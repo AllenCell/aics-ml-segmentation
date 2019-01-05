@@ -10,7 +10,7 @@ import logging
 
 # io libary
 import os
-from aicsimage import io, processing
+from aicsimageio import AICSImage, omeTifWriter
 import glob
 import pathlib
 
@@ -23,8 +23,8 @@ import torch
 from torch import from_numpy
 
 # import utils
-from deep_3d_seg.utils import get_samplers, load_single_image, compute_iou
-from deep_3d_seg.model_utils import weights_init, model_inference
+from aicsmlsegment.utils import get_samplers, load_single_image, compute_iou
+from aicsmlsegment.model_utils import weights_init, model_inference
 
 
 ## initialize logging
@@ -48,17 +48,17 @@ def train(args, model):
 
     # load the correct loss function
     if args.Loss == 'NLL_CM' and args.model == 'unet_2task':
-        from deep_3d_seg.custom_loss import MultiTaskElementNLLLoss 
+        from aicsmlsegment.custom_loss import MultiTaskElementNLLLoss 
         criterion = MultiTaskElementNLLLoss(args.LossWeight, args.nclass)
         print('use 2 task elementwise NLL loss')
     elif args.Loss == 'NLL_CM' and (args.model == 'unet_ds' or args.model == 'unet_xy' \
         or args.model == 'unet_deeper_xy' or args.model == 'unet_xy_d6' \
         or args.model == 'unet_xy_p3' or args.model == 'unet_xy_p2'):
-        from deep_3d_seg.custom_loss import MultiAuxillaryElementNLLLoss
+        from aicsmlsegment.custom_loss import MultiAuxillaryElementNLLLoss
         criterion = MultiAuxillaryElementNLLLoss(3,args.LossWeight, args.nclass)
         print('use unet with deep supervision loss')
     elif args.Loss == 'NLL_CM' and args.model == 'unet_xy_multi_task':
-        from deep_3d_seg.custom_loss import MultiTaskElementNLLLoss 
+        from aicsmlsegment.custom_loss import MultiTaskElementNLLLoss 
         criterion = MultiTaskElementNLLLoss(args.LossWeight, args.nclass)
         print('use 2 task elementwise NLL loss')
             
@@ -92,16 +92,16 @@ def train(args, model):
     #validation_set_loader = DataLoader(exp_Loader(validation_filenames), num_workers=1, batch_size=1, shuffle=False)
 
     if args.Augmentation == 'NOAUG_M':
-        from deep_3d_seg.DataLoader3D.Universal_Loader import NOAUG_M as train_loader
+        from aicsmlsegment.DataLoader3D.Universal_Loader import NOAUG_M as train_loader
         print('use no augmentation, with cost map')
     elif args.Augmentation == 'RR_FH_M':
-        from deep_3d_seg.DataLoader3D.Universal_Loader import RR_FH_M as train_loader
+        from aicsmlsegment.DataLoader3D.Universal_Loader import RR_FH_M as train_loader
         print('use flip + rotation augmentation, with cost map')
     elif args.Augmentation == 'RR_FH_M0':
-        from deep_3d_seg.DataLoader3D.Universal_Loader import RR_FH_M0 as train_loader
+        from aicsmlsegment.DataLoader3D.Universal_Loader import RR_FH_M0 as train_loader
         print('use flip + rotation augmentation, with cost map')
     elif args.Augmentation == 'RR_FH_M0C':
-        from deep_3d_seg.DataLoader3D.Universal_Loader import RR_FH_M0C as train_loader
+        from aicsmlsegment.DataLoader3D.Universal_Loader import RR_FH_M0C as train_loader
         print('use flip + rotation augmentation, with cost map, and also count valid pixels')
 
     # softmax for validation
@@ -175,7 +175,7 @@ def train(args, model):
         for img_idx, fn in enumerate(valid_filenames):
 
             # target 
-            label_reader = processing.AICSImage(fn+'_GT.ome.tif')  #CZYX
+            label_reader = AICSImage(fn+'_GT.ome.tif')  #CZYX
             label = label_reader.data
             label = np.squeeze(label,axis=0) # 4-D after squeeze
 
@@ -186,14 +186,14 @@ def train(args, model):
                 label = np.transpose(label,(1,0,2,3))
 
             # input image
-            input_reader = processing.AICSImage(fn+'.ome.tif') #CZYX  #TODO: check size
+            input_reader = AICSImage(fn+'.ome.tif') #CZYX  #TODO: check size
             input_img = input_reader.data
             input_img = np.squeeze(input_img,axis=0)
             if input_img.shape[1] < input_img.shape[0]:
                 input_img = np.transpose(input_img,(1,0,2,3))
 
             # cmap tensor
-            costmap_reader = processing.AICSImage(fn+'_CM.ome.tif') # ZYX
+            costmap_reader = AICSImage(fn+'_CM.ome.tif') # ZYX
             costmap = costmap_reader.data
             costmap = np.squeeze(costmap,axis=0)
             if costmap.shape[0] == 1:
@@ -211,13 +211,6 @@ def train(args, model):
                     validation_loss[vi] += compute_iou(outputs[vi][0,:,:,:]>0.5, label[0,:,:,:]==args.OutputCh[2*vi+1], costmap)
                 else:
                     validation_loss[vi] += compute_iou(outputs[vi][0,:,:,:]>0.5, label[vi,:,:,:]==args.OutputCh[2*vi+1], costmap)
-                
-                #write = io.omeTifWriter.OmeTifWriter('/' + fn + '_test_1_'+str(vi)+'.ome.tif')
-                #write.save((outputs[vi][0,:,:,:]>0.5).astype(np.int8))
-
-                #write = io.omeTifWriter.OmeTifWriter('/' + fn + '_test_2_'+str(vi)+'.ome.tif')
-                #write.save((label[vi,:,:,:]==args.OutputCh[2*vi+1]).astype(np.int8))
-
 
         # print loss 
         average_training_loss = sum(epoch_loss) / len(epoch_loss)
@@ -242,29 +235,6 @@ def evaluate(args, model):
     # check validity of parameters
     assert args.nchannel == len(args.InputCh), f'number of input channel does not match input channel indices'
 
-    '''
-        # in this scenario, input_dir refers to a single filename
-        reader = io.tifReader.TifReader(args.input_dir)
-        img = reader.load()
-        img = img.astype(float)
-
-        for tt in range(img.shape[0]):
-            # load data
-            struct_img = load_single_image(args, img[tt,:,:,:,:], time_flag=True)
-
-            # apply the model
-            output_img = model_inference(model, struct_img, softmax, args)
-
-            #out_full = processing.resize(output_img, (1.0,1/args.resize_ratio,1/args.resize_ratio), method='cubic')
-            write = io.omeTifWriter.OmeTifWriter(args.output_dir + 'img_T_' + str(tt) + '_seg.ome.tif')
-            write.save(output_img.astype(float))
-            print(f'Image at time {tt} has been segmented')
-    
-        filenames = [os.path.basename(os.path.splitext(f)[0])
-            for f in os.listdir(args.input_dir) if f.endswith(args.data_type)]
-        filenames.sort()
-    '''
-
     filenames = glob.glob(args.InputDir + '/*' + args.DataType)
     filenames.sort()
     print(filenames)
@@ -281,7 +251,7 @@ def evaluate(args, model):
         #print(len(output_img))
 
         for ch_idx in range(len(args.OutputCh)//2):
-            write = io.omeTifWriter.OmeTifWriter(args.OutputDir + pathlib.PurePosixPath(fn).stem + '_seg_'+ str(args.OutputCh[2*ch_idx])+'.ome.tif')
+            write = omeTifWriter.OmeTifWriter(args.OutputDir + pathlib.PurePosixPath(fn).stem + '_seg_'+ str(args.OutputCh[2*ch_idx])+'.ome.tif')
             if args.Threshold<0:
                 write.save(output_img[ch_idx].astype(float))
             else:
@@ -302,31 +272,31 @@ def main(args):
     # build the model, cooresponding to the selected loss function
     model = None
     if args.model == 'unet':
-        from deep_3d_seg.Net3D.uNet_original import UNet3D as DNN
+        from aicsmlsegment.Net3D.uNet_original import UNet3D as DNN
         model = DNN(args.nchannel, args.nclass)
     elif args.model == 'unet_2task':
-        from deep_3d_seg.Net3D.unet_two_tasks import UNet3D as DNN
+        from aicsmlsegment.Net3D.unet_two_tasks import UNet3D as DNN
         model = DNN(args.nchannel, args.nclass)
     elif args.model == 'unet_ds':
-        from deep_3d_seg.Net3D.unet_ds import UNet3D as DNN
+        from aicsmlsegment.Net3D.unet_ds import UNet3D as DNN
         model = DNN(args.nchannel, args.nclass)
     elif args.model == 'unet_xy':
-        from deep_3d_seg.Net3D.unet_xy import UNet3D as DNN
+        from aicsmlsegment.Net3D.unet_xy import UNet3D as DNN
         model = DNN(args.nchannel, args.nclass)
     elif args.model == 'unet_deeper_xy':
-        from deep_3d_seg.Net3D.unet_deeper_xy import UNet3D as DNN
+        from aicsmlsegment.Net3D.unet_deeper_xy import UNet3D as DNN
         model = DNN(args.nchannel, args.nclass)
     elif args.model == 'unet_xy_multi_task':
-        from deep_3d_seg.Net3D.unet_xy_multi_task import UNet3D as DNN
+        from aicsmlsegment.Net3D.unet_xy_multi_task import UNet3D as DNN
         model = DNN(args.nchannel, args.nclass)
     elif args.model == 'unet_xy_d6':
-        from deep_3d_seg.Net3D.unet_xy_d6 import UNet3D as DNN
+        from aicsmlsegment.Net3D.unet_xy_d6 import UNet3D as DNN
         model = DNN(args.nchannel, args.nclass)
     elif args.model == 'unet_xy_p3':
-        from deep_3d_seg.Net3D.unet_xy_enlarge import UNet3D as DNN
+        from aicsmlsegment.Net3D.unet_xy_enlarge import UNet3D as DNN
         model = DNN(args.nchannel, args.nclass, 3)
     elif args.model == 'unet_xy_p2':
-        from deep_3d_seg.Net3D.unet_xy_enlarge import UNet3D as DNN
+        from aicsmlsegment.Net3D.unet_xy_enlarge import UNet3D as DNN
         model = DNN(args.nchannel, args.nclass, 2)
         
     assert model is not None, f'model {args.model} not available'

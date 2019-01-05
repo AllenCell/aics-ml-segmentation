@@ -6,7 +6,7 @@ import random
 from tqdm import tqdm 
 
 from torch import from_numpy
-from aicsimage import io, processing
+from aicsimageio import AICSImage
 
 import time
 from torchvision.transforms import ToTensor
@@ -53,7 +53,7 @@ class RR_FH_M(Dataset):
 
         for img_idx, fn in tqdm(enumerate(filenames)):
 
-            label_reader = processing.AICSImage(fn+'_GT.ome.tif')  #CZYX
+            label_reader = AICSImage(fn+'_GT.ome.tif')  #CZYX
             label = label_reader.data
             label = np.squeeze(label,axis=0) # 4-D after squeeze
 
@@ -63,13 +63,13 @@ class RR_FH_M(Dataset):
             if label.shape[1]<label.shape[0]: 
                 label = np.transpose(label,(1,0,2,3))
 
-            input_reader = processing.AICSImage(fn+'.ome.tif') #CZYX  #TODO: check size
+            input_reader = AICSImage(fn+'.ome.tif') #CZYX  #TODO: check size
             input_img = input_reader.data
             input_img = np.squeeze(input_img,axis=0)
             if input_img.shape[1] < input_img.shape[0]:
                 input_img = np.transpose(input_img,(1,0,2,3))
 
-            costmap_reader = processing.AICSImage(fn+'_CM.ome.tif') # ZYX
+            costmap_reader = AICSImage(fn+'_CM.ome.tif') # ZYX
             costmap = costmap_reader.data
             costmap = np.squeeze(costmap,axis=0)
             if costmap.shape[0] == 1:
@@ -197,7 +197,7 @@ class RR_FH_M0(Dataset):
 
         for img_idx, fn in tqdm(enumerate(filenames)):
 
-            label_reader = processing.AICSImage(fn+'_GT.ome.tif')  #CZYX
+            label_reader = AICSImage(fn+'_GT.ome.tif')  #CZYX
             label = label_reader.data
             label = np.squeeze(label,axis=0) # 4-D after squeeze
 
@@ -207,13 +207,13 @@ class RR_FH_M0(Dataset):
             if label.shape[1]<label.shape[0]: 
                 label = np.transpose(label,(1,0,2,3))
 
-            input_reader = processing.AICSImage(fn+'.ome.tif') #CZYX  #TODO: check size
+            input_reader = AICSImage(fn+'.ome.tif') #CZYX  #TODO: check size
             input_img = input_reader.data
             input_img = np.squeeze(input_img,axis=0)
             if input_img.shape[1] < input_img.shape[0]:
                 input_img = np.transpose(input_img,(1,0,2,3))
 
-            costmap_reader = processing.AICSImage(fn+'_CM.ome.tif') # ZYX
+            costmap_reader = AICSImage(fn+'_CM.ome.tif') # ZYX
             costmap = costmap_reader.data
             costmap = np.squeeze(costmap,axis=0)
             if costmap.shape[0] == 1:
@@ -341,7 +341,7 @@ class RR_FH_M0C(Dataset):
 
         for img_idx, fn in tqdm(enumerate(filenames)):
 
-            label_reader = processing.AICSImage(fn+'_GT.ome.tif')  #CZYX
+            label_reader = AICSImage(fn+'_GT.ome.tif')  #CZYX
             label = label_reader.data
             label = np.squeeze(label,axis=0) # 4-D after squeeze
 
@@ -351,13 +351,13 @@ class RR_FH_M0C(Dataset):
             if label.shape[1]<label.shape[0]: 
                 label = np.transpose(label,(1,0,2,3))
 
-            input_reader = processing.AICSImage(fn+'.ome.tif') #CZYX  #TODO: check size
+            input_reader = AICSImage(fn+'.ome.tif') #CZYX  #TODO: check size
             input_img = input_reader.data
             input_img = np.squeeze(input_img,axis=0)
             if input_img.shape[1] < input_img.shape[0]:
                 input_img = np.transpose(input_img,(1,0,2,3))
 
-            costmap_reader = processing.AICSImage(fn+'_CM.ome.tif') # ZYX
+            costmap_reader = AICSImage(fn+'_CM.ome.tif') # ZYX
             costmap = costmap_reader.data
             costmap = np.squeeze(costmap,axis=0)
             if costmap.shape[0] == 1:
@@ -484,7 +484,7 @@ class NOAUG_M(Dataset):
 
         for img_idx, fn in tqdm(enumerate(filenames)):
 
-            label_reader = processing.AICSImage(fn+'_GT.ome.tif')  #CZYX
+            label_reader = AICSImage(fn+'_GT.ome.tif')  #CZYX
             label = label_reader.data
             label = np.squeeze(label,axis=0) # 4-D after squeeze
 
@@ -494,13 +494,13 @@ class NOAUG_M(Dataset):
             if label.shape[1]<label.shape[0]: 
                 label = np.transpose(label,(1,0,2,3))
 
-            input_reader = processing.AICSImage(fn+'.ome.tif') #CZYX  #TODO: check size
+            input_reader = AICSImage(fn+'.ome.tif') #CZYX  #TODO: check size
             input_img = input_reader.data
             input_img = np.squeeze(input_img,axis=0)
             if input_img.shape[1] < input_img.shape[0]:
                 input_img = np.transpose(input_img,(1,0,2,3))
 
-            costmap_reader = processing.AICSImage(fn+'_CM.ome.tif') # ZYX
+            costmap_reader = AICSImage(fn+'_CM.ome.tif') # ZYX
             costmap = costmap_reader.data
             costmap = np.squeeze(costmap,axis=0)
             if costmap.shape[0] == 1:
