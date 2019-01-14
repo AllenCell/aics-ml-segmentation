@@ -165,8 +165,8 @@ def train(args, model):
 
                 loss.backward()
                 optimizer.step()
-                
-                epoch_loss.append(loss.data[0])
+
+                epoch_loss.append(loss.data.item())
         
         # Validation starts ...
         validation_loss = np.zeros((len(args.OutputCh)//2,))
