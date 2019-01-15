@@ -23,9 +23,9 @@ import torch
 from torch import from_numpy
 
 # import utils
-from aicsmlsegment.utils import get_samplers, load_single_image, compute_iou
+from aicsmlsegment.utils import get_samplers, load_single_image, compute_iou, input_normalization
 from aicsmlsegment.model_utils import weights_init, model_inference
-
+from aicsimageprocessing import resize
 
 ## initialize logging
 #log = logging.getLogger()
@@ -235,30 +235,96 @@ def evaluate(args, model):
     # check validity of parameters
     assert args.nchannel == len(args.InputCh), f'number of input channel does not match input channel indices'
 
-    filenames = glob.glob(args.InputDir + '/*' + args.DataType)
-    filenames.sort()
-    print(filenames)
+    if args.mode == 'eval':
 
-    for fi, fn in enumerate(filenames):
+        filenames = glob.glob(args.InputDir + '/*' + args.DataType)
+        filenames.sort()
+        print(filenames)
 
+        for fi, fn in enumerate(filenames):
 
-        # load data
-        struct_img = load_single_image(args, fn, time_flag=False)
+            # load data
+            struct_img = load_single_image(args, fn, time_flag=False)
 
-        # apply the model
-        output_img = model_inference(model, struct_img, softmax, args)
+            # apply the model
+            output_img = model_inference(model, struct_img, softmax, args)
 
-        #print(len(output_img))
+            #print(len(output_img))
 
-        for ch_idx in range(len(args.OutputCh)//2):
-            write = omeTifWriter.OmeTifWriter(args.OutputDir + pathlib.PurePosixPath(fn).stem + '_seg_'+ str(args.OutputCh[2*ch_idx])+'.ome.tif')
-            if args.Threshold<0:
-                write.save(output_img[ch_idx].astype(float))
-            else:
-                out = output_img[ch_idx] > args.Threshold
-                out = out.astype(np.uint8)
-                out[out>0]=255
-                write.save(out)
+            for ch_idx in range(len(args.OutputCh)//2):
+                write = omeTifWriter.OmeTifWriter(args.OutputDir + pathlib.PurePosixPath(fn).stem + '_seg_'+ str(args.OutputCh[2*ch_idx])+'.ome.tif')
+                if args.Threshold<0:
+                    write.save(output_img[ch_idx].astype(float))
+                else:
+                    out = output_img[ch_idx] > args.Threshold
+                    out = out.astype(np.uint8)
+                    out[out>0]=255
+                    write.save(out)
+            
+            print(f'Image {fn} has been segmented')
+
+    elif args.mode == 'eval_file':
+
+        fn = args.InputFile
+        print(fn)
+        data_reader = AICSImage(fn)
+        img0 = data_reader.data
+        if args.timelapse:
+            assert data_reader.shape[0]>1
+
+            for tt in range(data_reader.shape[0]):
+                # Assume:  TCZYX
+                img = img0[tt, args.InputCh,:,:,:].astype(float)
+                img = input_normalization(img, args)
+
+                if len(args.ResizeRatio)>0:
+                    img = resize(img, (1, args.ResizeRatio[0], args.ResizeRatio[1], args.ResizeRatio[2]), method='cubic')
+                    for ch_idx in range(img.shape[0]):
+                        struct_img = img[ch_idx,:,:,:] # note that struct_img is only a view of img, so changes made on struct_img also affects img
+                        struct_img = (struct_img - struct_img.min())/(struct_img.max() - struct_img.min())
+                        img[ch_idx,:,:,:] = struct_img
+
+                # apply the model
+                output_img = model_inference(model, img, softmax, args)
+
+                for ch_idx in range(len(args.OutputCh)//2):
+                    writer = omeTifWriter.OmeTifWriter(args.OutputDir + pathlib.PurePosixPath(fn).stem + '_T_'+ f'{tt:03}' +'_seg_'+ str(args.OutputCh[2*ch_idx])+'.ome.tif')
+                    if args.Threshold<0:
+                        out = output_img[ch_idx].astype(float)
+                        out = resize(out, (1.0, 1/args.ResizeRatio[0], 1/args.ResizeRatio[1], 1/args.ResizeRatio[2]), method='cubic')
+                        writer.save(out)
+                    else:
+                        out = output_img[ch_idx] > args.Threshold
+                        out = resize(out, (1.0, 1/args.ResizeRatio[0], 1/args.ResizeRatio[1], 1/args.ResizeRatio[2]), method='nearest')
+                        out = out.astype(np.uint8)
+                        out[out>0]=255
+                        writer.save(out)
+        else:
+            img = img0[0,:,:,:].astype(float)
+            if img.shape[1] < img.shape[0]:
+                img = np.transpose(img,(1,0,2,3))
+            img = img[args.InputCh,:,:,:]
+            img = input_normalization(img, args)
+
+            if len(args.ResizeRatio)>0:
+                img = resize(img, (1, args.ResizeRatio[0], args.ResizeRatio[1], args.ResizeRatio[2]), method='cubic')
+                for ch_idx in range(img.shape[0]):
+                    struct_img = img[ch_idx,:,:,:] # note that struct_img is only a view of img, so changes made on struct_img also affects img
+                    struct_img = (struct_img - struct_img.min())/(struct_img.max() - struct_img.min())
+                    img[ch_idx,:,:,:] = struct_img
+
+            # apply the model
+            output_img = model_inference(model, img, softmax, args)
+
+            for ch_idx in range(len(args.OutputCh)//2):
+                writer = omeTifWriter.OmeTifWriter(args.OutputDir + pathlib.PurePosixPath(fn).stem +'_seg_'+ str(args.OutputCh[2*ch_idx])+'.ome.tif')
+                if args.Threshold<0:
+                    writer.save(output_img[ch_idx].astype(float))
+                else:
+                    out = output_img[ch_idx] > args.Threshold
+                    out = out.astype(np.uint8)
+                    out[out>0]=255
+                    writer.save(out)
         
         print(f'Image {fn} has been segmented')
 
@@ -330,7 +396,7 @@ def main(args):
             df.to_csv('//allen/aics/assay-dev/Segmentation/DeepLearning/SavedModel/NucMem/experiment_record.csv', index_label='index')
 
         train(args, model)
-    elif args.mode == 'eval':
+    elif args.mode == 'eval' or args.mode == 'eval_file':
         evaluate(args, model)
 
 
@@ -357,8 +423,15 @@ if __name__ == '__main__':
     parser_eval.add_argument('--InputCh', nargs='+', type=int, default=[0])
     parser_eval.add_argument('--Normalization',type=int, default=-1)
     parser_eval.add_argument('--Threshold',type=float, default=-1)
-    #parser_eval.add_argument('--timelapse',action='store_true')
-    
+
+    parser_eval = subparsers.add_parser('eval_file')
+    parser_eval.add_argument('--InputFile', required=True)
+    parser_eval.add_argument('--OutputDir', required=True)
+    parser_eval.add_argument('--ResizeRatio',nargs='+', type=float, default=[1.0,1.0,1.0])
+    parser_eval.add_argument('--InputCh', nargs='+', type=int, default=[0])
+    parser_eval.add_argument('--Normalization',type=int, default=-1)
+    parser_eval.add_argument('--Threshold',type=float, default=-1)
+    parser_eval.add_argument('--timelapse',action='store_true')
 
     parser_train = subparsers.add_parser('train')
     parser_train.add_argument('--Loss', required=True)
