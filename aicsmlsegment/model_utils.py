@@ -9,6 +9,82 @@ def weights_init(m):
         torch.nn.init.kaiming_normal(m.weight)
         m.bias.data.zero_()
 
+def apply_on_image(model, input_img, softmax, args):
+    print('here')
+    if args.RuntimeAug == 'None':
+        return model_inference(model, input_img, softmax, args)
+    else:
+        from PIL import Image
+        print('doing runtime augmentation')
+        import pathlib
+        from aicsimageio import omeTifWriter
+
+        input_img_aug = input_img.copy()
+        for ch_idx in range(input_img_aug.shape[0]):
+            str_im = input_img_aug[ch_idx,:,:,:]
+            input_img_aug[ch_idx,:,:,:] = np.flip(str_im, axis=2)
+            
+        out1 = model_inference(model, input_img_aug, softmax, args)
+
+        '''
+        for ch_idx in range(len(args.OutputCh)//2):
+            writer = omeTifWriter.OmeTifWriter(args.OutputDir + 'test_seg_aug1_'+ str(args.OutputCh[2*ch_idx])+'.ome.tif')
+            if args.Threshold<0:
+                writer.save(out1[ch_idx].astype(float))
+            else:
+                out = out1[ch_idx] > args.Threshold
+                out = out.astype(np.uint8)
+                out[out>0]=255
+                writer.save(out)
+        '''
+
+        input_img_aug = []
+        input_img_aug = input_img.copy()
+        for ch_idx in range(input_img_aug.shape[0]):
+            str_im = input_img_aug[ch_idx,:,:,:]
+            input_img_aug[ch_idx,:,:,:] = np.flip(str_im, axis=1)
+        
+        out2 = model_inference(model, input_img_aug, softmax, args)
+
+        '''
+        for ch_idx in range(len(args.OutputCh)//2):
+            writer = omeTifWriter.OmeTifWriter(args.OutputDir + 'test_seg_aug2_'+ str(args.OutputCh[2*ch_idx])+'.ome.tif')
+            if args.Threshold<0:
+                writer.save(out2[ch_idx].astype(float))
+            else:
+                out = out2[ch_idx] > args.Threshold
+                out = out.astype(np.uint8)
+                out[out>0]=255
+                writer.save(out)
+        '''
+
+        input_img_aug = []
+        input_img_aug = input_img.copy()
+        for ch_idx in range(input_img_aug.shape[0]):
+            str_im = input_img_aug[ch_idx,:,:,:]
+            input_img_aug[ch_idx,:,:,:] = np.flip(str_im, axis=0)
+        
+        out3 = model_inference(model, input_img_aug, softmax, args)
+
+        '''
+        for ch_idx in range(len(args.OutputCh)//2):
+            writer = omeTifWriter.OmeTifWriter(args.OutputDir + 'test_seg_aug3_'+ str(args.OutputCh[2*ch_idx])+'.ome.tif')
+            if args.Threshold<0:
+                writer.save(out3[ch_idx].astype(float))
+            else:
+                out = out3[ch_idx] > args.Threshold
+                out = out.astype(np.uint8)
+                out[out>0]=255
+                writer.save(out)
+        '''
+
+        out0 = model_inference(model, input_img, softmax, args)        
+
+        for ch_idx in range(len(out0)):
+            out0[ch_idx] = 0.25*(out0[ch_idx] + np.flip(out1[ch_idx], axis=3) + np.flip(out2[ch_idx], axis=2) + np.flip(out3[ch_idx], axis=1))
+        
+        return out0
+
 def model_inference(model, input_img, softmax, args):
 
     # zero padding on input image

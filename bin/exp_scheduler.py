@@ -24,7 +24,7 @@ from torch import from_numpy
 
 # import utils
 from aicsmlsegment.utils import get_samplers, load_single_image, compute_iou, input_normalization
-from aicsmlsegment.model_utils import weights_init, model_inference
+from aicsmlsegment.model_utils import weights_init, model_inference, apply_on_image
 from aicsimageprocessing import resize
 
 ## initialize logging
@@ -247,7 +247,8 @@ def evaluate(args, model):
             struct_img = load_single_image(args, fn, time_flag=False)
 
             # apply the model
-            output_img = model_inference(model, struct_img, softmax, args)
+            output_img = apply_on_image(model, struct_img, softmax, args)
+            #output_img = model_inference(model, struct_img, softmax, args)
 
             #print(len(output_img))
 
@@ -423,6 +424,7 @@ if __name__ == '__main__':
     parser_eval.add_argument('--InputCh', nargs='+', type=int, default=[0])
     parser_eval.add_argument('--Normalization',type=int, default=-1)
     parser_eval.add_argument('--Threshold',type=float, default=-1)
+    parser_eval.add_argument('--RuntimeAug',default='None')
 
     parser_eval = subparsers.add_parser('eval_file')
     parser_eval.add_argument('--InputFile', required=True)
@@ -431,6 +433,7 @@ if __name__ == '__main__':
     parser_eval.add_argument('--InputCh', nargs='+', type=int, default=[0])
     parser_eval.add_argument('--Normalization',type=int, default=-1)
     parser_eval.add_argument('--Threshold',type=float, default=-1)
+    parser_eval.add_argument('--RuntimeAug',default='None')
     parser_eval.add_argument('--timelapse',action='store_true')
 
     parser_train = subparsers.add_parser('train')

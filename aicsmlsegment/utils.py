@@ -61,7 +61,7 @@ def input_normalization(img, args):
             img[ch_idx,:,:,:] = struct_img[:,:,:]
         elif args.Normalization == 4: # lamin low
             m,s = stats.norm.fit(struct_img.flat)
-            strech_min = m - 1*s
+            strech_min = max(m - 1*s, struct_img.min())
             strech_max = min(m + 15 * s, struct_img.max())
             #print(m)
             #print(s)
@@ -125,7 +125,7 @@ def input_normalization(img, args):
             m,s = stats.norm.fit(img_valid.flat)
             m,s = stats.norm.fit(struct_img.flat)
             strech_min = struct_img.min()
-            strech_max = min(m + 25 *s, struct_img.max())
+            strech_max = min(m + 15 *s, struct_img.max())
             struct_img[struct_img>strech_max]=strech_max
             struct_img = (struct_img- strech_min + 1e-8)/(strech_max - strech_min + 1e-8)
             img[ch_idx,:,:,:] = struct_img[:,:,:]
@@ -192,7 +192,7 @@ def load_single_image(args, fn, time_flag=False):
             struct_img = img[ch_idx,:,:,:] # note that struct_img is only a view of img, so changes made on struct_img also affects img
             struct_img = (struct_img - struct_img.min())/(struct_img.max() - struct_img.min())
             img[ch_idx,:,:,:] = struct_img
-            
+
     return img
 
 
