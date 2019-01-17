@@ -24,6 +24,10 @@ def get_samplers(num_training_data, validation_ratio, my_seed):
 
 def input_normalization(img, args):
 
+    #from aicsimageio import omeTifWriter
+    #writer = omeTifWriter.OmeTifWriter('/allen/aics/assay-dev/Segmentation/DeepLearning/DNA_Labelfree_Evaluation/final_evaluation/test_before_norm.tiff')
+    #writer.save(img[0,:,:,:])
+
     for ch_idx in range(args.nchannel):
         struct_img = img[ch_idx,:,:,:] # note that struct_img is only a view of img, so changes made on struct_img also affects img
         if args.Normalization == 0: # min-max normalization
@@ -150,8 +154,17 @@ def input_normalization(img, args):
             struct_img_smooth_sub = struct_img - struct_img_smooth20
             struct_img = (struct_img_smooth_sub - struct_img_smooth_sub.min())/(struct_img_smooth_sub.max()-struct_img_smooth_sub.min())
             
+            m,s = stats.norm.fit(struct_img.flat)
+            strech_min = max(m - 2*s, struct_img.min())
+            strech_max = struct_img.max()
+            struct_img[struct_img<strech_min]=strech_min
+            struct_img = (struct_img- strech_min + 1e-8)/(strech_max - strech_min + 1e-8)
+
             img[ch_idx,:,:,:] = struct_img[:,:,:]
+            print('subtracted background')
     
+    #writer = omeTifWriter.OmeTifWriter('/allen/aics/assay-dev/Segmentation/DeepLearning/DNA_Labelfree_Evaluation/final_evaluation/test_after_norm.tiff')
+    #writer.save(img[0,:,:,:])
     return img
         
 
