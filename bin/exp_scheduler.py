@@ -341,23 +341,8 @@ def main(args):
     if args.model == 'unet':
         from aicsmlsegment.Net3D.uNet_original import UNet3D as DNN
         model = DNN(args.nchannel, args.nclass)
-    elif args.model == 'unet_2task':
-        from aicsmlsegment.Net3D.unet_two_tasks import UNet3D as DNN
-        model = DNN(args.nchannel, args.nclass)
-    elif args.model == 'unet_ds':
-        from aicsmlsegment.Net3D.unet_ds import UNet3D as DNN
-        model = DNN(args.nchannel, args.nclass)
     elif args.model == 'unet_xy':
         from aicsmlsegment.Net3D.unet_xy import UNet3D as DNN
-        model = DNN(args.nchannel, args.nclass)
-    elif args.model == 'unet_deeper_xy':
-        from aicsmlsegment.Net3D.unet_deeper_xy import UNet3D as DNN
-        model = DNN(args.nchannel, args.nclass)
-    elif args.model == 'unet_xy_multi_task':
-        from aicsmlsegment.Net3D.unet_xy_multi_task import UNet3D as DNN
-        model = DNN(args.nchannel, args.nclass)
-    elif args.model == 'unet_xy_d6':
-        from aicsmlsegment.Net3D.unet_xy_d6 import UNet3D as DNN
         model = DNN(args.nchannel, args.nclass)
     elif args.model == 'unet_xy_p3':
         from aicsmlsegment.Net3D.unet_xy_enlarge import UNet3D as DNN
