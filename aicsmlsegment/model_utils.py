@@ -102,7 +102,6 @@ def model_inference(model, input_img, softmax, args):
     num_step_x = int(np.floor(input_img.shape[3]/args.size_out[2])+1)
 
     for ix in range(num_step_x):
-        print('.')
         if ix<num_step_x-1:
             xa = ix * args.size_out[2]
         else:

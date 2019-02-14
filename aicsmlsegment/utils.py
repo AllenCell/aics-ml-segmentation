@@ -33,7 +33,7 @@ def input_normalization(img, args):
         if args.Normalization == 0: # min-max normalization
             #struct_img = (struct_img - np.percentile(struct_img,0.1) + 1e-8)/(np.percentile(struct_img,99.9) - np.percentile(struct_img,0.1) + 1e-8)
             struct_img = (struct_img - struct_img.min() + 1e-8)/(struct_img.max() - struct_img.min() + 1e-7)
-        elif args.Normalization == 1: # mem
+        elif args.Normalization == 1: # mem: DO NOT CHANGE (FIXED FOR CAAX PRODUCTION)
             m,s = stats.norm.fit(struct_img.flat)
             strech_min = max(m - 2*s, struct_img.min())
             strech_max = min(m + 11 *s, struct_img.max())
@@ -66,10 +66,11 @@ def input_normalization(img, args):
         elif args.Normalization == 4: # lamin low
             m,s = stats.norm.fit(struct_img.flat)
             strech_min = max(m - 1*s, struct_img.min())
-            strech_max = min(m + 15 * s, struct_img.max())
-            #print(m)
-            #print(s)
-            #print(strech_max)
+            strech_max = min(m + 10 * s, struct_img.max())
+            print(m)
+            print(s)
+            print(strech_min)
+            print(strech_max)
             struct_img[struct_img>strech_max]=strech_max
             struct_img[struct_img<strech_min]=strech_min
             struct_img = (struct_img - strech_min + 1e-8)/(strech_max - strech_min + 1e-8)
@@ -124,12 +125,12 @@ def input_normalization(img, args):
             struct_img[struct_img<strech_min]=strech_min
             struct_img = (struct_img- strech_min + 1e-8)/(strech_max - strech_min + 1e-8)
             img[ch_idx,:,:,:] = struct_img[:,:,:]
-        elif args.Normalization == 10: # nuc
+        elif args.Normalization == 10: # lamin hipsc, DO NOT CHANGE (FIXED FOR LAMNB1 PRODUCTION)
             img_valid = struct_img[struct_img>4000]
             m,s = stats.norm.fit(img_valid.flat)
             m,s = stats.norm.fit(struct_img.flat)
             strech_min = struct_img.min()
-            strech_max = min(m + 15 *s, struct_img.max())
+            strech_max = min(m + 25 *s, struct_img.max())
             struct_img[struct_img>strech_max]=strech_max
             struct_img = (struct_img- strech_min + 1e-8)/(strech_max - strech_min + 1e-8)
             img[ch_idx,:,:,:] = struct_img[:,:,:]
@@ -163,8 +164,6 @@ def input_normalization(img, args):
             img[ch_idx,:,:,:] = struct_img[:,:,:]
             print('subtracted background')
     
-    #writer = omeTifWriter.OmeTifWriter('/allen/aics/assay-dev/Segmentation/DeepLearning/DNA_Labelfree_Evaluation/final_evaluation/test_after_norm.tiff')
-    #writer.save(img[0,:,:,:])
     return img
         
 

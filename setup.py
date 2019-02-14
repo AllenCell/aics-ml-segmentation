@@ -21,34 +21,21 @@ def readme():
 
 test_deps = ['pytest', 'pytest-cov']
 lint_deps = ['flake8']
-interactive_dev_deps = [
-    'matplotlib>=2.2.3',
-    'jupyter',
-    'itkwidgets==0.12.2',
-    'ipython==7.0.1',
-    'ipywidgets==7.4.1'
-]
-all_deps = [*test_deps, *lint_deps, *interactive_dev_deps]
+all_deps = [*test_deps, *lint_deps]
 extras = {
     'test_group': test_deps,
     'lint_group': lint_deps,
-    'interactive_dev_group': interactive_dev_deps,
     'all': all_deps
 }
 
 setup(name=PACKAGE_NAME,
       version=MODULE_VERSION,
-      description='Scripts for structure segmentation.',
+      description='Scripts for ML structure segmentation.',
       long_description=readme(),
       author='AICS',
       author_email='jianxuc@alleninstitute.org',
       license='Allen Institute Software License',
       packages=find_packages(exclude=['tests', '*.tests', '*.tests.*']),
-      entry_points={
-          "console_scripts": [
-              "batch_pipeline={}.bin.batch_pipeline:main".format(PACKAGE_NAME)
-          ]
-      },
       install_requires=[
           'numpy>=1.15.1',
           'scipy>=1.1.0',
@@ -56,9 +43,8 @@ setup(name=PACKAGE_NAME,
           'pandas>=0.23.4',
           'aicsimageio>=0.4.3',
           'aicsimageprocessing',
-          'numba>=0.40.0',
-          'itk',
-          'tqdm'
+          'tqdm',
+          'pytorch=1.0.0'
       ],
 
       # For test setup. This will allow JUnit XML output for Jenkins

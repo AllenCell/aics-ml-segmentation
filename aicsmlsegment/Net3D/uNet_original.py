@@ -87,6 +87,6 @@ class UNet3D(nn.Module):
 
         out = out.permute(0, 2, 3, 4, 1).contiguous() # move the class channel to the last dimension
         out = out.view(out.numel() // self.numClass, self.numClass)
-        out = self.softmax(out)
+        out = self.softmax(out, dim=1)
 
         return out
