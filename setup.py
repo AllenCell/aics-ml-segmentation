@@ -43,8 +43,8 @@ setup(name=PACKAGE_NAME,
           'pandas>=0.23.4',
           'aicsimageio>=0.4.3',
           'aicsimageprocessing',
-          'tqdm',
-          'pytorch=1.0.0'
+          'tqdm'
+          #'pytorch=1.0.0'
       ],
 
       # For test setup. This will allow JUnit XML output for Jenkins

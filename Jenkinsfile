@@ -1,73 +1,119 @@
-#!groovy
-
-node ("python-gradle")
-{
-    parameters { booleanParam(name: 'promote_artifact', defaultValue: false, description: '') }
-    def is_promote=(params.promote_artifact)
-    echo "BUILDTYPE: " + (is_promote ? "Promote Image" : "Build, Publish and Tag")
-
-    try {
-        def VENV_BIN = "/local1/virtualenvs/jenkinstools/bin"
-        def PYTHON = "${VENV_BIN}/python3"
-
-        stage ("git") {
-            def git_url=gitUrl()
-            if (env.BRANCH_NAME == null) {
-                git url: "${git_url}"
-            }
-            else {
-                println "*** BRANCH ${env.BRANCH_NAME}"
-                git url: "${git_url}", branch: "${env.BRANCH_NAME}"
-            }
-        }
-
-        if (!is_promote) {
-            stage ("prepare version") {
-                sh "${PYTHON} ${VENV_BIN}/manage_version -t python -s prepare"
-            }
-
-            stage("build and publish") {
-                sh './gradlew -i cleanAll publish'
-            }
-
-            stage ("tag and commit") {
-                sh "${PYTHON} ${VENV_BIN}/manage_version -t python -s tag"
-            }
-
-            junit "build/test_report.xml"
-        }
-        else {
-            stage("promote") {
-                sh "${PYTHON} ${VENV_BIN}/promote_artifact -t python -g ${params.git_tag}"
-            }
-        }
-
-        currentBuild.result = "SUCCESS"
+pipeline {
+    parameters { booleanParam(name: 'create_release', defaultValue: false,
+                              description: 'If true, create a release artifact and publish to ' +
+                                           'the artifactory release PyPi or public PyPi.') }
+    options {
+        timeout(time: 1, unit: 'HOURS')
     }
-    catch(e) {
-        // If there was an exception thrown, the build failed
-        currentBuild.result = "FAILURE"
-        throw e
-    }
-    finally {
-
-        if (currentBuild?.result) {
-            println "BUILD: ${currentBuild.result}"
+    agent {
+        node {
+            label "python-gradle"
         }
-        // Slack
-        notifyBuildOnSlack(currentBuild.result, currentBuild.previousBuild?.result)
+    }
+    environment {
+        PATH = "/home/jenkins/.local/bin:$PATH"
+        REQUESTS_CA_BUNDLE = "/etc/ssl/certs"
+    }
+    stages {
+        stage ("create virtualenv") {
+            steps {
+                this.notifyBB("INPROGRESS")
+                sh "./gradlew -i cleanAll installCIDependencies"
+            }
+        }
 
-        // Email
-        step([$class: 'Mailer',
-              notifyEveryUnstableBuild: true,
-              recipients: '!AICS_DevOps@alleninstitute.org',
-              sendToIndividuals: true])
+        stage ("bump version pre-build") {
+            when {
+                expression { return params.create_release }
+            }
+            steps {
+                // This will drop the dev suffix if we are releasing
+                // X.Y.Z.devN -> X.Y.Z
+                sh "./gradlew -i bumpVersionRelease"
+            }
+        }
+
+        stage ("test/build distribution") {
+            steps {
+                sh "./gradlew -i build"
+            }
+        }
+
+        stage ("report on tests") {
+            steps {
+                junit "build/test_report.xml"
+
+                cobertura autoUpdateHealth: false,
+                    autoUpdateStability: false,
+                    coberturaReportFile: 'build/coverage.xml',
+                    failUnhealthy: false,
+                    failUnstable: false,
+                    maxNumberOfBuilds: 0,
+                    onlyStable: false,
+                    sourceEncoding: 'ASCII',
+                    zoomCoverageChart: false
+
+
+            }
+        }
+
+        stage ("publish release") {
+            when {
+                branch 'master'
+                expression { return params.create_release }
+            }
+            steps {
+                sh "./gradlew -i publishRelease"
+                sh "./gradlew -i gitTagCommitPush"
+                sh "./gradlew -i bumpVersionPostRelease gitCommitPush"
+             }
+        }
+
+        stage ("publish snapshot") {
+            when {
+                branch 'master'
+                not { expression { return params.create_release } }
+            }
+            steps {
+                sh "./gradlew -i publishSnapshot"
+                script {
+                    def ignoreAuthors = ["jenkins", "Jenkins User", "Jenkins Builder"]
+                    if (!ignoreAuthors.contains(gitAuthor())) {
+                        sh "./gradlew -i bumpVersionDev gitCommitPush"
+                    }
+                }
+            }
+        }
+
+    }
+    post {
+        always {
+            notifyBuildOnSlack(currentBuild.result, currentBuild.previousBuild?.result)
+            this.notifyBB(currentBuild.result)
+        }
+        cleanup {
+            deleteDir()
+        }
     }
 }
 
-def gitUrl() {
-    checkout scm
-    sh(returnStdout: true, script: 'git config remote.origin.url').trim()
+def notifyBB(String state) {
+    // on success, result is null
+    state = state ?: "SUCCESS"
+
+    if (state == "SUCCESS" || state == "FAILURE") {
+        currentBuild.result = state
+    }
+
+    notifyBitbucket commitSha1: "${GIT_COMMIT}",
+                credentialsId: 'aea50792-dda8-40e4-a683-79e8c83e72a6',
+                disableInprogressNotification: false,
+                considerUnstableAsSuccess: true,
+                ignoreUnverifiedSSLPeer: false,
+                includeBuildNumberInKey: false,
+                prependParentProjectKey: false,
+                projectKey: 'SW',
+                stashServerBaseUrl: 'https://aicsbitbucket.corp.alleninstitute.org'
 }
 
 def notifyBuildOnSlack(String buildStatus = 'STARTED', String priorStatus) {
@@ -86,4 +132,8 @@ def notifyBuildOnSlack(String buildStatus = 'STARTED', String priorStatus) {
                 message: "BACK_TO_NORMAL: '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.BUILD_URL})"
         )
     }
+}
+
+def gitAuthor() {
+    sh(returnStdout: true, script: 'git log -1 --format=%an').trim()
 }
