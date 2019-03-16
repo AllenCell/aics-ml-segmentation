@@ -162,7 +162,7 @@ def train(args, model):
                     loss = criterion(outputs, targets, cmap)
                 else: # input + target
                     loss = criterion(outputs,targets)
-
+                    
                 loss.backward()
                 optimizer.step()
 

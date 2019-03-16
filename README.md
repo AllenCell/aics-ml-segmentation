@@ -31,3 +31,6 @@ cd ./aics-ml-segmentation
 pip install -e .
 ```
 
+Resource:
+
+[Python Development in Visual Studio Code](https://realpython.com/python-development-visual-studio-code/)

@@ -135,32 +135,18 @@ def input_normalization(img, args):
             struct_img = (struct_img- strech_min + 1e-8)/(strech_max - strech_min + 1e-8)
             img[ch_idx,:,:,:] = struct_img[:,:,:]
         elif args.Normalization == 12: # nuc
-            nuc_min = 300
-            nuc_max = 1000
-            img_valid = struct_img[np.logical_and(struct_img>nuc_min,struct_img<nuc_max)]
-            m,s = stats.norm.fit(img_valid.flat)
-
-            strech_min = max(max(m - 2.5*s, struct_img.min()), nuc_min)
-            strech_max = min(min(m + 9.5 *s, struct_img.max()), nuc_max)
-
-            #struct_img[struct_img>nuc_max] = strech_min
-
-            struct_img[struct_img>strech_max]=strech_max
-            struct_img[struct_img<strech_min]=strech_min
             
-            struct_img = (struct_img- strech_min + 1e-8)/(strech_max - strech_min + 1e-8)
-
             from scipy import ndimage as ndi
-            struct_img_smooth20 = ndi.gaussian_filter(struct_img, sigma=50, mode='nearest', truncate=3.0)
-            struct_img_smooth_sub = struct_img - struct_img_smooth20
+            struct_img_smooth = ndi.gaussian_filter(struct_img, sigma=50, mode='nearest', truncate=3.0)
+            struct_img_smooth_sub = struct_img - struct_img_smooth
             struct_img = (struct_img_smooth_sub - struct_img_smooth_sub.min())/(struct_img_smooth_sub.max()-struct_img_smooth_sub.min())
             
             m,s = stats.norm.fit(struct_img.flat)
-            strech_min = max(m - 2*s, struct_img.min())
-            strech_max = struct_img.max()
+            strech_min = max(m - 2.5*s, struct_img.min())
+            strech_max = min(m + 10 *s, struct_img.max())
+            struct_img[struct_img>strech_max]=strech_max
             struct_img[struct_img<strech_min]=strech_min
             struct_img = (struct_img- strech_min + 1e-8)/(strech_max - strech_min + 1e-8)
-
             img[ch_idx,:,:,:] = struct_img[:,:,:]
             print('subtracted background')
     
