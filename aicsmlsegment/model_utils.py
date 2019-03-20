@@ -277,7 +277,6 @@ def build_model(config):
         from aicsmlsegment.Net3D.unet_xy import UNet3D as DNN
         model = DNN(config['nchannel'], config['nclass'])
     elif name =='unet_xy_zoom':
-        print('correct')
         from aicsmlsegment.Net3D.unet_xy_enlarge import UNet3D as DNN
         model = DNN(config['nchannel'], config['nclass'], model_config.get('zoom_ratio',3))
     

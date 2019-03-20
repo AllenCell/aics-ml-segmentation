@@ -37,7 +37,7 @@ def main():
 
     # create data loader
     loaders = get_train_dataloader(config)
-    loader_config = config['']
+    loader_config = config['loader']
 
     # Create the optimizer
     optimizer = build_optimizer(config, model)
@@ -52,12 +52,13 @@ def main():
                                                 val_criterion, loaders, config['OutputCh'],
                                                 logger=logger)
     else:
-        trainer = BasicFolderTrainer(model, loader_config, optimizer, lr_scheduler, loss_criterion, val_criterion,
-                                config['device'], loaders, config['OutputCh'], config['checkpoint_dir'],
-                                max_num_epochs=config['epochs'],
-                                max_num_iterations=config['iters'],
-                                validate_after_iters=config['validate_after_iters'],
-                                logger=logger)
+        print('start a new training')
+    trainer = BasicFolderTrainer(model, loader_config, optimizer, lr_scheduler, loss_criterion, val_criterion,
+                            config['device'], loaders, config['OutputCh'], config['checkpoint_dir'],
+                            max_num_epochs=config['epochs'],
+                            max_num_iterations=config['iters'],
+                            validate_after_iters=config['validate_after_iters'],
+                            logger=logger)
     trainer.run_training()
 
 if __name__ == '__main__':
