@@ -136,12 +136,15 @@ def model_inference(model, input_img, softmax, args):
                 
                 assert len(args.OutputCh)//2 <= len(tmp_out)
 
+                '''
                 if args.model == 'cascade':
                     label = tmp_out[0]
                 elif args.model == 'DSU' or args.model == 'HDSU':
                     label = tmp_out[1]
                 else:
                     label = tmp_out
+                '''
+                label = tmp_out
 
                 for ch_idx in range(len(args.OutputCh)//2):
                     label = tmp_out[args.OutputCh[ch_idx*2]]

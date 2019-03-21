@@ -10,11 +10,11 @@ from aicsmlsegment.utils import get_logger
 from aicsmlsegment.model_utils import get_number_of_learnable_parameters, build_model
 
 
-def main():
+def main(args):
 
     # create logger
     logger = get_logger('ModelTrainer')
-    config = load_config('/allen/aics/assay-dev/Segmentation/aics-ml-segmentation/configs/train_config.yaml')
+    config = load_config(args.config)
     logger.info(config)
 
     # Create loss criterion
@@ -62,4 +62,6 @@ def main():
     trainer.run_training()
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', required=True)
+    main(parser.parse_args())
