@@ -48,8 +48,8 @@ def input_normalization(img, args):
     #from aicsimageio import omeTifWriter
     #writer = omeTifWriter.OmeTifWriter('/allen/aics/assay-dev/Segmentation/DeepLearning/DNA_Labelfree_Evaluation/final_evaluation/test_before_norm.tiff')
     #writer.save(img[0,:,:,:])
-
-    for ch_idx in range(args.nchannel):
+    nchannel = img.shape[0]
+    for ch_idx in range(nchannel):
         struct_img = img[ch_idx,:,:,:] # note that struct_img is only a view of img, so changes made on struct_img also affects img
         if args.Normalization == 0: # min-max normalization
             #struct_img = (struct_img - np.percentile(struct_img,0.1) + 1e-8)/(np.percentile(struct_img,99.9) - np.percentile(struct_img,0.1) + 1e-8)
