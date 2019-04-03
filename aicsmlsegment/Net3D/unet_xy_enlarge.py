@@ -46,6 +46,8 @@ class UNet3D(nn.Module):
 
         self.softmax = F.log_softmax  # nn.LogSoftmax(1)
 
+        self.final_activation = nn.Softmax(dim=1)
+
         self.numClass = n_classes[0]
         self.numClass1 = n_classes[1]
         self.numClass2 = n_classes[2]

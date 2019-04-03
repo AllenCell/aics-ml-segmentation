@@ -2,6 +2,14 @@ import numpy as np
 import torch
 from torch.autograd import Variable
 import time
+import logging
+import os
+import shutil
+import sys
+
+from aicsmlsegment.utils import get_logger
+
+SUPPORTED_MODELS = ['unet_xy_zoom', 'unet_xy']
 
 def weights_init(m):
     classname = m.__class__.__name__
@@ -128,12 +136,15 @@ def model_inference(model, input_img, softmax, args):
                 
                 assert len(args.OutputCh)//2 <= len(tmp_out)
 
+                '''
                 if args.model == 'cascade':
                     label = tmp_out[0]
                 elif args.model == 'DSU' or args.model == 'HDSU':
                     label = tmp_out[1]
                 else:
                     label = tmp_out
+                '''
+                label = tmp_out
 
                 for ch_idx in range(len(args.OutputCh)//2):
                     label = tmp_out[args.OutputCh[ch_idx*2]]
@@ -146,3 +157,134 @@ def model_inference(model, input_img, softmax, args):
                     output_img[ch_idx][0,za:(za+args.size_out[0]), ya:(ya+args.size_out[1]), xa:(xa+args.size_out[2])] = out_nda[:,:,:,args.OutputCh[ch_idx*2+1]]
 
     return output_img
+
+def save_checkpoint(state, is_best, checkpoint_dir, logger=None):
+    """Saves model and training parameters at '{checkpoint_dir}/last_checkpoint.pytorch'.
+    If is_best==True saves '{checkpoint_dir}/best_checkpoint.pytorch' as well.
+    Args:
+        state (dict): contains model's state_dict, optimizer's state_dict, epoch
+            and best evaluation metric value so far
+        is_best (bool): if True state contains the best model seen so far
+        checkpoint_dir (string): directory where the checkpoint are to be saved
+    """
+
+    def log_info(message):
+        if logger is not None:
+            logger.info(message)
+
+    if not os.path.exists(checkpoint_dir):
+        log_info(
+            f"Checkpoint directory does not exists. Creating {checkpoint_dir}")
+        os.mkdir(checkpoint_dir)
+
+    last_file_path = os.path.join(checkpoint_dir, 'last_checkpoint.pytorch')
+    log_info(f"Saving last checkpoint to '{last_file_path}'")
+    torch.save(state, last_file_path)
+    if is_best:
+        best_file_path = os.path.join(checkpoint_dir, 'best_checkpoint.pytorch')
+        log_info(f"Saving best checkpoint to '{best_file_path}'")
+        shutil.copyfile(last_file_path, best_file_path)
+
+
+def load_checkpoint(checkpoint_path, model, optimizer=None):
+    """Loads model and training parameters from a given checkpoint_path
+    If optimizer is provided, loads optimizer's state_dict of as well.
+    Args:
+        checkpoint_path (string): path to the checkpoint to be loaded
+        model (torch.nn.Module): model into which the parameters are to be copied
+        optimizer (torch.optim.Optimizer) optional: optimizer instance into
+            which the parameters are to be copied
+    Returns:
+        state
+    """
+    if not os.path.exists(checkpoint_path):
+        raise IOError(f"Checkpoint '{checkpoint_path}' does not exist")
+
+    #device = torch.device("cuda:0" if torch.cuda.is_available() else 'cpu')
+    state = torch.load(checkpoint_path, map_location=torch.device('cpu'))
+    if 'model_state_dict' in state:
+        model.load_state_dict(state['model_state_dict'])
+    else:
+        model.load_state_dict(state)
+
+    if optimizer is not None:
+        optimizer.load_state_dict(state['optimizer_state_dict'])
+
+    return state
+
+
+def get_number_of_learnable_parameters(model):
+    model_parameters = filter(lambda p: p.requires_grad, model.parameters())
+    return sum([np.prod(p.size()) for p in model_parameters])
+
+
+def find_maximum_patch_size(model, device):
+    """Tries to find the biggest patch size that can be send to GPU for inference
+    without throwing CUDA out of memory"""
+    logger = get_logger('PatchFinder')
+    in_channels = model.in_channels
+
+    patch_shapes = [(64, 128, 128), (96, 128, 128),
+                    (64, 160, 160), (96, 160, 160),
+                    (64, 192, 192), (96, 192, 192)]
+
+    for shape in patch_shapes:
+        # generate random patch of a given size
+        patch = np.random.randn(*shape).astype('float32')
+
+        patch = torch \
+            .from_numpy(patch) \
+            .view((1, in_channels) + patch.shape) \
+            .to(device)
+
+        logger.info(f"Current patch size: {shape}")
+        model(patch)
+
+
+def unpad(probs, index, shape, pad_width=8):
+    def _new_slices(slicing, max_size):
+        if slicing.start == 0:
+            p_start = 0
+            i_start = 0
+        else:
+            p_start = pad_width
+            i_start = slicing.start + pad_width
+
+        if slicing.stop == max_size:
+            p_stop = None
+            i_stop = max_size
+        else:
+            p_stop = -pad_width
+            i_stop = slicing.stop - pad_width
+
+        return slice(p_start, p_stop), slice(i_start, i_stop)
+
+    D, H, W = shape
+
+    i_c, i_z, i_y, i_x = index
+    p_c = slice(0, probs.shape[0])
+
+    p_z, i_z = _new_slices(i_z, D)
+    p_y, i_y = _new_slices(i_y, H)
+    p_x, i_x = _new_slices(i_x, W)
+
+    probs_index = (p_c, p_z, p_y, p_x)
+    index = (i_c, i_z, i_y, i_x)
+    return probs[probs_index], index
+    
+def build_model(config):
+
+    assert 'model' in config, 'Could not find model configuration'
+    model_config = config['model']
+    name = model_config['name']
+    assert name in SUPPORTED_MODELS, f'Invalid model: {name}. Supported models: {SUPPORTED_MODELS}'
+
+    if name == 'unet_xy':
+        from aicsmlsegment.Net3D.unet_xy import UNet3D as DNN
+        model = DNN(config['nchannel'], config['nclass'])
+    elif name =='unet_xy_zoom':
+        from aicsmlsegment.Net3D.unet_xy_enlarge import UNet3D as DNN
+        model = DNN(config['nchannel'], config['nclass'], model_config.get('zoom_ratio',3))
+    
+    model = model.to(config['device'])
+    return model

@@ -1,11 +1,32 @@
 import torch.nn as nn
 import numpy as np
+import logging
+import sys
 from torch.utils.data import sampler as torch_sampler
 from aicsimageio import AICSImage
 from aicsimageprocessing import resize
 import os
 from scipy import ndimage as ndi
 from scipy import stats
+import argparse
+
+import torch
+import yaml
+
+def load_config(config_path):
+    #parser = argparse.ArgumentParser(description='UNet3D training')
+    #parser.add_argument('--config', type=str, help='Path to the YAML config file', required=True)
+    #args = parser.parse_args()
+    config = _load_config_yaml(config_path)
+    # Get a device to train on
+    device_name = config.get('device', 'cuda:0')
+    device = torch.device(device_name if torch.cuda.is_available() else 'cpu')
+    config['device'] = device
+    return config
+
+
+def _load_config_yaml(config_file):
+    return yaml.load(open(config_file, 'r'))
 
 def get_samplers(num_training_data, validation_ratio, my_seed):
 
@@ -27,12 +48,13 @@ def input_normalization(img, args):
     #from aicsimageio import omeTifWriter
     #writer = omeTifWriter.OmeTifWriter('/allen/aics/assay-dev/Segmentation/DeepLearning/DNA_Labelfree_Evaluation/final_evaluation/test_before_norm.tiff')
     #writer.save(img[0,:,:,:])
-
-    for ch_idx in range(args.nchannel):
+    nchannel = img.shape[0]
+    for ch_idx in range(nchannel):
         struct_img = img[ch_idx,:,:,:] # note that struct_img is only a view of img, so changes made on struct_img also affects img
         if args.Normalization == 0: # min-max normalization
+            pass
             #struct_img = (struct_img - np.percentile(struct_img,0.1) + 1e-8)/(np.percentile(struct_img,99.9) - np.percentile(struct_img,0.1) + 1e-8)
-            struct_img = (struct_img - struct_img.min() + 1e-8)/(struct_img.max() - struct_img.min() + 1e-7)
+            #struct_img = (struct_img - struct_img.min() + 1e-8)/(struct_img.max() - struct_img.min() + 1e-7)
         elif args.Normalization == 1: # mem: DO NOT CHANGE (FIXED FOR CAAX PRODUCTION)
             m,s = stats.norm.fit(struct_img.flat)
             strech_min = max(m - 2*s, struct_img.min())
@@ -202,3 +224,15 @@ def compute_iou(prediction, gt, cmap):
     area_u[cmap==0]=False
 
     return np.count_nonzero(area_i) / np.count_nonzero(area_u)
+
+def get_logger(name, level=logging.INFO):
+    logger = logging.getLogger(name)
+    logger.setLevel(level)
+    # Logging to console
+    stream_handler = logging.StreamHandler(sys.stdout)
+    formatter = logging.Formatter(
+        '%(asctime)s [%(threadName)s] %(levelname)s %(name)s - %(message)s')
+    stream_handler.setFormatter(formatter)
+    logger.addHandler(stream_handler)
+
+    return logger

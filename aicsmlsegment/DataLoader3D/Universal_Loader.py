@@ -197,6 +197,9 @@ class RR_FH_M0(Dataset):
 
         for img_idx, fn in tqdm(enumerate(filenames)):
 
+            if len(self.img)==num_patch:
+                break
+
             label_reader = AICSImage(fn+'_GT.ome.tif')  #CZYX
             label = label_reader.data
             label = np.squeeze(label,axis=0) # 4-D after squeeze
