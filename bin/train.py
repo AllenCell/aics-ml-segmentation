@@ -56,8 +56,7 @@ def main(args):
     trainer = BasicFolderTrainer(model, loader_config, optimizer, lr_scheduler, loss_criterion, val_criterion,
                             config['device'], loaders, config['OutputCh'], config['checkpoint_dir'],
                             max_num_epochs=config['epochs'],
-                            max_num_iterations=config['iters'],
-                            validate_after_iters=config['validate_after_iters'],
+                            validate_every_n_epoch=config['validate_every_n_epoch'],
                             logger=logger)
     trainer.run_training()
 

@@ -52,8 +52,9 @@ def input_normalization(img, args):
     for ch_idx in range(nchannel):
         struct_img = img[ch_idx,:,:,:] # note that struct_img is only a view of img, so changes made on struct_img also affects img
         if args.Normalization == 0: # min-max normalization
+            pass
             #struct_img = (struct_img - np.percentile(struct_img,0.1) + 1e-8)/(np.percentile(struct_img,99.9) - np.percentile(struct_img,0.1) + 1e-8)
-            struct_img = (struct_img - struct_img.min() + 1e-8)/(struct_img.max() - struct_img.min() + 1e-7)
+            #struct_img = (struct_img - struct_img.min() + 1e-8)/(struct_img.max() - struct_img.min() + 1e-7)
         elif args.Normalization == 1: # mem: DO NOT CHANGE (FIXED FOR CAAX PRODUCTION)
             m,s = stats.norm.fit(struct_img.flat)
             strech_min = max(m - 2*s, struct_img.min())
