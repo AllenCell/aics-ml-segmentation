@@ -43,7 +43,9 @@ setup(name=PACKAGE_NAME,
           'pandas>=0.23.4',
           'aicsimageio>=0.4.3',
           'aicsimageprocessing',
-          'tqdm'
+          'tqdm',
+          'pyyaml',
+          'tensorboardX'
           #'pytorch=1.0.0'
       ],
 

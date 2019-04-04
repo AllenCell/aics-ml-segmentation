@@ -25,16 +25,18 @@ def main(args):
     print(f'Loading model from {model_path}...')
     load_checkpoint(model_path, model)
 
+    # extract the parameters for preparing the input image
+    args_norm = lambda:None
+    args_norm.Normalization = config['Normalization']
+
+    # extract the parameters for running the model inference
     args_inference=lambda:None
     args_inference.size_in = config['size_in']
     args_inference.size_out = config['size_out']
     args_inference.OutputCh = config['OutputCh']
-    args_inference.nclass = [model.numClass, model.numClass1, model.numClass2] ####HACK#####
+    args_inference.nclass =  config['nclass'] 
 
-    args_norm = lambda:None
-    args_norm.Normalization = config['Normalization']
-
-    # do inference
+    # run
     inf_config = config['mode']
     if inf_config['name'] == 'file':
         fn = inf_config['InputFile']
@@ -45,36 +47,34 @@ def main(args):
             assert img0.shape[0]>1
 
             for tt in range(img0.shape[0]):
-                # Assume:  TCZYX
+                # Assume:  dimensions = TCZYX
                 img = img0[tt, config['InputCh'],:,:,:].astype(float)
-
-                args = lambda:None
-                args.Normalization = config['Normalization']
                 img = input_normalization(img, args_norm)
 
                 if len(config['ResizeRatio'])>0:
-                    img = resize(img, (1, args.ResizeRatio[0], args.ResizeRatio[1], args.ResizeRatio[2]), method='cubic')
+                    img = resize(img, (1, config['ResizeRatio'][0], config['ResizeRatio'][1], config['ResizeRatio'][2]), method='cubic')
                     for ch_idx in range(img.shape[0]):
-                        struct_img = img[ch_idx,:,:,:] # note that struct_img is only a view of img, so changes made on struct_img also affects img
+                        struct_img = img[ch_idx,:,:,:]
                         struct_img = (struct_img - struct_img.min())/(struct_img.max() - struct_img.min())
                         img[ch_idx,:,:,:] = struct_img
 
+                # apply the model
                 output_img = model_inference(model, img, model.final_activation, args_inference)
 
-                for ch_idx in range(len(args.OutputCh)//2):
-                    writer = omeTifWriter.OmeTifWriter(args.OutputDir + pathlib.PurePosixPath(fn).stem + '_T_'+ f'{tt:03}' +'_seg_'+ str(config['OutputCh'][2*ch_idx])+'.ome.tif')
-                    if config['Threshold']<0:
-                        out = output_img[ch_idx].astype(float)
+                # extract the result and write the output
+                for ch_idx in range(len(config['OutputCh'].OutputCh)//2):
+                    writer = omeTifWriter.OmeTifWriter(config['OutputDir'] + pathlib.PurePosixPath(fn).stem + '_T_'+ f'{tt:03}' +'_seg_'+ str(config['OutputCh'][2*ch_idx])+'.tiff')
+                    out = output_img[ch_idx]
+                    if len(config['ResizeRatio'])>0:
                         out = resize(out, (1.0, 1/config['ResizeRatio'][0], 1/config['ResizeRatio'][1], 1/config['ResizeRatio'][2]), method='cubic')
-                        writer.save(out)
-                    else:
-                        out = output_img[ch_idx] > config['Threshold']
-                        out = resize(out, (1.0, 1/config['ResizeRatio'][0], 1/config['ResizeRatio'][1], 1/config['ResizeRatio'][2]), method='nearest')
+                    if config['Threshold']>0:
+                        out = out > config['Threshold']
                         out = out.astype(np.uint8)
                         out[out>0]=255
-                        writer.save(out)
+                    writer.save(out)
         else:
-            img = img0[0,:,:,:].astype(float)
+            img = img0[0,:,:,:,:].astype(float)
+            print(f'processing one image of size {img.shape}')
             if img.shape[1] < img.shape[0]:
                 img = np.transpose(img,(1,0,2,3))
             img = img[config['InputCh'],:,:,:]
@@ -90,29 +90,31 @@ def main(args):
             # apply the model
             output_img = model_inference(model, img, model.final_activation, args_inference)
 
+            # extract the result and write the output
             for ch_idx in range(len(config['OutputCh'])//2):
-                writer = omeTifWriter.OmeTifWriter(config['OutputDir'] + pathlib.PurePosixPath(fn).stem +'_seg_'+ str(config['OutputCh'][2*ch_idx])+'.ome.tif')
-                if config['Threshold']<0:
-                    writer.save(output_img[ch_idx].astype(float))
-                else:
-                    out = output_img[ch_idx] > config['Threshold']
+                out = output_img[ch_idx] 
+                if len(config['ResizeRatio'])>0:
+                    out = resize(out, (1.0, 1/config['ResizeRatio'][0], 1/config['ResizeRatio'][1], 1/config['ResizeRatio'][2]), method='cubic')
+                if config['Threshold']>0:
+                    out = out > config['Threshold']
                     out = out.astype(np.uint8)
                     out[out>0]=255
-                    writer.save(out)
+                writer = omeTifWriter.OmeTifWriter(config['OutputDir'] + pathlib.PurePosixPath(fn).stem +'_seg_'+ str(config['OutputCh'][2*ch_idx])+'.tiff')
+                writer.save(out)
             print(f'Image {fn} has been segmented')
 
     elif inf_config['name'] == 'folder':
         from glob import glob
         filenames = glob(inf_config['InputDir'] + '/*' + inf_config['DataType'])
         filenames.sort()
-        print(filenames)
+        #print(filenames)
 
         for _, fn in enumerate(filenames):
 
             # load data
             data_reader = AICSImage(fn)
             img0 = data_reader.data
-            img = img0[0,:,:,:].astype(float)
+            img = img0[0,:,:,:,:].astype(float)
             if img.shape[1] < img.shape[0]:
                 img = np.transpose(img,(1,0,2,3))
             img = img[config['InputCh'],:,:,:]
@@ -121,7 +123,7 @@ def main(args):
             # apply the model
             output_img = model_inference(model, img, model.final_activation, args_inference)
 
-
+            # extract the result and write the output
             for ch_idx in range(len(config['OutputCh'])//2):
                 write = omeTifWriter.OmeTifWriter(config['OutputDir'] + pathlib.PurePosixPath(fn).stem + '_seg_'+ str(config['OutputCh'][2*ch_idx])+'.ome.tif')
                 if config['Threshold']<0:

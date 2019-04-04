@@ -43,12 +43,34 @@ def get_samplers(num_training_data, validation_ratio, my_seed):
 
     return train_sampler, valid_sampler
 
+def simple_norm(img, a, b, m_high=-1, m_low=-1):
+    idx = np.ones(img.shape, dtype=bool)
+    if m_high>0:
+        idx = np.logical_and(idx, img<m_high)
+    if m_low>0:
+        idx = np.logical_and(idx, img>m_low)
+    img_valid = img[idx]
+    m,s = stats.norm.fit(img_valid.flat)
+    strech_min = max(m - a*s, img.min())
+    strech_max = min(m + b*s, img.max())
+    img[img>strech_max]=strech_max
+    img[img<strech_min]=strech_min
+    img = (img- strech_min + 1e-8)/(strech_max - strech_min + 1e-8)
+    return img
+
+def background_sub(img, r):
+    struct_img_smooth = ndi.gaussian_filter(img, sigma=r, mode='nearest', truncate=3.0)
+    struct_img_smooth_sub = img - struct_img_smooth
+    struct_img = (struct_img_smooth_sub - struct_img_smooth_sub.min())/(struct_img_smooth_sub.max()-struct_img_smooth_sub.min())
+    return struct_img
+
 def input_normalization(img, args):
 
     #from aicsimageio import omeTifWriter
     #writer = omeTifWriter.OmeTifWriter('/allen/aics/assay-dev/Segmentation/DeepLearning/DNA_Labelfree_Evaluation/final_evaluation/test_before_norm.tiff')
     #writer.save(img[0,:,:,:])
     nchannel = img.shape[0]
+    args.Normalization = int(args.Normalization)
     for ch_idx in range(nchannel):
         struct_img = img[ch_idx,:,:,:] # note that struct_img is only a view of img, so changes made on struct_img also affects img
         if args.Normalization == 0: # min-max normalization
@@ -64,88 +86,11 @@ def input_normalization(img, args):
             struct_img = (struct_img- strech_min + 1e-8)/(strech_max - strech_min + 1e-8)
             img[ch_idx,:,:,:] = struct_img[:,:,:]
         elif args.Normalization == 2: # nuc
-            #img_valid = struct_img[np.logical_and(struct_img>300,struct_img<1000)]
-            #m,s = stats.norm.fit(img_valid.flat)
-            m,s = stats.norm.fit(struct_img.flat)
-            strech_min = max(m - 2.5*s, struct_img.min())
-            strech_max = min(m + 10 *s, struct_img.max())
-            struct_img[struct_img>strech_max]=strech_max
-            struct_img[struct_img<strech_min]=strech_min
-            struct_img = (struct_img- strech_min + 1e-8)/(strech_max - strech_min + 1e-8)
-            img[ch_idx,:,:,:] = struct_img[:,:,:]
-        elif args.Normalization == 3: # lamin high
-            m,s = stats.norm.fit(struct_img.flat)
-            strech_min = np.percentile(struct_img,0.005)
-            strech_max = min(m + 8 *s, struct_img.max())
-            print(m)
-            print(s)
-            print(strech_min)
-            print(strech_max)
-            struct_img[struct_img>strech_max]=strech_max
-            struct_img[struct_img<strech_min]=strech_min
-            struct_img = (struct_img - strech_min + 1e-8)/(strech_max - strech_min + 1e-8)
-            img[ch_idx,:,:,:] = struct_img[:,:,:]
-        elif args.Normalization == 4: # lamin low
-            m,s = stats.norm.fit(struct_img.flat)
-            strech_min = max(m - 1*s, struct_img.min())
-            strech_max = min(m + 10 * s, struct_img.max())
-            print(m)
-            print(s)
-            print(strech_min)
-            print(strech_max)
-            struct_img[struct_img>strech_max]=strech_max
-            struct_img[struct_img<strech_min]=strech_min
-            struct_img = (struct_img - strech_min + 1e-8)/(strech_max - strech_min + 1e-8)
-            img[ch_idx,:,:,:] = struct_img[:,:,:]
-        elif args.Normalization == 5: # light
-            m,s = stats.norm.fit(struct_img.flat)
-            strech_min = max(m - 4*s, struct_img.min())
-            strech_max = min(m + 4 *s, struct_img.max())
-            struct_img[struct_img>strech_max]=strech_max
-            struct_img[struct_img<strech_min]=strech_min
-            struct_img = (struct_img- strech_min + 1e-8)/(strech_max - strech_min + 1e-8)
-            img[ch_idx,:,:,:] = struct_img[:,:,:]
-        elif args.Normalization == 6: # dna-fast
-            m,s = stats.norm.fit(struct_img.flat)
-            strech_min = max(m - 2*s, struct_img.min())
-            strech_max = min(m + 8 *s, struct_img.max()) # used 6 before transfer learing, use 8 after
-            print(strech_max)
-            print(struct_img.max())
-            print(strech_min)
-            print(struct_img.min())
-            #strech_min = struct_img.min()
-            #strech_max = struct_img.max()
-            struct_img[struct_img>strech_max]=strech_max
-            struct_img[struct_img<strech_min]=strech_min
-            struct_img = (struct_img- strech_min + 1e-8)/(strech_max - strech_min + 1e-8)
-            #writer = io.omeTifWriter.OmeTifWriter('test.ome.tiff')
-            #writer.save(struct_img)
+            #struct_img = simple_norm(struct_img, 2.5, 10, 1000, 300)
+            struct_img = simple_norm(struct_img, 2.5, 10)
             img[ch_idx,:,:,:] = struct_img[:,:,:]
         elif args.Normalization == 7: # cardio_wga
-            m,s = stats.norm.fit(struct_img.flat)
-            strech_min = max(m - 1*s, struct_img.min())
-            strech_max = min(m + 6 *s, struct_img.max()) # used 6 before transfer learing, use 8 after
-            struct_img[struct_img>strech_max]=strech_max
-            struct_img[struct_img<strech_min]=strech_min
-            struct_img = (struct_img- strech_min + 1e-8)/(strech_max - strech_min + 1e-8)
-            img[ch_idx,:,:,:] = struct_img[:,:,:]
-        elif args.Normalization == 8: # FBL hipsc
-            m,s = stats.norm.fit(struct_img.flat)
-            strech_min = struct_img.min()
-            strech_max = min(m + 20 *s, struct_img.max()) # used 6 before transfer learing, use 8 after
-            struct_img[struct_img>strech_max]=strech_max
-            struct_img[struct_img<strech_min]=strech_min
-            struct_img = (struct_img- strech_min + 1e-8)/(strech_max - strech_min + 1e-8)
-            img[ch_idx,:,:,:] = struct_img[:,:,:]
-        elif args.Normalization == 9: # nuc
-            img_valid = struct_img[struct_img>10000]
-            m,s = stats.norm.fit(img_valid.flat)
-            m,s = stats.norm.fit(struct_img.flat)
-            strech_min = m - 3.5*s
-            strech_max = m + 3.5 *s
-            struct_img[struct_img>strech_max]=strech_max
-            struct_img[struct_img<strech_min]=strech_min
-            struct_img = (struct_img- strech_min + 1e-8)/(strech_max - strech_min + 1e-8)
+            struct_img = simple_norm(struct_img, 1, 6)
             img[ch_idx,:,:,:] = struct_img[:,:,:]
         elif args.Normalization == 10: # lamin hipsc, DO NOT CHANGE (FIXED FOR LAMNB1 PRODUCTION)
             img_valid = struct_img[struct_img>4000]
@@ -157,20 +102,16 @@ def input_normalization(img, args):
             struct_img = (struct_img- strech_min + 1e-8)/(strech_max - strech_min + 1e-8)
             img[ch_idx,:,:,:] = struct_img[:,:,:]
         elif args.Normalization == 12: # nuc
-            
-            from scipy import ndimage as ndi
-            struct_img_smooth = ndi.gaussian_filter(struct_img, sigma=50, mode='nearest', truncate=3.0)
-            struct_img_smooth_sub = struct_img - struct_img_smooth
-            struct_img = (struct_img_smooth_sub - struct_img_smooth_sub.min())/(struct_img_smooth_sub.max()-struct_img_smooth_sub.min())
-            
-            m,s = stats.norm.fit(struct_img.flat)
-            strech_min = max(m - 2.5*s, struct_img.min())
-            strech_max = min(m + 10 *s, struct_img.max())
-            struct_img[struct_img>strech_max]=strech_max
-            struct_img[struct_img<strech_min]=strech_min
-            struct_img = (struct_img- strech_min + 1e-8)/(strech_max - strech_min + 1e-8)
+            struct_img = background_sub(struct_img,50)
+            struct_img = simple_norm(struct_img, 2.5, 10)
             img[ch_idx,:,:,:] = struct_img[:,:,:]
             print('subtracted background')
+
+        elif args.Normalization == 15: 
+            struct_img[struct_img>4000] = struct_img.min()
+            struct_img = background_sub(struct_img,50)
+            img[ch_idx,:,:,:] = struct_img[:,:,:]
+        
     
     return img
         

@@ -44,6 +44,7 @@ def build_lr_scheduler(config, optimizer):
         lr_config['optimizer'] = optimizer
         return clazz(**lr_config)
 
+
 def get_loss_criterion(config):
     """
     Returns the loss function based on provided configuration
@@ -57,7 +58,7 @@ def get_loss_criterion(config):
 
     #ignore_index = loss_config.get('ignore_index', None)
 
-    #TODO
+    #TODO: add more loss functions
     '''
     if weight is not None:
         # convert to cuda tensor if necessary
@@ -194,16 +195,15 @@ class BasicFolderTrainer:
         num_epoch (int): useful when loading the model from the checkpoint
     """
 
-    def __init__(self, model, loader_config, optimizer, lr_scheduler, loss_criterion,
-                 val_criterion, device, loaders, OutputCh, checkpoint_dir,
-                 max_num_epochs=100, validate_every_n_epoch=10,
-                 validate_iters=None, best_val_score=float('-inf'),
-                 num_iterations=1, num_epoch=0, logger=None):
+    def __init__(self, model, optimizer, lr_scheduler, loss_criterion,
+                 val_criterion, loaders, config, logger=None):
+
         if logger is None:
             self.logger = get_logger('ModelTrainer', level=logging.DEBUG)
         else:
             self.logger = logger
 
+        device = config['device']
         self.logger.info(f"Sending the model to '{device}'")
         self.model = model.to(device)
         self.logger.debug(model)
@@ -214,58 +214,58 @@ class BasicFolderTrainer:
         self.val_criterion = val_criterion
         self.device = device
         self.loaders = loaders
-        self.checkpoint_dir = checkpoint_dir
-        self.max_num_epochs = max_num_epochs
-        self.validate_every_n_epoch = validate_every_n_epoch
-        self.validate_iters = validate_iters
-        self.best_val_score = best_val_score
-        self.writer = SummaryWriter(
-            log_dir=os.path.join(checkpoint_dir, 'logs'))
 
-        self.num_iterations = num_iterations
-        self.num_epoch = num_epoch
-        self.OutputCh = OutputCh
+        self.size_in = config['size_in']
+        self.size_out = config['size_out']
+
+        # training setting
+        self.checkpoint_dir = config['checkpoint_dir']
+        self.max_num_epochs = config['epochs']
+        self.save_every_n_epoch = config['save_every_n_epoch']
+
+        # validation setting
+        self.validation_config = config['validation']
+        self.leaveout = self.validation_config['leaveout']
+
+        self.writer = SummaryWriter(
+            log_dir=os.path.join(self.checkpoint_dir, 'logs'))
+
+        # dataloader config 
+        loader_config = config['loader']
         self.batch_size = loader_config['batch_size']
-        self.leaveout = loader_config['leaveout']
         self.PatchPerBuffer = loader_config['PatchPerBuffer']
         self.NumWorkers = loader_config['NumWorkers']
-        self.size_in = loader_config['size_in']
-        self.size_out = loader_config['size_out']
+ 
         self.epoch_shuffle = loader_config['epoch_shuffle']
         self.datafolder = loader_config['datafolder']
-
+        
+        #TODO: these parameters could be updated when resuming
+        self.num_iterations = 1  
+        self.num_epoch = 1
+        
         ##### customized loader ######
-        # prepare the training/validattion filenames
-        train_filenames, valid_filenames = shuffle_split_filenames(self.datafolder, self.leaveout)
-        self.valid_filenames = valid_filenames
-        self.train_filenames = train_filenames
-        self.train_loader =  DataLoader(self.loaders(train_filenames, self.PatchPerBuffer, self.size_in, self.size_out), num_workers=self.NumWorkers, batch_size=self.batch_size, shuffle=True)
+        if self.validation_config['metric'] is not None:
+            # prepare the training/validattion filenames
+            train_filenames, valid_filenames = shuffle_split_filenames(self.datafolder, self.validation_config['leaveout'])
+            self.valid_filenames = valid_filenames
+            self.train_filenames = train_filenames
+        else:
+            filenames = glob(self.datafolder + '/*_GT.ome.tif')
+            filenames.sort()
+            self.train_filenames = []
+            self.valid_filenames = []
+            for fi, fn in enumerate(filenames):
+                self.train_filenames.append(fn[:-11])
+            
 
-    @classmethod
-    def from_checkpoint(cls, checkpoint_path, model, loader_config, optimizer, lr_scheduler, loss_criterion, val_criterion,
-                        loaders, OutputCh, logger=None):
-        logger.info(f"Loading checkpoint '{checkpoint_path}'...")
-        state = load_checkpoint(checkpoint_path, model, optimizer)
-        logger.info(
-            f"Checkpoint loaded. Epoch: {state['epoch']}. Best val score: {state['best_eval_score']}. Num_iterations: {state['num_iterations']}")
-        checkpoint_dir = os.path.split(checkpoint_path)[0]
-        return cls(model, loader_config, optimizer, lr_scheduler,
-                   loss_criterion, val_criterion,
-                   torch.device(state['device']),
-                   loaders, OutputCh, checkpoint_dir,
-                   best_val_score=state['best_eval_score'],
-                   num_iterations=state['num_iterations'],
-                   num_epoch=state['epoch'],
-                   max_num_epochs=state['max_num_epochs'],
-                   validate_every_n_epoch=state['validate_every_n_epoch'],
-                   validate_iters=state['validate_iters'],
-                   logger=logger)
-
+        self.train_loader =  DataLoader(self.loaders(self.train_filenames, self.PatchPerBuffer, self.size_in, self.size_out), num_workers=self.NumWorkers, batch_size=self.batch_size, shuffle=True)
+    
     def run_training(self):
         for _ in range(self.num_epoch, self.max_num_epochs):
             # train for one epoch
             should_terminate = self.train()
 
+            # check if we should stop #TODO: add early-stopping check
             if should_terminate:
                 break
 
@@ -291,9 +291,9 @@ class BasicFolderTrainer:
         for i, current_batch in enumerate(self.train_loader):
             self.logger.info(
                 f'Training iteration {self.num_iterations}. Batch {i}. Epoch [{self.num_epoch}/{self.max_num_epochs - 1}]')
-            print(f'Training iteration {self.num_iterations}. Batch {i}. Epoch [{self.num_epoch}/{self.max_num_epochs - 1}]')
+            
 
-            if len(current_batch) == 2:
+            if len(current_batch) == 2:  # no costmap
                 input, target = current_batch
                 input, target = input.to(self.device), target.to(self.device)
                 weight = None
@@ -301,17 +301,16 @@ class BasicFolderTrainer:
                 input, target, weight = current_batch
                 input, weight = input.to(self.device), weight.to(self.device)
 
-                ##TODO: should make the format of target consistent (now, it could be a tensor or list of tensors)
+                # target is always a list, containing one or more tensors
                 if len(target)>1:
                     for list_idx in range(len(target)):
                         target[list_idx] = target[list_idx].to(self.device)
                 else:
                     target = target[0].to(self.device)
 
-
             output, loss = self._forward_pass(input, target, weight)
-
-            train_losses.update(loss.item(), input.size(0))
+            train_losses.update(loss.data.item(), input.size(0))
+            print(f'iteration {self.num_iterations} in Epoch [{self.num_epoch}/{self.max_num_epochs - 1}], loss = {loss.data.item()}')
 
             # compute gradients and update parameters
             self.optimizer.zero_grad()
@@ -319,38 +318,23 @@ class BasicFolderTrainer:
             self.optimizer.step()
             self.num_iterations += 1
 
-        if self.num_epoch % self.validate_every_n_epoch == 0:
-                # normalize logits and compute the evaluation criterion
-                #val_score = self.val_criterion(self.model.final_activation(output[0]), target)
-                #train_val_scores.update(val_score.item(), input.size(0))
+        if self.num_epoch % self.save_every_n_epoch == 0:
+            
+            save_checkpoint({
+                'epoch': self.num_epoch + 1,
+                'num_iterations': self.num_iterations,
+                'model_state_dict': self.model.state_dict(),
+                #'best_val_score': self.best_val_score,
+                'optimizer_state_dict': self.optimizer.state_dict(),
+                'device': str(self.device),
+                }, checkpoint_dir=self.checkpoint_dir, logger=self.logger)
 
-                # evaluate on validation set
-                #eval_score = self.validate()
-                # adjust learning rate if necessary
-                #if isinstance(self.scheduler, ReduceLROnPlateau):
-                #    self.scheduler.step(eval_score)
-                #else:
-                #    self.scheduler.step()
-                # log current learning rate in tensorboard
-                #self._log_lr()
-                # remember best validation metric
-                #is_best = self._is_best_val_score(eval_score)
 
-                # save checkpoint
-                #self._save_checkpoint(is_best)
-                self._save_checkpoint(True)
-
-                # log stats, params and images
-                #self.logger.info(
-                #    f'Training stats. Loss: {train_losses.avg}')
-                #self._log_stats('train', train_losses.avg, train_val_scores.avg)
-                #self._log_params()
-                # normalize output (during training the network outputs logits only)
-                #output = self.model.final_activation(output[0])
-                #self._log_images(input, target, output[0])
+        # TODO: add validation step
 
         return False
 
+    '''
     def validate(self):
         self.logger.info('Validating...')
 
@@ -415,7 +399,7 @@ class BasicFolderTrainer:
 
         finally:
             self.model.train()
-
+    '''
     def _forward_pass(self, input, target, weight=None):
         # forward pass
         output = self.model(input)
@@ -426,27 +410,6 @@ class BasicFolderTrainer:
             loss = self.loss_criterion(output, target, weight)
 
         return output, loss
-
-    def _is_best_val_score(self, val_score):
-        is_best = val_score > self.best_val_score
-        if is_best:
-            self.logger.info(f'Saving new best evaluation metric: {val_score}')
-        self.best_val_score = max(val_score, self.best_val_score)
-        return is_best
-
-    def _save_checkpoint(self, is_best):
-        save_checkpoint({
-            'epoch': self.num_epoch + 1,
-            'num_iterations': self.num_iterations,
-            'model_state_dict': self.model.state_dict(),
-            'best_val_score': self.best_val_score,
-            'optimizer_state_dict': self.optimizer.state_dict(),
-            'device': str(self.device),
-            'max_num_epochs': self.max_num_epochs,
-            'validate_every_n_epoch': self.validate_every_n_epoch,
-            'validate_iters': self.validate_iters
-        }, is_best, checkpoint_dir=self.checkpoint_dir,
-            logger=self.logger)
 
     def _log_lr(self):
         lr = self.optimizer.param_groups[0]['lr']
@@ -479,28 +442,3 @@ class BasicFolderTrainer:
         for name, batch in sources.items():
             for tag, image in self._images_from_batch(name, batch):
                 self.writer.add_image(tag, image, self.num_iterations, dataformats='HW')
-
-    def _images_from_batch(self, name, batch):
-        tag_template = '{}/batch_{}/channel_{}/slice_{}'
-
-        tagged_images = []
-
-        if batch.ndim == 5:
-            slice_idx = batch.shape[2] // 2  # get the middle slice
-            for batch_idx in range(batch.shape[0]):
-                for channel_idx in range(batch.shape[1]):
-                    tag = tag_template.format(name, batch_idx, channel_idx, slice_idx)
-                    img = batch[batch_idx, channel_idx, slice_idx, ...]
-                    tagged_images.append((tag, (self._normalize_img(img))))
-        else:
-            slice_idx = batch.shape[1] // 2  # get the middle slice
-            for batch_idx in range(batch.shape[0]):
-                tag = tag_template.format(name, batch_idx, 0, slice_idx)
-                img = batch[batch_idx, slice_idx, ...]
-                tagged_images.append((tag, (self._normalize_img(img))))
-
-        return tagged_images
-
-    @staticmethod
-    def _normalize_img(img):
-        return (img - np.min(img)) / np.ptp(img)

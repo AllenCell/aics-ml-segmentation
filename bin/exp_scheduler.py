@@ -229,7 +229,7 @@ def train(args, model):
 def evaluate(args, model):
 
     model.eval()
-    softmax = nn.Softmax()
+    softmax = nn.Softmax(dim=1)
     softmax.cuda()
 
     # check validity of parameters
@@ -239,12 +239,13 @@ def evaluate(args, model):
 
         filenames = glob.glob(args.InputDir + '/*' + args.DataType)
         filenames.sort()
-        print(filenames)
 
         for fi, fn in enumerate(filenames):
-
+            print(fn)
             # load data
             struct_img = load_single_image(args, fn, time_flag=False)
+
+            print(struct_img.shape)
 
             # apply the model
             output_img = apply_on_image(model, struct_img, softmax, args)
