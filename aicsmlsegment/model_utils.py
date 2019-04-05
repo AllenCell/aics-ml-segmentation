@@ -215,26 +215,3 @@ def build_model(config):
     
     model = model.to(config['device'])
     return model
-
-'''def find_maximum_patch_size(model, device):
-    """Tries to find the biggest patch size that can be send to GPU for inference
-    without throwing CUDA out of memory"""
-    logger = get_logger('PatchFinder')
-    in_channels = model.in_channels
-
-    patch_shapes = [(64, 128, 128), (96, 128, 128),
-                    (64, 160, 160), (96, 160, 160),
-                    (64, 192, 192), (96, 192, 192)]
-
-    for shape in patch_shapes:
-        # generate random patch of a given size
-        patch = np.random.randn(*shape).astype('float32')
-
-        patch = torch \
-            .from_numpy(patch) \
-            .view((1, in_channels) + patch.shape) \
-            .to(device)
-
-        logger.info(f"Current patch size: {shape}")
-        model(patch)
-'''
