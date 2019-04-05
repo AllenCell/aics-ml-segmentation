@@ -9,7 +9,6 @@ from aicsimageio import AICSImage, omeTifWriter
 from aicsimageprocessing import resize
 
 from aicsmlsegment.utils import load_config, load_single_image, input_normalization
-from aicsmlsegment.training_utils import BasicFolderTrainer, get_validation_metric, get_loss_criterion, build_optimizer, build_lr_scheduler, get_train_dataloader
 from aicsmlsegment.utils import get_logger
 from aicsmlsegment.model_utils import build_model, load_checkpoint, model_inference
 
@@ -120,19 +119,33 @@ def main(args):
             img = img[config['InputCh'],:,:,:]
             img = input_normalization(img, args_norm)
 
+
+            writer = omeTifWriter.OmeTifWriter(config['OutputDir'] + pathlib.PurePosixPath(fn).stem + '_seg_input.ome.tif')
+            writer.save(img)
+
+            if len(config['ResizeRatio'])>0:
+                img = resize(img, (1, config['ResizeRatio'][0], config['ResizeRatio'][1], config['ResizeRatio'][2]), method='cubic')
+                for ch_idx in range(img.shape[0]):
+                    struct_img = img[ch_idx,:,:,:] # note that struct_img is only a view of img, so changes made on struct_img also affects img
+                    struct_img = (struct_img - struct_img.min())/(struct_img.max() - struct_img.min())
+                    img[ch_idx,:,:,:] = struct_img
+
+            writer = omeTifWriter.OmeTifWriter(config['OutputDir'] + pathlib.PurePosixPath(fn).stem + '_seg_input_2.ome.tif')
+            writer.save(img)
+
             # apply the model
             output_img = model_inference(model, img, model.final_activation, args_inference)
 
             # extract the result and write the output
             for ch_idx in range(len(config['OutputCh'])//2):
-                write = omeTifWriter.OmeTifWriter(config['OutputDir'] + pathlib.PurePosixPath(fn).stem + '_seg_'+ str(config['OutputCh'][2*ch_idx])+'.ome.tif')
+                writer = omeTifWriter.OmeTifWriter(config['OutputDir'] + pathlib.PurePosixPath(fn).stem + '_seg_'+ str(config['OutputCh'][2*ch_idx])+'.ome.tif')
                 if config['Threshold']<0:
-                    write.save(output_img[ch_idx].astype(float))
+                    writer.save(output_img[ch_idx].astype(float))
                 else:
                     out = output_img[ch_idx] > config['Threshold']
                     out = out.astype(np.uint8)
                     out[out>0]=255
-                    write.save(out)
+                    writer.save(out)
             
             print(f'Image {fn} has been segmented')
 

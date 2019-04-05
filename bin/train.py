@@ -5,7 +5,7 @@ import traceback
 
 from aicsmlsegment.utils import load_config
 
-from aicsmlsegment.training_utils import BasicFolderTrainer, get_validation_metric, get_loss_criterion, build_optimizer, build_lr_scheduler, get_train_dataloader
+from aicsmlsegment.training_utils import BasicFolderTrainer, get_loss_criterion, build_optimizer, get_train_dataloader
 from aicsmlsegment.utils import get_logger
 from aicsmlsegment.model_utils import get_number_of_learnable_parameters, build_model, load_checkpoint
 
@@ -26,11 +26,6 @@ def main(args):
     # Log the number of learnable parameters
     logger.info(f'Number of learnable params {get_number_of_learnable_parameters(model)}')
 
-    # Create evaluation metric
-    val_criterion = []
-    if config['validation']['metric'] is not None:
-        val_criterion = get_validation_metric(config['validation'])
-
     # create data loader
     loaders = get_train_dataloader(config)
 
@@ -49,7 +44,7 @@ def main(args):
         print('start a new training')
 
     # run the training
-    trainer = BasicFolderTrainer(model, optimizer, lr_scheduler, loss_criterion, val_criterion, 
+    trainer = BasicFolderTrainer(model, optimizer, lr_scheduler, loss_criterion, 
                         loaders, config, logger=logger)
     trainer.run_training()
 

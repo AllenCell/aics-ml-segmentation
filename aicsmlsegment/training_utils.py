@@ -9,41 +9,27 @@ import torch
 from tensorboardX import SummaryWriter
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
+from torch.autograd import Variable
 import torch.optim as optim
 import importlib
 import random 
 from glob import glob
+from tqdm import tqdm
 
 from aicsimageio import AICSImage
 
 from aicsmlsegment.custom_loss import MultiAuxillaryElementNLLLoss
 from aicsmlsegment.custom_metrics import DiceCoefficient, MeanIoU, AveragePrecision
 from aicsmlsegment.model_utils import load_checkpoint, save_checkpoint, model_inference
-from aicsmlsegment.utils import compute_iou, get_logger
+from aicsmlsegment.utils import compute_iou, get_logger, load_single_image, input_normalization
 
-SUPPORTED_LOSSES = ['Aux'] #['ce', 'bce', 'wce', 'pce', 'dice', 'gdl']
-SUPPORTED_METRICS = ['dice', 'iou', 'ap']
+SUPPORTED_LOSSES = ['Aux'] 
 
 def build_optimizer(config, model):
     learning_rate = config['learning_rate']
     weight_decay = config['weight_decay']
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     return optimizer
-
-
-def build_lr_scheduler(config, optimizer):
-    lr_config = config.get('lr_scheduler', None)
-    if lr_config is None:
-        # use ReduceLROnPlateau as a default scheduler
-        return ReduceLROnPlateau(optimizer, mode='max', factor=0.2, patience=20, verbose=True)
-    else:
-        class_name = lr_config.pop('name')
-        m = importlib.import_module('torch.optim.lr_scheduler')
-        clazz = getattr(m, class_name)
-        # add optimizer to the config
-        lr_config['optimizer'] = optimizer
-        return clazz(**lr_config)
-
 
 def get_loss_criterion(config):
     """
@@ -59,63 +45,8 @@ def get_loss_criterion(config):
     #ignore_index = loss_config.get('ignore_index', None)
 
     #TODO: add more loss functions
-    '''
-    if weight is not None:
-        # convert to cuda tensor if necessary
-        weight = torch.tensor(weight).to(config['device'])
-
-    if name == 'bce':
-        skip_last_target = loss_config.get('skip_last_target', False)
-        if ignore_index is None and not skip_last_target:
-            return nn.BCEWithLogitsLoss()
-        else:
-            return BCELossWrapper(nn.BCEWithLogitsLoss(), ignore_index=ignore_index, skip_last_target=skip_last_target)
-    elif name == 'ce':
-        if ignore_index is None:
-            ignore_index = -100  # use the default 'ignore_index' as defined in the CrossEntropyLoss
-        return nn.CrossEntropyLoss(weight=weight, ignore_index=ignore_index)
-    elif name == 'wce':
-        if ignore_index is None:
-            ignore_index = -100  # use the default 'ignore_index' as defined in the CrossEntropyLoss
-        return WeightedCrossEntropyLoss(weight=weight, ignore_index=ignore_index)
-    elif name == 'pce':
-        return PixelWiseCrossEntropyLoss(class_weights=weight, ignore_index=ignore_index)
-    elif name == 'gdl':
-        return GeneralizedDiceLoss(weight=weight, ignore_index=ignore_index)
-    else:
-        sigmoid_normalization = loss_config.get('sigmoid_normalization', True)
-        skip_last_target = loss_config.get('skip_last_target', False)
-        return DiceLoss(weight=weight, ignore_index=ignore_index, sigmoid_normalization=sigmoid_normalization,
-                        skip_last_target=skip_last_target)
-    '''
     if name == 'Aux':
         return MultiAuxillaryElementNLLLoss(3, loss_config['loss_weight'],  config['nclass'])
-
-
-def get_validation_metric(config):
-    """
-    Returns the validaiton metric function based on provided configuration
-    :param config: (dict) a top level configuration object containing the 'eval_metric' key
-    :return: an instance of the evaluation metric
-    """
-    assert 'val_metric' in config, 'Could not find validation metric configuration'
-    val_config = config['val_metric']
-    name = val_config['name']
-    assert name in SUPPORTED_METRICS, f'Invalid validation metric: {name}. Supported metrics: {SUPPORTED_METRICS}'
-
-    ignore_index = val_config.get('ignore_index', None)
-
-    if name == 'dice':
-        return DiceCoefficient(ignore_index=ignore_index)
-    elif name == 'iou':
-        skip_channels = val_config.get('skip_channels', ())
-        return MeanIoU(skip_channels=skip_channels, ignore_index=ignore_index)
-    elif name == 'ap':
-        threshold = val_config.get('threshold', 0.5)
-        min_instance_size = val_config.get('min_instance_size', None)
-        use_last_target = val_config.get('use_last_target', False)
-        return AveragePrecision(threshold=threshold, ignore_index=ignore_index, min_instance_size=min_instance_size,
-                                use_last_target=use_last_target)
 
 
 def get_train_dataloader(config):
@@ -127,20 +58,6 @@ def get_train_dataloader(config):
     else:
         print('other loaders are under construction')
         quit()
-
-class RunningAverage:
-    """Computes and stores the average
-    """
-
-    def __init__(self):
-        self.count = 0
-        self.sum = 0
-        self.avg = 0
-
-    def update(self, value, n=1):
-        self.count += n
-        self.sum += value * n
-        self.avg = self.sum / self.count
 
 def shuffle_split_filenames(datafolder, leaveout):
     print('prepare the data ... ...')
@@ -175,28 +92,12 @@ class BasicFolderTrainer:
     Args:
         model: model to be trained
         optimizer (nn.optim.Optimizer): optimizer used for training
-        lr_scheduler (torch.optim.lr_scheduler._LRScheduler): learning rate scheduler
-            WARN: bear in mind that lr_scheduler.step() is invoked after every validation step
-            (i.e. validate_after_iters) not after every epoch. So e.g. if one uses StepLR with step_size=30
-            the learning rate will be adjusted after every 30 * validate_after_iters iterations.
         loss_criterion (callable): loss function
-        eval_criterion (callable): used to compute training/validation metric (such as Dice, IoU, AP or Rand score)
-            saving the best checkpoint is based on the result of this function on the validation set
-        device (torch.device): device to train on
         loaders (dict): 'train' and 'val' loaders
         checkpoint_dir (string): dir for saving checkpoints and tensorboard logs
-        max_num_epochs (int): maximum number of epochs
-        validate_after_iters (int): validate after that many iterations
-        log_after_iters (int): number of iterations before logging to tensorboard
-        validate_iters (int): number of validation iterations, if None validate
-            on the whole validation set
-        best_val_score (float): best validation score so far (higher better)
-        num_iterations (int): useful when loading the model from the checkpoint
-        num_epoch (int): useful when loading the model from the checkpoint
     """
 
-    def __init__(self, model, optimizer, lr_scheduler, loss_criterion,
-                 val_criterion, loaders, config, logger=None):
+    def __init__(self, model, optimizer, lr_scheduler, loss_criterion, loaders, config, logger=None):
 
         if logger is None:
             self.logger = get_logger('ModelTrainer', level=logging.DEBUG)
@@ -211,7 +112,6 @@ class BasicFolderTrainer:
         self.optimizer = optimizer
         self.scheduler = lr_scheduler
         self.loss_criterion = loss_criterion
-        self.val_criterion = val_criterion
         self.device = device
         self.loaders = loaders
 
@@ -226,6 +126,8 @@ class BasicFolderTrainer:
         # validation setting
         self.validation_config = config['validation']
         self.leaveout = self.validation_config['leaveout']
+        self.OutputCh = self.validation_config['OutputCh']
+        self.validate_every_n_epoch = self.validation_config['validate_every_n_epoch']
 
         self.writer = SummaryWriter(
             log_dir=os.path.join(self.checkpoint_dir, 'logs'))
@@ -240,8 +142,8 @@ class BasicFolderTrainer:
         self.datafolder = loader_config['datafolder']
         
         #TODO: these parameters could be updated when resuming
-        self.num_iterations = 1  
-        self.num_epoch = 1
+        self.num_iterations = 0
+        self.num_epoch = 0
         
         ##### customized loader ######
         if self.validation_config['metric'] is not None:
@@ -249,6 +151,12 @@ class BasicFolderTrainer:
             train_filenames, valid_filenames = shuffle_split_filenames(self.datafolder, self.validation_config['leaveout'])
             self.valid_filenames = valid_filenames
             self.train_filenames = train_filenames
+            self.args_inference=lambda:None
+            self.args_inference.size_in = config['size_in']
+            self.args_inference.size_out = config['size_out']
+            self.args_inference.OutputCh = self.OutputCh
+            self.args_inference.nclass =  config['nclass'] 
+
         else:
             filenames = glob(self.datafolder + '/*_GT.ome.tif')
             filenames.sort()
@@ -272,67 +180,114 @@ class BasicFolderTrainer:
             self.num_epoch += 1
 
     def train(self):
-        """Trains the model for 1 epoch.
-        Args:
-            train_loader (torch.utils.data.DataLoader): training data loader
-        Returns:
-            True if the training should be terminated immediately, False otherwise
-        """
-        train_losses = RunningAverage()
-        #train_val_scores = RunningAverage()
 
-        # sets the model in training mode
-        self.model.train()
+        start_epoch = self.num_epoch
+        for _ in range(start_epoch, self.max_num_epochs+1):
 
-        # check if re-load on training data in needed
-        if self.num_epoch>0 and  self.num_epoch % self.epoch_shuffle ==0:
-           self.train_loader =  DataLoader(self.loaders(self.train_filenames, self.PatchPerBuffer, self.size_in, self.size_out), num_workers=self.NumWorkers, batch_size=self.batch_size, shuffle=True)
+            # sets the model in training mode
+            self.model.train()
 
-        for i, current_batch in enumerate(self.train_loader):
-            self.logger.info(
-                f'Training iteration {self.num_iterations}. Batch {i}. Epoch [{self.num_epoch}/{self.max_num_epochs - 1}]')
-            
+            # check if re-load on training data in needed
+            if self.num_epoch>0 and  self.num_epoch % self.epoch_shuffle ==0:
+                print('shuffling data')
+                self.train_loader =  DataLoader(self.loaders(self.train_filenames, self.PatchPerBuffer, self.size_in, self.size_out), num_workers=self.NumWorkers, batch_size=self.batch_size, shuffle=True)
 
-            if len(current_batch) == 2:  # no costmap
-                input, target = current_batch
-                input, target = input.to(self.device), target.to(self.device)
-                weight = None
+            # Training starts ...
+            epoch_loss = []
+
+            for i, current_batch in tqdm(enumerate(self.train_loader)):
+                    
+                inputs = Variable(current_batch[0].cuda())
+                targets = current_batch[1]
+                outputs = self.model(inputs)
+
+                if len(targets)>1:
+                    for zidx in range(len(targets)):
+                        targets[zidx] = Variable(targets[zidx].cuda())
+                else: 
+                    targets = Variable(targets[0].cuda())
+
+                self.optimizer.zero_grad()
+                if len(current_batch)==3: # input + target + cmap
+                    cmap = Variable(current_batch[2].cuda())
+                    loss = self.loss_criterion(outputs, targets, cmap)
+                else: # input + target
+                    loss = self.loss_criterion(outputs,targets)
+                    
+                loss.backward()
+                self.optimizer.step()
+
+                epoch_loss.append(loss.data.item())
+                self.num_iterations += 1
+
+            average_training_loss = sum(epoch_loss) / len(epoch_loss)
+
+            # validation
+            if self.num_epoch>0 and self.num_epoch % self.validate_every_n_epoch ==0:
+                validation_loss = np.zeros((len(self.OutputCh)//2,))
+                self.model.eval() 
+
+                for img_idx, fn in enumerate(self.valid_filenames):
+
+                    # target 
+                    label_reader = AICSImage(fn+'_GT.ome.tif')  #CZYX
+                    label = label_reader.data
+                    label = np.squeeze(label,axis=0) # 4-D after squeeze
+
+                    # when the tif has only 1 channel, the loaded array may have falsely swaped dimensions (ZCYX). we want CZYX
+                    # (This may also happen in different OS or different package versions)
+                    # ASSUMPTION: we have more z slices than the number of channels 
+                    if label.shape[1]<label.shape[0]: 
+                        label = np.transpose(label,(1,0,2,3))
+
+                    # input image
+                    input_reader = AICSImage(fn+'.ome.tif') #CZYX  #TODO: check size
+                    input_img = input_reader.data
+                    input_img = np.squeeze(input_img,axis=0)
+                    if input_img.shape[1] < input_img.shape[0]:
+                        input_img = np.transpose(input_img,(1,0,2,3))
+
+                    # cmap tensor
+                    costmap_reader = AICSImage(fn+'_CM.ome.tif') # ZYX
+                    costmap = costmap_reader.data
+                    costmap = np.squeeze(costmap,axis=0)
+                    if costmap.shape[0] == 1:
+                        costmap = np.squeeze(costmap,axis=0)
+                    elif costmap.shape[1] == 1:
+                        costmap = np.squeeze(costmap,axis=1)
+
+                    # output 
+                    outputs = model_inference(self.model, input_img, self.model.final_activation, self.args_inference)
+                    
+                    assert len(self.OutputCh)//2 == len(outputs)
+
+                    for vi in range(len(outputs)):
+                        if label.shape[0]==1: # the same label for all output
+                            validation_loss[vi] += compute_iou(outputs[vi][0,:,:,:]>0.5, label[0,:,:,:]==self.OutputCh[2*vi+1], costmap)
+                        else:
+                            validation_loss[vi] += compute_iou(outputs[vi][0,:,:,:]>0.5, label[vi,:,:,:]==self.OutputCh[2*vi+1], costmap)
+
+
+                
+                average_validation_loss = validation_loss / len(self.valid_filenames)
+                print(f'Epoch: {self.num_epoch}, Training Loss: {average_training_loss}, Validation loss: {average_validation_loss}')
             else:
-                input, target, weight = current_batch
-                input, weight = input.to(self.device), weight.to(self.device)
+                print(f'Epoch: {self.num_epoch}, Training Loss: {average_training_loss}')
 
-                # target is always a list, containing one or more tensors
-                if len(target)>1:
-                    for list_idx in range(len(target)):
-                        target[list_idx] = target[list_idx].to(self.device)
-                else:
-                    target = target[0].to(self.device)
 
-            output, loss = self._forward_pass(input, target, weight)
-            train_losses.update(loss.data.item(), input.size(0))
-            print(f'iteration {self.num_iterations} in Epoch [{self.num_epoch}/{self.max_num_epochs - 1}], loss = {loss.data.item()}')
-
-            # compute gradients and update parameters
-            self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
-            self.num_iterations += 1
-
-        if self.num_epoch % self.save_every_n_epoch == 0:
-            
-            save_checkpoint({
-                'epoch': self.num_epoch + 1,
-                'num_iterations': self.num_iterations,
-                'model_state_dict': self.model.state_dict(),
-                #'best_val_score': self.best_val_score,
-                'optimizer_state_dict': self.optimizer.state_dict(),
-                'device': str(self.device),
-                }, checkpoint_dir=self.checkpoint_dir, logger=self.logger)
-
+            if self.num_epoch % self.save_every_n_epoch == 0:
+                save_checkpoint({
+                    'epoch': self.num_epoch,
+                    'num_iterations': self.num_iterations,
+                    'model_state_dict': self.model.state_dict(),
+                    #'best_val_score': self.best_val_score,
+                    'optimizer_state_dict': self.optimizer.state_dict(),
+                    'device': str(self.device),
+                    }, checkpoint_dir=self.checkpoint_dir, logger=self.logger)
+            self.num_epoch += 1
 
         # TODO: add validation step
 
-        return False
 
     '''
     def validate(self):
@@ -400,16 +355,6 @@ class BasicFolderTrainer:
         finally:
             self.model.train()
     '''
-    def _forward_pass(self, input, target, weight=None):
-        # forward pass
-        output = self.model(input)
-        # compute the loss
-        if weight is None:
-            loss = self.loss_criterion(output, target)
-        else:
-            loss = self.loss_criterion(output, target, weight)
-
-        return output, loss
 
     def _log_lr(self):
         lr = self.optimizer.param_groups[0]['lr']
