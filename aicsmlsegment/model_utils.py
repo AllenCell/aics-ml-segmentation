@@ -95,6 +95,8 @@ def apply_on_image(model, input_img, softmax, args):
 
 def model_inference(model, input_img, softmax, args):
 
+    model.eval()
+
     if args.size_in == args.size_out:
         img_pad = np.np.expand_dims(input_img, axis=0) # add batch dimension
     else:  # zero padding on input image

@@ -133,9 +133,9 @@ class RR_FH_M0(Dataset):
             
             while new_patch_num < num_patch_per_img[img_idx]:
                 
-                pz = random.randint(1, label.shape[1] - size_out[0]-1)
-                py = random.randint(1, label.shape[2] - size_out[1]-1)
-                px = random.randint(1, label.shape[3] - size_out[2]-1)
+                pz = random.randint(0, label.shape[1] - size_out[0])
+                py = random.randint(0, label.shape[2] - size_out[1])
+                px = random.randint(0, label.shape[3] - size_out[2])
 
                 
                 # check if this is a good crop
@@ -275,9 +275,9 @@ class RR_FH_M0C(Dataset):
             
             while new_patch_num < num_patch_per_img[img_idx]:
                 
-                pz = random.randint(1, label.shape[1] - size_out[0]-1)
-                py = random.randint(1, label.shape[2] - size_out[1]-1)
-                px = random.randint(1, label.shape[3] - size_out[2]-1)
+                pz = random.randint(0, label.shape[1] - size_out[0])
+                py = random.randint(0, label.shape[2] - size_out[1])
+                px = random.randint(0, label.shape[3] - size_out[2])
 
                 
                 # check if this is a good crop
@@ -374,9 +374,9 @@ class NOAUG_M(Dataset):
             
             while new_patch_num < num_patch_per_img[img_idx]:
                 
-                pz = random.randint(1, label.shape[1] - size_out[0]-1)
-                py = random.randint(1, label.shape[2] - size_out[1]-1)
-                px = random.randint(1, label.shape[3] - size_out[2]-1)
+                pz = random.randint(0, label.shape[1] - size_out[0])
+                py = random.randint(0, label.shape[2] - size_out[1])
+                px = random.randint(0, label.shape[3] - size_out[2])
 
                 
                 ## check if this is a good crop

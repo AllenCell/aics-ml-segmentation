@@ -120,8 +120,8 @@ def main(args):
             img = input_normalization(img, args_norm)
 
 
-            writer = omeTifWriter.OmeTifWriter(config['OutputDir'] + pathlib.PurePosixPath(fn).stem + '_seg_input.ome.tif')
-            writer.save(img)
+            #writer = omeTifWriter.OmeTifWriter(config['OutputDir'] + pathlib.PurePosixPath(fn).stem + '_seg_input.ome.tif')
+            #writer.save(img)
 
             if len(config['ResizeRatio'])>0:
                 img = resize(img, (1, config['ResizeRatio'][0], config['ResizeRatio'][1], config['ResizeRatio'][2]), method='cubic')
@@ -130,8 +130,8 @@ def main(args):
                     struct_img = (struct_img - struct_img.min())/(struct_img.max() - struct_img.min())
                     img[ch_idx,:,:,:] = struct_img
 
-            writer = omeTifWriter.OmeTifWriter(config['OutputDir'] + pathlib.PurePosixPath(fn).stem + '_seg_input_2.ome.tif')
-            writer.save(img)
+            #writer = omeTifWriter.OmeTifWriter(config['OutputDir'] + pathlib.PurePosixPath(fn).stem + '_seg_input_2.ome.tif')
+            #writer.save(img)
 
             # apply the model
             output_img = model_inference(model, img, model.final_activation, args_inference)
