@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import os
 import sys
 import logging
@@ -6,9 +8,12 @@ import traceback
 import importlib
 import pathlib
 import csv
+
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt 
+import matplotlib
 from glob import glob
 from random import shuffle
 from scipy import stats
@@ -18,6 +23,9 @@ import cv2
 
 from aicssegmentation.core.utils import histogram_otsu
 from aicsimageio import AICSImage, omeTifWriter
+from aicsmlsegment.utils import input_normalization
+
+matplotlib.use('TkAgg')
 
 ####################################################################################################
 # global settings
@@ -100,12 +108,27 @@ def create_merge_mask(raw_img, seg1, seg2):
     seg2_label = np.round(seg2_label)
     seg2_label = seg2_label.astype(np.uint8)
 
-    img = np.zeros((raw_img.shape[1], 3*raw_img.shape[2], 3),dtype=np.uint8)
+
+    bw = seg1>0
+    z_profile = np.zeros((bw.shape[0],),dtype=int)
+    for zz in range(bw.shape[0]):
+        z_profile[zz] = np.count_nonzero(bw[zz,:,:])
+    mid_frame = round(histogram_otsu(z_profile)*bw.shape[0]).astype(int)
+
+    img = np.zeros((2*raw_img.shape[1], 3*raw_img.shape[2], 3),dtype=np.uint8)
+
+    row_index = 0
 
     for cc in range(3):
-        img[:, :raw_img.shape[2], cc]=np.amax(raw_img, axis=0)
-        img[:, raw_img.shape[2]:2*raw_img.shape[2], cc]=np.amax(seg1_label, axis=0)
-        img[:, 2*raw_img.shape[2]:, cc]=np.amax(seg2_label, axis=0)
+        img[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], :raw_img.shape[2], cc]=np.amax(raw_img, axis=0)
+        img[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], raw_img.shape[2]:2*raw_img.shape[2], cc]=np.amax(seg1_label, axis=0)
+        img[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 2*raw_img.shape[2]:, cc]=np.amax(seg2_label, axis=0)
+    
+    row_index = 1
+    for cc in range(3):
+        img[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], :raw_img.shape[2], cc]=raw_img[mid_frame,:,:]
+        img[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], raw_img.shape[2]:2*raw_img.shape[2], cc]=seg1_label[mid_frame,:,:]
+        img[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 2*raw_img.shape[2]:, cc]=seg2_label[mid_frame,:,:]
 
     draw_mask = np.zeros((img.shape[0],img.shape[1]),dtype=np.uint8)
     draw_img = img.copy()
@@ -173,6 +196,7 @@ class Args(object):
         p.add_argument('--train_path', required=True, help='path to output training data')
         p.add_argument('--mask_path', help='[optional] the output directory for masks')
         p.add_argument('--csv_name', required=True, help='the csv file to save the sorting results')
+        p.add_argument('--Normalization', required=True, type=int, help='the normalization recipe to use')
 
         self.__no_args_print_help(p)
         p.parse_args(namespace=self)
@@ -216,6 +240,10 @@ class Executor(object):
         df = pd.read_csv(args.csv_name)
 
         for index, row in df.iterrows():
+
+            if not np.isnan(row['score']) and (row['score']==1 or row['score']==0):
+                continue
+
             reader = AICSImage(row['raw'])
             im_full = reader.data
             struct_img = im_full[0,args.input_channel,:,:,:]
@@ -225,34 +253,41 @@ class Executor(object):
 
             reader_seg1 = AICSImage(row['seg1'])
             im_seg1_full = reader_seg1.data
-            assert im_seg1_full.shape[0]==1 and im_seg1_full.shape[1]==1
-            seg1 = im_seg1_full[0,0,:,:,:]
+            assert im_seg1_full.shape[0]==1
+            assert im_seg1_full.shape[1]==1 or im_seg1_full.shape[2]==1
+            if im_seg1_full.shape[1]==1:
+                seg1 = im_seg1_full[0,0,:,:,:]>0.1
+            else:
+                seg1 = im_seg1_full[0,:,0,:,:]>0.1
 
             reader_seg2 = AICSImage(row['seg2'])
             im_seg2_full = reader_seg2.data
-            assert im_seg2_full.shape[0]==1 and im_seg2_full.shape[1]==1
-            seg2 = im_seg2_full[0,0,:,:,:]
-
-            if not np.isnan(row['score']) and (row['score']==1 or row['score']==0):
-                continue
+            assert im_seg2_full.shape[0]==1 
+            assert im_seg2_full.shape[1]==1 or im_seg2_full.shape[2]==1
+            if im_seg2_full.shape[1]==1:
+                seg2 = im_seg2_full[0,0,:,:,:]>0
+            else:
+                seg2 = im_seg2_full[0,:,0,:,:]>0
             
             create_merge_mask(raw_img, seg1.astype(np.uint8), seg2.astype(np.uint8))
+
             if ignore_img:
                 df['score'].iloc[index]=0
-                continue
             else:
                 df['score'].iloc[index]=1
 
-            mask_fn = args.mask_path + os.sep + os.path.basename(row['raw'])[:-5] + '_mask.tiff'
-            crop_mask = np.zeros(seg1.shape, dtype=np.uint8)
-            for zz in range(crop_mask.shape[0]):
-                crop_mask[zz,:,:] = draw_mask[:crop_mask.shape[1],:crop_mask.shape[2]]
+                mask_fn = args.mask_path + os.sep + os.path.basename(row['raw'])[:-5] + '_mask.tiff'
+                crop_mask = np.zeros(seg1.shape, dtype=np.uint8)
+                for zz in range(crop_mask.shape[0]):
+                    crop_mask[zz,:,:] = draw_mask[:crop_mask.shape[1],:crop_mask.shape[2]]
 
-            crop_mask = crop_mask.astype(np.uint8)
-            crop_mask[crop_mask>0]=255
-            writer = omeTifWriter.OmeTifWriter(mask_fn)
-            writer.save(crop_mask)
-            df['mask'].iloc[index]=mask_fn
+                crop_mask = crop_mask.astype(np.uint8)
+                crop_mask[crop_mask>0]=255
+                writer = omeTifWriter.OmeTifWriter(mask_fn)
+                writer.save(crop_mask)
+                df['mask'].iloc[index]=mask_fn
+
+            df.to_csv(args.csv_name)
             
 
         #########################################
@@ -262,6 +297,7 @@ class Executor(object):
         #  step as smooth as possible, even though
         #  this may waster i/o time on reloading images)
         # #######################################
+        print('finish merging, start building the training data ...')
         training_data_count = 0
         for index, row in df.iterrows():
             if row['score']==1:
@@ -270,33 +306,49 @@ class Executor(object):
                 # load raw image
                 reader = AICSImage(row['raw'])
                 img = reader.data.astype(np.float32)
-                struct_img = img[0,args.input_channel,:,:,:].copy()
+                struct_img = input_normalization(img[0,[args.input_channel],:,:,:], args)
+                struct_img= struct_img[0,:,:,:]
 
-                # load segmentation gt
-                reader = AICSImage(row['seg'])
-                img = reader.data
-                assert img.shape[0]==1 and img.shape[1]==1
-                seg = img[0,0,:,:,:]>0
-                seg = seg.astype(np.uint8)
-                seg[seg>0]=1
+                reader_seg1 = AICSImage(row['seg1'])
+                im_seg1_full = reader_seg1.data
+                assert im_seg1_full.shape[0]==1
+                assert im_seg1_full.shape[1]==1 or im_seg1_full.shape[2]==1
+                if im_seg1_full.shape[1]==1:
+                    seg1 = im_seg1_full[0,0,:,:,:]>0.1
+                else:
+                    seg1 = im_seg1_full[0,:,0,:,:]>0.1
 
-                cmap = np.ones(seg.shape, dtype=np.float32)
+                reader_seg2 = AICSImage(row['seg2'])
+                im_seg2_full = reader_seg2.data
+                assert im_seg2_full.shape[0]==1 
+                assert im_seg2_full.shape[1]==1 or im_seg2_full.shape[2]==1
+                if im_seg2_full.shape[1]==1:
+                    seg2 = im_seg2_full[0,0,:,:,:]>0
+                else:
+                    seg2 = im_seg2_full[0,:,0,:,:]>0
+
                 if os.path.isfile(str(row['mask'])):
                     # load segmentation gt
                     reader = AICSImage(row['mask'])
                     img = reader.data
                     assert img.shape[0]==1 and img.shape[1]==1
-                    mask = img[0,0,:,:,:]
-                    cmap[mask>0]=0
-
+                    mask = img[0,0,:,:,:]>0
+                    seg1[mask>0]=0
+                    seg2[mask==0]=0
+                    seg1 = np.logical_or(seg1,seg2)
+ 
+                cmap = np.ones(seg1.shape, dtype=np.float32)
                 writer = omeTifWriter.OmeTifWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '.ome.tif')
                 writer.save(struct_img)
 
+                seg1 = seg1.astype(np.uint8)
+                seg1[seg1>0]=255
                 writer = omeTifWriter.OmeTifWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '_GT.ome.tif')
-                writer.save(seg)
+                writer.save(seg1)
 
                 writer = omeTifWriter.OmeTifWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '_CM.ome.tif')
                 writer.save(cmap)
+        print('training data is ready')
 
 
 def main():

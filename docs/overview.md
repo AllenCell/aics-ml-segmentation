@@ -21,6 +21,7 @@ Above picture shows a flowchart of the actual steps in practice. **Curator** and
 ![demo1 pic](./demo1_pic.png)
 
 [Link to the demo documentation](./demo_1.md)
+
 Link to the demo video
 
 ### Case 2: Segmentation of Lamin B1 in 3D fluorescent microscopy images of hiPS cells 
@@ -28,6 +29,7 @@ Link to the demo video
 ![demo2 pic](./demo2_pic.png)
 
 [Link to the demo documentation](./demo_2.md)
+
 Link to the demo video
 
 

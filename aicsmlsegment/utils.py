@@ -1,8 +1,8 @@
-import torch.nn as nn
+#import torch.nn as nn
 import numpy as np
 import logging
 import sys
-from torch.utils.data import sampler as torch_sampler
+#from torch.utils.data import sampler as torch_sampler
 from aicsimageio import AICSImage
 from aicsimageprocessing import resize
 import os
@@ -10,7 +10,7 @@ from scipy import ndimage as ndi
 from scipy import stats
 import argparse
 
-import torch
+#import torch
 import yaml
 
 def load_config(config_path):

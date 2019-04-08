@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import os
 import sys
 import logging
@@ -9,6 +11,7 @@ import csv
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt 
+import matplotlib
 from glob import glob
 from random import shuffle
 from scipy import stats
@@ -18,6 +21,9 @@ from scipy import ndimage as ndi
 
 from aicssegmentation.core.utils import histogram_otsu
 from aicsimageio import AICSImage, omeTifWriter
+from aicsmlsegment.utils import input_normalization
+
+matplotlib.use('TkAgg')
 
 ####################################################################################################
 # global settings
@@ -231,6 +237,7 @@ class Args(object):
         p.add_argument('--train_path', required=True, help='path to output training data')
         p.add_argument('--mask_path', help='[optional] the output directory for masks')
         p.add_argument('--csv_name', required=True, help='the csv file to save the sorting results')
+        p.add_argument('--Normalization', required=True, type=int, help='the normalization recipe to use')
 
         self.__no_args_print_help(p)
         p.parse_args(namespace=self)
@@ -322,6 +329,7 @@ class Executor(object):
         #  step as smooth as possible, even though
         #  this may waster i/o time on reloading images)
         # #######################################
+        print('finish merging, start building the training data ...')
         training_data_count = 0
         for index, row in df.iterrows():
             if row['score']==1:
@@ -330,7 +338,8 @@ class Executor(object):
                 # load raw image
                 reader = AICSImage(row['raw'])
                 img = reader.data.astype(np.float32)
-                struct_img = img[0,args.input_channel,:,:,:].copy()
+                struct_img = input_normalization(img[0,[args.input_channel],:,:,:], args)
+                struct_img= struct_img[0,:,:,:]
 
                 # load segmentation gt
                 reader = AICSImage(row['seg'])
@@ -357,7 +366,7 @@ class Executor(object):
 
                 writer = omeTifWriter.OmeTifWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '_CM.ome.tif')
                 writer.save(cmap)
-
+        print('training data is ready')
 
 def main():
     dbg = False
@@ -382,41 +391,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-'''
-sample_fn = '/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_classic_workflow_segmentation_iter_1/image_040_struct_segmentation.tiff'
-mpx, mpy = -1, -1
-
-
-
-# Create a black image, a window and bind the function to window
-reader = AICSImage(sample_fn)
-data = reader.data 
-img = np.amax(data[0,0,:,:,:]>0, axis=0)
-img = img.astype(np.uint8)
-img[img>0]=255
-img = np.stack([img,img,img],axis=2)
-mask = np.zeros_like(img)
-cv2.namedWindow('image')
-cv2.setMouseCallback('image',draw_polygons)
-
-while(1):
-    cv2.imshow('image',img)
-    if len(pts)>0:
-        cv2.polylines(img, [np.asarray(pts).astype(np.int32)], False, (0,255,255))
-    k = cv2.waitKey(50)
-    if k == 27:
-        break
-    elif k == ord('d'):
-        pts.append(pts[0])
-        cv2.fillPoly(img, [np.asarray(pts).astype(np.int32)], (0,255,255))
-        cv2.fillPoly(mask, [np.asarray(pts).astype(np.int32)], (255,0,0))
-        pts=[]
-
-
-print(mask.shape)
-mask = mask[:,:,0]
-imsave('test.tiff',mask)
-    
-cv2.destroyAllWindows()
-'''
