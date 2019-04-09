@@ -9,8 +9,10 @@ conda create --name mlsegmenter python=3.6
 2. activate your environment and do the installation within the environment:
 
 ```bash 
-source activate mlsegmenter 
+conda activate mlsegmenter 
 ```
+
+(Note: always check out [conda documentation](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#activating-an-environment) for updates. If you are using an older version of conda, you may need to activate the environment by `source activate mlsegmenter`.)
 
 3. Install Pytorch
 
@@ -31,6 +33,6 @@ cd ./aics-ml-segmentation
 pip install -e .
 ```
 
-Resource:
+External resource:
 
 [Python Development in Visual Studio Code](https://realpython.com/python-development-visual-studio-code/)

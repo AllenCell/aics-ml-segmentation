@@ -194,7 +194,8 @@ class Args(object):
         p.add_argument('--seg1_path', required=True, help='path to segmentation results v1')
         p.add_argument('--seg2_path', required=True, help='path to segmentation results v2')
         p.add_argument('--train_path', required=True, help='path to output training data')
-        p.add_argument('--mask_path', help='[optional] the output directory for masks')
+        p.add_argument('--mask_path', help='[optional] the output directory for merging masks')
+        p.add_argument('--ex_mask_path', help='[optional] the output directory for excluding masks')
         p.add_argument('--csv_name', required=True, help='the csv file to save the sorting results')
         p.add_argument('--Normalization', required=True, type=int, help='the normalization recipe to use')
 
@@ -225,13 +226,13 @@ class Executor(object):
             filenames.sort()
             with open(args.csv_name, 'w') as csvfile:
                 filewriter = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
-                filewriter.writerow(['raw','seg1','seg2','score','mask'])
+                filewriter.writerow(['raw','seg1','seg2','score','merging_mask','excluding_mask'])
                 for _, fn in enumerate(filenames):
                     seg1_fn = args.seg1_path + os.sep + os.path.basename(fn)[:-5] + '_struct_segmentation.tiff'
                     seg2_fn = args.seg2_path + os.sep + os.path.basename(fn)[:-5] + '_struct_segmentation.tiff'
                     assert os.path.exists(seg1_fn)
                     assert os.path.exists(seg2_fn)
-                    filewriter.writerow([fn, seg1_fn , seg2_fn , None, None])
+                    filewriter.writerow([fn, seg1_fn , seg2_fn , None, None, None])
 
     def execute(self, args):
 
@@ -285,7 +286,23 @@ class Executor(object):
                 crop_mask[crop_mask>0]=255
                 writer = omeTifWriter.OmeTifWriter(mask_fn)
                 writer.save(crop_mask)
-                df['mask'].iloc[index]=mask_fn
+                df['merging_mask'].iloc[index]=mask_fn
+
+                need_mask = input('Do you need to add a mask for this image, enter y or n:  ')
+                if need_mask == 'y':
+                    create_merge_mask(raw_img, seg1.astype(np.uint8), seg2.astype(np.uint8))
+
+                    mask_fn = args.mask_path + os.sep + os.path.basename(row['raw'])[:-5] + '_mask.tiff'
+                    crop_mask = np.zeros(seg1.shape, dtype=np.uint8)
+                    for zz in range(crop_mask.shape[0]):
+                        crop_mask[zz,:,:] = draw_mask[:crop_mask.shape[1],:crop_mask.shape[2]]
+
+                    crop_mask = crop_mask.astype(np.uint8)
+                    crop_mask[crop_mask>0]=255
+                    writer = omeTifWriter.OmeTifWriter(mask_fn)
+                    writer.save(crop_mask)
+                    df['excluding_mask'].iloc[index]=mask_fn
+
 
             df.to_csv(args.csv_name)
             
@@ -327,17 +344,24 @@ class Executor(object):
                 else:
                     seg2 = im_seg2_full[0,:,0,:,:]>0
 
-                if os.path.isfile(str(row['mask'])):
-                    # load segmentation gt
-                    reader = AICSImage(row['mask'])
+                if os.path.isfile(str(row['merging_mask'])):
+                    reader = AICSImage(row['merging_mask'])
                     img = reader.data
                     assert img.shape[0]==1 and img.shape[1]==1
                     mask = img[0,0,:,:,:]>0
                     seg1[mask>0]=0
                     seg2[mask==0]=0
                     seg1 = np.logical_or(seg1,seg2)
- 
+                
                 cmap = np.ones(seg1.shape, dtype=np.float32)
+                if os.path.isfile(str(row['excluding_mask'])):
+                    reader = AICSImage(row['excluding_mask'])
+                    img = reader.data
+                    assert img.shape[0]==1 and img.shape[1]==1
+                    ex_mask = img[0,0,:,:,:]>0
+                    cmap[ex_mask>0]=0
+ 
+                
                 writer = omeTifWriter.OmeTifWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '.ome.tif')
                 writer.save(struct_img)
 
