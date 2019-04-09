@@ -38,8 +38,9 @@ curator_sorting \
 After clicking through all images, the training data is saved in `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_training_data_iter_1`. Manually updating the paths (path to training data and path to save the trained model) the training configuration file in 'train.yaml'. Then, simply run
 
 ```bash
-dl_train --config /home/config_files/train_lab.yaml
+python /allen/aics/assay-dev/Segmentation/DeepLearning/aics-ml-segmentation/aicsmlsegment/bin/train.py --config /allen/aics/assay-dev/Segmentation/DeepLearning/aics-ml-segmentation/configs/train_config.yaml
 ```
+
 Depending on the size of your training data, the training process may take 8~32 hours
 
 ## Stage 4: Run **Binarizer**
@@ -47,7 +48,7 @@ Depending on the size of your training data, the training process may take 8~32 
 The trained model is saved at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_saved_model_iter_1/checkpoint_epoch_400.pytorch`. After updating the paths in prediction configuration (`predict_folder_config.yaml`), we can simply run
 
 ```bash
-dl_predict --config ../config/predict_folder_config.yaml
+python /allen/aics/assay-dev/Segmentation/DeepLearning/aics-ml-segmentation/aicsmlsegment/bin/predict.py --config /allen/aics/assay-dev/Segmentation/DeepLearning/aics-ml-segmentation/configs/predict_folder_config.yaml
 ```
 
 Looking at the results, we find that Lamin B1 in all interphase cells are segmented very well, but still need improvement for mitotic cells. 
@@ -59,7 +60,7 @@ For convenice, we use a set of samples from mitotic enriched experiments, where 
 * first run with the DL model and save at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_DL_iter_2`
 
 ```bash
-dl_predict --config ../config/predict_folder_config.yaml
+python /allen/aics/assay-dev/Segmentation/DeepLearning/aics-ml-segmentation/aicsmlsegment/bin/predict.py --config /allen/aics/assay-dev/Segmentation/DeepLearning/aics-ml-segmentation/configs/predict_folder_config.yaml
 ```
 
 * second run with the `lmnb1_mitotic` workflow, and save at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_classic_workflow_segmentation_iter_2`
@@ -90,14 +91,14 @@ curator_merging \
 After clicking through all images, the training data is saved in `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_training_data_iter_2`. Manually updating the paths (path to training data and path to save the trained model) the training configuration file in 'train.yaml'. Then, simply run
 
 ```bash
-dl_train --config /home/config_files/train_lab.yaml
+python /allen/aics/assay-dev/Segmentation/DeepLearning/aics-ml-segmentation/aicsmlsegment/bin/train.py --config /allen/aics/assay-dev/Segmentation/DeepLearning/aics-ml-segmentation/configs/train_config.yaml
 ```
 ## Stage 7: Run *Binarizer*
 
 The trained model is saved at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_saved_model_iter_1/checkpoint_epoch_400.pytorch`. After updating the paths in prediction configuration (`predict_folder_config.yaml`), we can simply run
 
 ```bash
-dl_predict --config ../config/predict_folder_config.yaml
+python /allen/aics/assay-dev/Segmentation/DeepLearning/aics-ml-segmentation/aicsmlsegment/bin/predict.py --config /allen/aics/assay-dev/Segmentation/DeepLearning/aics-ml-segmentation/configs/predict_folder_config.yaml
 ```
 
 Looking at the results, Lamin B1 in both interphase cells and mitotic cells are segmented well. 
