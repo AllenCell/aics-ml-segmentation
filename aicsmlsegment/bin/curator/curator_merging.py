@@ -292,7 +292,7 @@ class Executor(object):
                 if need_mask == 'y':
                     create_merge_mask(raw_img, seg1.astype(np.uint8), seg2.astype(np.uint8))
 
-                    mask_fn = args.mask_path + os.sep + os.path.basename(row['raw'])[:-5] + '_mask.tiff'
+                    mask_fn = args.ex_mask_path + os.sep + os.path.basename(row['raw'])[:-5] + '_mask.tiff'
                     crop_mask = np.zeros(seg1.shape, dtype=np.uint8)
                     for zz in range(crop_mask.shape[0]):
                         crop_mask[zz,:,:] = draw_mask[:crop_mask.shape[1],:crop_mask.shape[2]]

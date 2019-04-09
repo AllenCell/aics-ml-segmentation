@@ -7,7 +7,7 @@ In this demo, we will show how we get the segmentation of Lamin B1 in 3D fluores
 We refer [demo 1](./demo_1.md) for how to develop a classic image segmentation workflow. Suppose we already have work out a workflow for it and save it as `seg_lmnb1_interphase.py` (i.e., `workflow_name=lmnb1_interphase`). So, we can run 
 
 ```bash
-batch_processing --workflow_name lmnb1_interphase --struct_ch 0 --output_dir /path/to/lamin/out/ per_dir --input_dir  /path/to/lamin/original/ --data_type .tiff
+batch_processing --workflow_name lmnb1_interphase --struct_ch 0 --output_dir /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_classic_workflow_segmentation_iter_1 per_dir --input_dir  /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_fluorescent --data_type .tiff
 ```
 
 > Are they good?
@@ -52,12 +52,21 @@ dl_predict --config ../config/predict_folder_config.yaml
 
 Looking at the results, we find that Lamin B1 in all interphase cells are segmented very well, but still need improvement for mitotic cells. 
 
-How can we segment Lamin B1 in mitotic cells better? Again, we can quickly develop a workflow to get reasonable segmentation of Lamin B1 in mitotic cells. Again, we refer [demo 1](./demo_1.md) for how to develop a classic image segmentation workflow. Suppose we already have work out this workflow call it `lmnb1_mitotic`.
+How can we segment Lamin B1 in mitotic cells better? We can quickly develop a workflow to get reasonable segmentation of Lamin B1 in mitotic cells. Again, we refer [demo 1](./demo_1.md) for how to develop a classic image segmentation workflow. Suppose we already have work out this workflow and call it `lmnb1_mitotic`.
 
-For convenice, we use a set of samples from mitotic enriched experiments, where there are usually at least one mitotic cell in the FOV. Suppose the images are saved at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_fluorescent_mitotic`. Then, we run the **Binarizer** twices
+For convenice, we use a set of samples from mitotic enriched experiments, where there are usually at least one mitotic cell in each FOV. Suppose the images are saved at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_fluorescent_mitosis`. Then, we run the **Binarizer** twices
 
 * first run with the DL model and save at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_DL_iter_2`
+
+```bash
+dl_predict --config ../config/predict_folder_config.yaml
+```
+
 * second run with the `lmnb1_mitotic` workflow, and save at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_classic_workflow_segmentation_iter_2`
+
+```bash
+batch_processing --workflow_name lmnb1_mitotic --struct_ch 0 --output_dir /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_classic_workflow_segmentation_iter_2 per_dir --input_dir /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_fluorescent_mitosis --data_type .tiff
+```
 
 ## Stage 5: Run **Curator**
 
@@ -70,6 +79,7 @@ curator_merging \
     --seg1_path /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_DL_iter_2/ \
     --seg2_path /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_classic_workflow_segmentation_iter_2 \
     --mask_path /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_mask_iter_2   \
+    --ex_mask_path /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_excluding_mask_iter_2 \
     --csv_name /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/merging_test.csv  \
     --train_path /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_training_data_iter_2 \
     --Normalization 10
