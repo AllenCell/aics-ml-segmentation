@@ -232,6 +232,7 @@ class Args(object):
         p.add_argument('--d', '--debug', action='store_true', dest='debug',
                        help='If set debug log output is enabled')
         p.add_argument('--raw_path', required=True, help='path to raw images')
+        p.add_argument('--data_type', required=True, help='the type of raw images')
         p.add_argument('--input_channel', default=0, type=int)
         p.add_argument('--seg_path', required=True, help='path to segmentation results')
         p.add_argument('--train_path', required=True, help='path to output training data')
@@ -269,13 +270,16 @@ class Executor(object):
             print('the csv file for saving sorting results exists, sorting will be resumed')
         else:
             print('no existing csv found, start a new sorting ')
-            filenames = glob(args.raw_path + '/*.tiff')
+            if not args.data_type.startswith('.'):
+                args.data_type = '.' + args.data_type
+
+            filenames = glob(args.raw_path + '/*' + args.data_type)
             filenames.sort()
             with open(args.csv_name, 'w') as csvfile:
                 filewriter = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
                 filewriter.writerow(['raw','seg','score','mask'])
                 for _, fn in enumerate(filenames):
-                    seg_fn = args.seg_path + os.sep + os.path.basename(fn)[:-5] + '_struct_segmentation.tiff'
+                    seg_fn = args.seg_path + os.sep + os.path.basename(fn)[:-1*len(args.data_type)] + '_struct_segmentation.tiff'
                     assert os.path.exists(seg_fn)
                     filewriter.writerow([fn, seg_fn , None , None])
 

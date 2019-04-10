@@ -1,10 +1,10 @@
 # Demo 2: Segmentation of Lamin B1 in 3D fluorescent microscopy images of hiPS cells 
 
-In this demo, we will show how we get the segmentation of Lamin B1 in 3D fluorescent microscopy images of hiPS cells. 
+In this demo, we will show how we get the segmentation of Lamin B1 in 3D fluorescent microscopy images of hiPS cells. Before reading this demo, make sure to check out [demo 1: build a classic image segmentation workflow](./demo_1.md), and detailed documentation of each building block of our segmenter ([Binarizer](./bb1.md),[Curator](./bb2.md), [Trainer](./bb3.md)).
 
 ## Stage 1: Run **Binarizer** (a classic image segmentation workflow)
 
-We refer [demo 1](./demo_1.md) for how to develop a classic image segmentation workflow. Suppose we already have work out a workflow for it and save it as `seg_lmnb1_interphase.py` (i.e., `workflow_name=lmnb1_interphase`). So, we can run 
+Suppose we already have work out a classic image segmentation workflow and save it as `seg_lmnb1_interphase.py` (i.e., `workflow_name=lmnb1_interphase`). So, we can run 
 
 ```bash
 batch_processing --workflow_name lmnb1_interphase --struct_ch 0 --output_dir /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_classic_workflow_segmentation_iter_1 per_dir --input_dir  /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_fluorescent --data_type .tiff
@@ -35,7 +35,7 @@ curator_sorting \
 
 ## Stage 3: Run **Trainer** 
 
-After clicking through all images, the training data is saved in `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_training_data_iter_1`. Manually updating the paths (path to training data and path to save the trained model) the training configuration file in 'train.yaml'. Then, simply run
+After clicking through all images, the training data are automatically generated and saved at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_training_data_iter_1`. Manually updating the paths in the training configuration file in 'train.yaml'. Then, simply run
 
 ```bash
 dl_train --config /allen/aics/assay-dev/Segmentation/DeepLearning/aics-ml-segmentation/configs/train_config.yaml
@@ -45,25 +45,23 @@ Depending on the size of your training data, the training process may take 8~32 
 
 ## Stage 4: Run **Binarizer**
 
-The trained model is saved at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_saved_model_iter_1/checkpoint_epoch_400.pytorch`. After updating the paths in prediction configuration (`predict_folder_config.yaml`), we can simply run
+The trained model is saved at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_saved_model_iter_1/checkpoint_epoch_400.pytorch`. After updating the paths in prediction configuration file `predict_folder_config.yaml`, we can simply run
 
 ```bash
 dl_predict --config /allen/aics/assay-dev/Segmentation/DeepLearning/aics-ml-segmentation/configs/predict_folder_config.yaml
 ```
 
-Looking at the results, we find that Lamin B1 in all interphase cells are segmented very well, but still need improvement for mitotic cells. 
+Looking at the results, we find that Lamin B1 in all interphase cells are segmented very well, but still need improvement for mitotic cells. How can we segment Lamin B1 in mitotic cells better? We develop another classic image segmentation workflow to get reasonable segmentation of Lamin B1 in mitotic cells, and call it `lmnb1_mitotic`.
 
-How can we segment Lamin B1 in mitotic cells better? We can quickly develop a workflow to get reasonable segmentation of Lamin B1 in mitotic cells. Again, we refer [demo 1](./demo_1.md) for how to develop a classic image segmentation workflow. Suppose we already have work out this workflow and call it `lmnb1_mitotic`.
+For convenience, we use a set of samples from mitotic enriched experiments, where there are usually at least one mitotic cell in each FOV. Suppose the images are saved at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_fluorescent_mitosis`. Then, we run the **Binarizer** twices
 
-For convenice, we use a set of samples from mitotic enriched experiments, where there are usually at least one mitotic cell in each FOV. Suppose the images are saved at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_fluorescent_mitosis`. Then, we run the **Binarizer** twices
-
-* first run with the DL model and save at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_DL_iter_2`
+* first run with the DL model (better for interphase) and save at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_DL_iter_2`
 
 ```bash
 dl_predict --config /allen/aics/assay-dev/Segmentation/DeepLearning/aics-ml-segmentation/configs/predict_folder_config.yaml
 ```
 
-* second run with the `lmnb1_mitotic` workflow, and save at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_classic_workflow_segmentation_iter_2`
+* second run with the `lmnb1_mitotic` workflow (better for mitosis), and save at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_classic_workflow_segmentation_iter_2`
 
 ```bash
 batch_processing --workflow_name lmnb1_mitotic --struct_ch 0 --output_dir /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_classic_workflow_segmentation_iter_2 per_dir --input_dir /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_fluorescent_mitosis --data_type .tiff
@@ -71,7 +69,7 @@ batch_processing --workflow_name lmnb1_mitotic --struct_ch 0 --output_dir /allen
 
 ## Stage 5: Run **Curator**
 
-The curation goal of this step is for each image merge the two segmentation versions (one for interphase, one for mitotic). So, we chose to use the "merging" strategy in **Curator**.
+The curation goal of this step is to merge the two segmentation versions (one for interphase, one for mitotic) of each image. So, we chose to use the "merging" strategy in **Curator**.
 
 ```bash
 curator_merging \
@@ -88,17 +86,19 @@ curator_merging \
 
 ## Stage 6: Run **Trainer**
 
-After clicking through all images, the training data is saved in `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_training_data_iter_2`. Manually updating the paths (path to training data and path to save the trained model) the training configuration file in 'train.yaml'. Then, simply run
+After clicking through all images, the training data is saved in `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_training_data_iter_2`. Manually updating the paths in the training configuration file 'train.yaml'. Then, simply run
 
 ```bash
 dl_train --config /allen/aics/assay-dev/Segmentation/DeepLearning/aics-ml-segmentation/configs/train_config.yaml
 ```
 ## Stage 7: Run *Binarizer*
 
-The trained model is saved at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_saved_model_iter_1/checkpoint_epoch_400.pytorch`. After updating the paths in prediction configuration (`predict_folder_config.yaml`), we can simply run
+The trained model is saved at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_saved_model_iter_2/checkpoint_epoch_400.pytorch`. After updating the paths in prediction configuration file `predict_folder_config.yaml`, we can simply run
 
 ```bash
 dl_predict --config /allen/aics/assay-dev/Segmentation/DeepLearning/aics-ml-segmentation/configs/predict_folder_config.yaml
 ```
 
 Looking at the results, Lamin B1 in both interphase cells and mitotic cells are segmented well. 
+
+![dl pic](./dl_final.png)

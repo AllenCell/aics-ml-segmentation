@@ -38,7 +38,7 @@ If an image is labeled as 'Good' (i.e, after a right mouse click), users will be
 
 ## Merging: 
 
-Suppose you have a set of images, saved at `/home/data/original/`. In each image, the structure channel is the third one (so, index=2, zero-base). Two different versions of preliminary structure segmentations are saved at `/home/data/segmentation_v1/` and `/home/data/segmentation_v2/`. The mask for merging the two versions will be saved at `/home/data/merging_mask_v1/`. For each mask, you will draw polygons on a 2D image (max z-projection) to indicate the areas to use `segmentation_v1`, while the areas outside the polygons will use `segmentation_v2`. You want to save the training data at `/home/data/training_v1/`. A `.csv` file will be generated to track this process and resume the process when necessary. We need to give it a name, say `/home/data/curator_v1_tracker.csv`. We also want to save the images masking areas to be excluded (see special note 1 below) in each image at `/home/data/merging_excluding_mask_v1/`. Also, check special note 2 for input image normalization, we use recipe 15 here.
+Suppose you have a set of images, saved at `/home/data/original/`. In each image, the structure channel is the third one (so, index=2, zero-base). Two different versions of preliminary structure segmentations are saved at `/home/data/segmentation_v1/` and `/home/data/segmentation_v2/`. The mask for merging the two versions will be saved at `/home/data/merging_mask_v1/`. For each mask, you will draw polygons on a 2D image (max z-projection) to indicate the areas to use `segmentation_v1`, while the areas outside the polygons will use `segmentation_v2`. (*So, it is important to assign which is v1 and which is v2.*) You want to save the training data at `/home/data/training_v1/`. A `.csv` file will be generated to track this process and resume the process when necessary. We need to give it a name, say `/home/data/curator_v1_tracker.csv`. We also want to save the images masking areas to be excluded (see special note 1 below about excluding masks) in each image at `/home/data/merging_excluding_mask_v1/`. Also, check special note 2 for input image normalization, we use recipe 15 here.
 
 ### How to run?
 
@@ -58,6 +58,12 @@ After each merging mask, users will be asked if an excluing mask is needed. If s
 
 
 ## Take-All:
+
+If you already have a fully annotated set of images for training, the **Curator** would be happy to *Take-all*. What it does is to convert your images to a specific format compatible with **Trainer**. To use *Take-all*, users need to 
+
+1. make sure all original images are in one folder and have the same format (e.g., multi-channel `ome.tif` with the target structure in channel `0`). 
+2. make sure all segmentation (i.e. ground truth images) are in one folder (different from original images) and each filename starting with the basename of the corresponding original image (without extension) and followed by `_struct_segmentation.tiff`. For example, one orginal image filename is `img_001.ome.tif`. Then, the segmentation filename should be `img_001_struct_segmentation.tiff`.
+3. (optional) if excluding masks are needed for certain images, they must be saved in one folder (different from original and segmentation) and each filename starting with the basename of the corresponding original image (without extension) and followed by `_mask.tiff`. For example, one orginal image filename is `img_001.ome.tif`. Then, the filename for the excluding mask should be `img_001_mask.tiff`. The areas to be excluding should have value `0` in the image, while other areas have positive values. 
 
 ```bash
 curator_takeall --raw_path /home/data/original/ --input_channel 2 --seg_path /home/data/segmentation_v1/ --train_path /home/data/training_v1/ --Normalization 15 

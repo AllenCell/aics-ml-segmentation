@@ -1,4 +1,13 @@
-### Installation 
+
+
+## Installation 
+
+0. prerequisite:
+
+NVIDIA is the leading vendor of GPUs for deep learning at various scales with full support for Linux. We assume an [NVIDIA GPU](https://www.nvidia.com/en-us/deep-learning-ai/developer/) has been set up properly on a machine running a Linux operation system (we recommend Ubuntu).  
+
+Also, make sure to check if a GPU supports at least CUDA 8.0 (CUDA 9.0 and up is preferred): [NVIDIA Driver check](https://www.nvidia.com/Download/index.aspx?lang=en-us).
+
 
 1. create a conda environment: 
 
@@ -33,7 +42,14 @@ cd ./aics-ml-segmentation
 pip install -e .
 ```
 
-External resource:
+## Documentation:
+
+See [documentation and tutorials](./docs/overview.md)
+
+
+External resources:
+
+[Which GPU to buy? A guide in 2018](https://blog.slavv.com/picking-a-gpu-for-deep-learning-3d4795c273b9)
 
 [Python Development in Visual Studio Code](https://realpython.com/python-development-visual-studio-code/)
-[Which GPU to buy? A guide in 2018](https://blog.slavv.com/picking-a-gpu-for-deep-learning-3d4795c273b9)
+
