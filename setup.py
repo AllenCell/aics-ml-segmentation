@@ -36,6 +36,15 @@ setup(name=PACKAGE_NAME,
       author_email='jianxuc@alleninstitute.org',
       license='Allen Institute Software License',
       packages=find_packages(exclude=['tests', '*.tests', '*.tests.*']),
+      entry_points={
+          "console_scripts": [
+            "dl_train={}.bin.train:main".format(PACKAGE_NAME),
+            "dl_predict={}.bin.predict:main".format(PACKAGE_NAME),
+            "curator_merging={}.bin.curator.curator_merging:main".format(PACKAGE_NAME),
+            "curator_sorting={}.bin.curator.curator_sorting:main".format(PACKAGE_NAME),
+            "curator_takeall={}.bin.curator.curator_takeall:main".format(PACKAGE_NAME),
+          ]
+      },
       install_requires=[
           'numpy>=1.15.1',
           'scipy>=1.1.0',
