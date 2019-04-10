@@ -12,7 +12,11 @@ from aicsmlsegment.utils import get_logger
 from aicsmlsegment.model_utils import get_number_of_learnable_parameters, build_model, load_checkpoint
 
 
-def main(args):
+def main():
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', required=True)
+    args = parser.parse_args()
 
     # create logger
     logger = get_logger('ModelTrainer')
@@ -37,6 +41,4 @@ def main(args):
     trainer.train()
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--config', required=True)
-    main(parser.parse_args())
+    main()

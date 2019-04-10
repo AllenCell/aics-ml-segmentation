@@ -288,7 +288,7 @@ class Executor(object):
                 writer.save(crop_mask)
                 df['merging_mask'].iloc[index]=mask_fn
 
-                need_mask = input('Do you need to add a mask for this image, enter y or n:  ')
+                need_mask = input('Do you need to add an excluding mask for this image, enter y or n:  ')
                 if need_mask == 'y':
                     create_merge_mask(raw_img, seg1.astype(np.uint8), seg2.astype(np.uint8))
 

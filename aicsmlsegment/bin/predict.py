@@ -14,7 +14,11 @@ from aicsmlsegment.utils import load_config, load_single_image, input_normalizat
 from aicsmlsegment.utils import get_logger
 from aicsmlsegment.model_utils import build_model, load_checkpoint, model_inference
 
-def main(args):
+def main():
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', required=True)
+    args = parser.parse_args()
 
     config = load_config(args.config)
 
@@ -152,6 +156,5 @@ def main(args):
             print(f'Image {fn} has been segmented')
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--config', required=True)
-    main(parser.parse_args())
+    
+    main()
