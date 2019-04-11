@@ -51,5 +51,6 @@ External resources:
 
 [Which GPU to buy? A guide in 2018](https://blog.slavv.com/picking-a-gpu-for-deep-learning-3d4795c273b9)
 
+
 [Python Development in Visual Studio Code](https://realpython.com/python-development-visual-studio-code/)
 

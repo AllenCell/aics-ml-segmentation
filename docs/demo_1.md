@@ -40,10 +40,11 @@ You can easily test your workflow on a folder of images following the steps belo
 
 1. duplicate the template file in `/aics-segmentation/aicssegmentation/structure_wrapper/seg_template.py` as `/aics-segmentation/aicssegmentation/structure_wrapper/seg_atp2a2.py`
 2. Open `seg_atp2a2.py`
-3. Change the function name from `Workflow_template()` to `Workflow_atp2a2()` on line 12
-4. insert you parameters and functions at the placeholders (searching `#ADD-HERE` in the code). Meanwhile, make sure you `import` all the functions you want to use. You can check the `seg_lamin_interphase.py` under structure_wrapper to see examples.
+3. Change the function name from `Workflow_template()` to `Workflow_atp2a2()`
+4. insert you parameters and functions at the placeholders. Meanwhile, make sure you `import` all the functions you want to use. You can check the `seg_lamin_interphase.py` under structure_wrapper to see examples.
 5. Save the file
 6. run (make sure to use your own path and structure channel index)
+
 ```bash
 batch_processing --workflow_name atp2a2 --struct_ch 1 --output_dir /path/to/output per_dir --input_dir /path/to/raw --data_type .czi
 ```
@@ -51,9 +52,9 @@ Or, you can also use the scripts (`aicssegmentation/bin/run_toolkit.sh` for linu
 
 ## Stage 2: Evaluation
 
-After batch running on several images, you can roughly know how well the current **Binarizer** works. In our case, we find it works pretty well. We are all done!
+The goal of the jupyter notebook "playground" is to design and assess the overall workflow on one or a few images. You may need serveral rounds of finetuning the parameters in the batch mode (i.e., adjusting parameters in `seg_atp2a2.py` in this demo) to make sure the parameters are truely "optimized" for a large set of images.  
 
-In some situations, after closely inspecting on several images, you may find that some parameters may need to be adjusted a little bit low or a little bit higher. Then, you can go back to your structure wrapper file, e.g., `seg_atp2a2.py`, to make the changes and re-run it. You may not have to go back to the jupyter notebook. The notebook is only meant to help you test out the overall workflow and a quick test to get reasonable parameters.
+In our demo, we find the results from classic segmentation workflows are pretty well. We are all done! In some situations, after closely inspecting on several images, you may find that some parameters may need to be adjusted a little bit low or a little bit higher. Then, you can go back to your structure wrapper file, e.g., `seg_atp2a2.py`, to make the changes and re-run it. You may not have to go back to the jupyter notebook. The notebook is only meant to help you test out the overall workflow and a quick test to get reasonable parameters.
 
 
 
