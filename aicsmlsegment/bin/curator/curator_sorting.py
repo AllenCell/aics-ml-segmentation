@@ -66,18 +66,18 @@ def draw_polygons(event):
             if len(pts)>1:
                 rr, cc = line(int(round(pts[-1][0])), int(round(pts[-1][1])), int(round(pts[-2][0])), int(round(pts[-2][1])) )
                 draw_img[cc,rr,:1]=255
-            draw_ax.imshow(draw_img)
-            plt.show()
+                draw_ax.set_data(draw_img)
+                plt.draw()
     elif event.button == 3:
         if len(pts)>2:
             # draw polygon
             pts_array = np.asarray(pts)
             rr, cc = polygon(pts_array[:,0], pts_array[:,1])
             draw_img[cc,rr,:1]=255
-            draw_ax.imshow(draw_img)
+            draw_ax.set_data(draw_img)
             draw_mask[cc,rr]=1
             pts.clear()
-            plt.show()
+            plt.draw()
         else:
             print('need at least three clicks before finishing annotation')
 
@@ -180,12 +180,12 @@ def create_mask(raw_img, seg):
     figManager = plt.get_current_fig_manager() 
     figManager.full_screen_toggle() 
     ax = fig.add_subplot(111)
-    ax.imshow(img)
-    draw_ax = ax
+    draw_ax = ax.imshow(img)
     cid = fig.canvas.mpl_connect('button_press_event', draw_polygons)
     cid2 = fig.canvas.mpl_connect('key_press_event', quit_mask_drawing)
     plt.show()
     fig.canvas.mpl_disconnect(cid)
+    fig.canvas.mpl_disconnect(cid2)
 
 class Args(object):
     """
