@@ -63,12 +63,13 @@ def gt_sorting_callback(event):
 def draw_polygons(event):
     global pts, draw_img, draw_ax, draw_mask
     if event.button == 1:
-        pts.append([event.xdata,event.ydata])
-        if len(pts)>1:
-            rr, cc = line(int(round(pts[-1][0])), int(round(pts[-1][1])), int(round(pts[-2][0])), int(round(pts[-2][1])) )
-            draw_img[cc,rr,:1]=255
-        draw_ax.imshow(draw_img)
-        plt.show()
+        if not (event.ydata == None or event.xdata == None):
+            pts.append([event.xdata,event.ydata])
+            if len(pts)>1:
+                rr, cc = line(int(round(pts[-1][0])), int(round(pts[-1][1])), int(round(pts[-2][0])), int(round(pts[-2][1])) )
+                draw_img[cc,rr,:1]=255
+            draw_ax.imshow(draw_img)
+            plt.show()
     elif event.button == 3:
         if len(pts)>2:
             # draw polygon

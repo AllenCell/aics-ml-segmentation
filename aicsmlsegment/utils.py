@@ -104,11 +104,18 @@ def input_normalization(img, args):
             struct_img = simple_norm(struct_img, 2.5, 10)
             img[ch_idx,:,:,:] = struct_img[:,:,:]
             print('subtracted background')
+        elif args.Normalization == 11: 
+            struct_img = background_sub(struct_img,50)
+            #struct_img = simple_norm(struct_img, 2.5, 10)
+            img[ch_idx,:,:,:] = struct_img[:,:,:]
 
         elif args.Normalization == 15: 
             struct_img[struct_img>4000] = struct_img.min()
             struct_img = background_sub(struct_img,50)
             img[ch_idx,:,:,:] = struct_img[:,:,:]
+        else:
+            print('no normalization recipe found')
+            quit()
         
     
     return img
