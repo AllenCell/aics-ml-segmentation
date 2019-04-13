@@ -25,6 +25,7 @@ The curation goal of this step is to collect those images have been successfully
 ```bash
 curator_sorting \
     --raw_path /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_fluorescent \
+    --data_type .tiff \
     --input_ch 0 \
     --seg_path /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_classic_workflow_segmentation_iter_1 \
     --mask_path /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_mask_iter_1 \

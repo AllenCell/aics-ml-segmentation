@@ -291,9 +291,14 @@ class Executor(object):
         df = pd.read_csv(args.csv_name)
 
         for index, row in df.iterrows():
+
+            if not np.isnan(row['score']) and (row['score']==1 or row['score']==0):
+                continue
+
             reader = AICSImage(row['raw'])
             im_full = reader.data
             struct_img = im_full[0,args.input_channel,:,:,:]
+            struct_img[struct_img>5000] = struct_img.min()
             raw_img = (struct_img- struct_img.min() + 1e-8)/(struct_img.max() - struct_img.min() + 1e-8)
             raw_img = 255 * raw_img
             raw_img = raw_img.astype(np.uint8)
@@ -302,9 +307,6 @@ class Executor(object):
             im_seg_full = reader_seg.data
             assert im_seg_full.shape[0]==1 and im_seg_full.shape[1]==1
             seg = im_seg_full[0,0,:,:,:]
-
-            if not np.isnan(row['score']) and (row['score']==1 or row['score']==0):
-                continue
 
             score = gt_sorting(raw_img, seg)
             if score == 1:
