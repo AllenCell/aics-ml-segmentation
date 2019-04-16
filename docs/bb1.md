@@ -14,7 +14,7 @@ Suppose you already build a classic image segmentation workflow for your data an
 Suppose we have a file at /home/data/fbl/image_test.tiff and we want to save the segmentation at /home/data/fbl_segmentation/
 
 ```bash
-python batch_processing.py --workflow_name FBL_HIPSC --struct_ch 0 --output_dir /home/data/fbl_segmentation/ per_img --input /home/data/fbl/image_test.tiff 
+batch_processing --workflow_name FBL_HIPSC --struct_ch 0 --output_dir /home/data/fbl_segmentation/ per_img --input /home/data/fbl/image_test.tiff 
 ```
 
 ### Apply on a folder of images 
@@ -46,3 +46,4 @@ Copy and paster the configuration file at `./config/predict_folder.yaml` into a 
 dl_predict --config /home/config_files/predict_folder_lab.yaml
 ```
 
+You can find the desciptions of all parameters in the configuration `.yaml` [here](./doc_pred_yaml).

@@ -2,9 +2,12 @@
 
 This is a detailed description of the configuration for training a DL model in **Trainer**. There are a lot of parameters in the configuration file, which can be categorized into three types:
 
-1. Parameters specific to each training (need to change/check every time), marked by :pushpin:
-2. Parameters specific to each machine (only need to change once on a particular machine), marked by :computer:
-3. Parameters pre-defined for the general training scheme (no need to change for most problems and need basic knowledge of deep learning to adjust), marked by :ok:
+1. Need to change on every run (i.e., parameters specific to each execution), marked by :warning:
+    * `checkpoint_dir` (where to save trained models), `datafolder` (where are training data)
+2. Need to change for every segmentation problem (i.e., parameters specific to one problem), marked by :pushpin:
+    * `model`, `epochs`, `save_every_n_epoch`, ``PatchPerBuffer``
+3. Only need to change once on a particular machine (parameters specific to each machine), marked by :computer:
+4. No need to change for most problems (parameters pre-defined as a general training scheme and requires advacned deep learning knowledge to adjust), marked by :ok:
 
 
 ### Model related parameters
@@ -27,7 +30,7 @@ There may be probably more than 100 models in the literature for 3D image segmen
 nchannel: 1
 nclass: [2, 2, 2]
 ```
-These are related to the model architecture and fixed by default. 
+These are related to the model architecture and fixed by default. We assume the input image has only one channel.
 
 3. patch size (:computer:)
 
@@ -44,7 +47,7 @@ In most situations, we cannot fit the entire image into the memory of a single G
 | unet_xy_zoom on 8GB GPU   |                   |                   |               |
 | unet_xy_zoom on 32GB GPU  | [52, 420, 420]    | [20, 152, 152]    |       8       |
 
-4. model directory
+4. model directory (:warning:)
 ```yaml
 checkpoint_dir:  /home/model/xyz/
 resume: null
@@ -81,8 +84,8 @@ loader:
   epoch_shuffle: 5
   NumWorkers: 1
 ```
-`datafolder` and `PatchPerBuffer` (:pushpin:) need to check in each training. `datafolder` is the directory of training data. `PatchPerBuffer` is the number of sample patches randomly drawn in each epoch, which can be set as *number of patches to draw from each data* **x** *number of training data*. `name`, `epoch_shuffle` and `NumWorkers` (:ok:) are fixed by default. `batch_size` is related to GPU memory and patch size (see values presented with patch size).
+`datafolder` (:warning:) and `PatchPerBuffer` (:pushpin:) need to be specified for each problem. `datafolder` is the directory of training data. `PatchPerBuffer` is the number of sample patches randomly drawn in each epoch, which can be set as *number of patches to draw from each data* **x** *number of training data*. `name`, `epoch_shuffle` and `NumWorkers` (:ok:) are fixed by default. `batch_size` is related to GPU memory and patch size (see values presented with patch size).
 
 ### Validation related parameter
 
-In machine learning studies, we usually do a validation after every few epochs to make sure things are not going wrong. For most 3d microscopy image segmentation problems, the training data is very limited. We cannot save a portion from the training data for validation purpose. So, by default, validation is turn-off (:ok:) and may only be used for advanced users. 
+In machine learning studies, we usually do a validation after every few epochs to make sure things are not going wrong. For most 3d microscopy image segmentation problems, the training data is very limited. We cannot save a big portion (e.g., 20%) from the training data for validation purpose. So, by default, we use leave-one-out for validation (:ok:) and may only need to adjust for advanced users. 

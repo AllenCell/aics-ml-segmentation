@@ -12,6 +12,10 @@ Assume we have one or a set of 3D microscopy images tagging a specific intracell
 * **Curator**: [documentation](./bb2.md)
 * **Trainer**: [documentation](./bb3.md)
 
+## Challengs in deep learning based segmentation
+
+Deep learning is a very powerful approach for 3D image segmentation. But, it is NOT like collecting a set of segmentation ground truth, feeding them into a DL model and getting a perfect segmentation model. Deep learnig for 3D image segmentation is still being actively studied in the field of computer vision (see top conferences organized by [MICCAI](http://www.miccai.org/) and [CVF](https://www.thecvf.com/) ). It is not rare to see a model trained with our package still cannot obtain accurate segmentation, which could be due to many possible reasons. Finding out ways to improve the segmentation model is beyond the scope of this tutorial. Here, we only want to demonstrate the usage of our package, which is designed to (1) be able to get a good segmentation model on a wide range of problems (2) be fexible enough for advanced users to develop their own research works on deep learning based 3D segmentation.***  
+
 ## Demos on real examples:
 
 ![overview pic](./overview_pic.png)
