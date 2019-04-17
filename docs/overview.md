@@ -6,7 +6,7 @@ The goal of the *Allen Cell Structure Segmenter* is to generate 3D segmentation 
 
 *Note: The image reader used in our package supports images in common formats, such as `.tiff`, `.tif`, `.ome.tif`. The only vendor specific format supported by the reader is `.czi` (the file format for ZEISS microscope). For other formats, images have to be converted to `.tiff` or `.ome.tif` in advance.* 
 
-## Understanding each building blocks:
+## Understanding each building block:
 
 * **Binarizer**: [documentation](./bb1.md)
 * **Curator**: [documentation](./bb2.md)
