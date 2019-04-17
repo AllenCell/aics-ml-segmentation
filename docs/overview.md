@@ -20,7 +20,7 @@ Deep learning (DL) is a very powerful approach for 3D image segmentation. But it
 
 ![overview pic](./overview_pic.png)
 
-The above flowchart is a simplified version of the segmenter showing the most important parts of the workflows. **Binarizer** refers to the classic image segmentation and **Curator** and **Trainer** makes up the DL workflows [bioRxiv paper](https://www.biorxiv.org/content/10.1101/491035v1). **Curator** and **Trainer** are used to improve the segmentation from **Binarizer** when necessary. Here, we will have demonstrations on two examples: first one only using **Binarizer** to solve the problem and the other example requiring **Curator** and **Trainer** .
+The above flowchart is a simplified version of the segmenter showing the most important parts of the workflows. **Binarizer** refers to the classic image segmentation and **Curator** and **Trainer** makes up the DL workflows (details can be found in [bioRxiv paper](https://www.biorxiv.org/content/10.1101/491035v1)). **Curator** and **Trainer** are used to improve the segmentation from **Binarizer** when necessary. Here, we will have demonstrations on two examples: first one only using **Binarizer** to solve the problem and the other example requiring **Curator** and **Trainer** .
 
 ### Example 1: **Binarizer** 
 ### Segmentation of ATP2A2 in 3D fluorescent microscopy images of hiPS cells 
