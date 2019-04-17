@@ -1,14 +1,14 @@
 # Demo 1: Segmentation of ATP2A2 in 3D fluorescent microscopy images of hiPS cells 
 
-In this demo, we will show how we get the segmentation of ATP2A2 in 3D fluorescent microscopy images of hiPS cells. 
+In this demo, we will show how to get the segmentation of ATP2A2 in 3D fluorescent microscopy images of hiPS cells. 
 
 ## Stage 1: Develop a classic image segmentation workflow
 
-We recommend that users start by identifying a structure in the [lookup table](https://www.allencell.org/segmenter.html) that looks most similar to the segmentation task that you are faced with. Once you have identified this structure, open the correspoinding Jupyter Notebook and follow the instructions in the notebook to tune the workflow for your particular task. Finally, after finalizing the algorithms and parameters in the workflow, modify batch_processing.py to batch process all data (file by file or folder by folder).
+We recommend users start by identifying a structure in the [lookup table](https://www.allencell.org/segmenter.html) that looks the most similar to the segmentation task that you have. Once you have identified a structure, open the correspoinding Jupyter Notebook and follow the instructions in the notebook to tune the workflow for your particular task. After finalizing the algorithms and parameters in the workflow, modify batch_processing.py to batch process all data (file by file or folder by folder).
 
 #### Step 1: Find the entry in the lookup table with most similar morphology to your data
 
-List of "playgrounds" accomoanying the lookup table:
+List of "playgrounds" for the lookup table:
 
 1. playground_st6gal.ipynb: workflow for Sialyltransferase 1
 2. playground_spotty.ipynb: workflow for Fibrillarin, Beta catenin
@@ -20,7 +20,7 @@ List of "playgrounds" accomoanying the lookup table:
 8. playground_filament3d.ipynb: workflows for Tight junction protein ZO1, Beta actin, Non-muscle myosin IIB, Alpha-actinin-1, Alpha tubulin, Troponin I, and Titin
 9. playground_shell.ipynb: workflow for Lamin B1 (Interphase-specific)
 
-In this example, ATP2A2 tags the same structure as Sec61B and thus looks very similar to Sec61B. So, we pick `playground_curvi.ipynb`.
+In this example, ATP2A2 localizes to the nuclear pheriphry and ER tubules, very simiar to Sec61B and therefore we are starting with  `playground_curvi.ipynb`.
 
 #### Step 2: Go to the Jupyter Notebook and tune the workflow
 
