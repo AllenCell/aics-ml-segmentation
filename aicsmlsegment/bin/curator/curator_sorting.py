@@ -288,7 +288,7 @@ class Executor(object):
 
         global draw_mask
         # part 1: do sorting
-        df = pd.read_csv(args.csv_name)
+        df = pd.read_csv(args.csv_name, index_col=False)
 
         for index, row in df.iterrows():
 
@@ -327,7 +327,7 @@ class Executor(object):
             else:
                 df['score'].iloc[index]=0
 
-            df.to_csv(args.csv_name)
+            df.to_csv(args.csv_name, index=False)
 
         #########################################
         # generate training data:

@@ -10,3 +10,10 @@ Copy and paster the configuration file at './config/train.yaml' into a new one, 
 dl_train --config /home/config_files/train_lab.yaml
 ```
 
+### When multiple GPUs are available
+
+By default, the **Trainer** takes the first available GPU to run the computation. If there are multiple GPUs on your machine, you can choose which GPU to use. Simply set `CUDA_VISIBLE_DEVICES` before the command, like 
+
+```bash
+CUDA_VISIBLE_DEVICES=2  dl_train --config /home/config_files/train_lab.yaml
+```

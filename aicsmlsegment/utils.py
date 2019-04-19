@@ -14,9 +14,6 @@ import torch
 import yaml
 
 def load_config(config_path):
-    #parser = argparse.ArgumentParser(description='UNet3D training')
-    #parser.add_argument('--config', type=str, help='Path to the YAML config file', required=True)
-    #args = parser.parse_args()
     config = _load_config_yaml(config_path)
     # Get a device to train on
     device_name = config.get('device', 'cuda:0')

@@ -32,20 +32,28 @@ nclass: [2, 2, 2]
 ```
 These are related to the model architecture and fixed by default. We assume the input image has only one channel.
 
-3. patch size (:computer:)
+3. patch size (:computer:) (:pushpin:)
 
 ```yaml 
-size_in: [48, 148, 148] 
-size_out: [20, 60, 60]
+size_in: [50, 156, 156] 
+size_out: [22, 68, 68]
 ```
-In most situations, we cannot fit the entire image into the memory of a single GPU. These are also related to `batch_size` (an data loader parameter), which will be discussed shortly. Here are some pre-calculated values for different models on different types of GPUs.
+In most situations, we cannot fit the entire image into the memory of a single GPU. These are also related to `batch_size` (an data loader parameter), which will be discussed shortly. `size_in` is the actual size of each patch fed into the model, while `size_out` is the size of the model's prediction. The prediction size is smaller than the input size is because the multiple convolution operations. The equation for calculating `size_in` and `size_out` is as follows.
 
-|                           | size_in           | size_out          |  batch_size   |
-| --------------------------|:-----------------:|:-----------------:|:-------------:|
-| unet_xy on 8GB GPU        |                   |                   |               |
-| unet_xy on 32GB GPU       | [48, 148, 148]    | [20, 60, 60]      |       8       |
-| unet_xy_zoom on 8GB GPU   |                   |                   |               |
-| unet_xy_zoom on 32GB GPU  | [52, 420, 420]    | [20, 152, 152]    |       8       |
+> For unet_xy, `size_in` = `[z, 8p+60, 8p+60]`, `size_out` = `[z-28, 8p-28, 8p-28]`
+
+> For unet_xy_zoom, with `zoom_ratio`=`k`, `size_in` = `[z, 8kp+60k, 8kp+60k]` and `size_out` = `[z-32, 8kp-28k-4, 8kp-28k-4]`
+
+Here, `p` and `z` can be any positive integers that make `size_out` has all positive values.
+
+Here are some pre-calculated values for different models on different types of GPUs.
+
+|                                       | size_in           | size_out          |  batch_size   |
+| --------------------------------------|:-----------------:|:-----------------:|:-------------:|
+| unet_xy on 12GB GPU                   |  [44, 140, 140]   | [16, 52, 52]      |       4       |
+| unet_xy on 33GB GPU                   |  [50, 156, 156]   | [22, 68, 68]      |       8       |
+| unet_xy_zoom (ratio=3) on 12GB GPU    |  [52, 372, 372]   | [20, 104, 104]    |       4       |
+| unet_xy_zoom (ratio=3) on 33GB GPU    |  [52, 420, 420]   | [20, 152, 152]    |       8       |
 
 4. model directory (:warning:)
 ```yaml
