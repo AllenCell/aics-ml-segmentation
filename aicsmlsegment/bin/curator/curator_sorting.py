@@ -104,14 +104,7 @@ def gt_sorting(raw_img, seg):
         out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 1*raw_img.shape[2]:2*raw_img.shape[2], cc]=im[mid_frame,:,:]
         out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 2*raw_img.shape[2]:3*raw_img.shape[2], cc]=im[mid_frame+4,:,:]
         out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 3*raw_img.shape[2]:4*raw_img.shape[2], cc]=np.amax(im, axis=0)
-        '''
-        out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 0*raw_img.shape[2]:1*raw_img.shape[2], cc]=im[mid_frame-8,:,:]
-        out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 1*raw_img.shape[2]:2*raw_img.shape[2], cc]=im[mid_frame-4,:,:]
-        out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 2*raw_img.shape[2]:3*raw_img.shape[2], cc]=im[mid_frame,:,:]
-        out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 3*raw_img.shape[2]:4*raw_img.shape[2], cc]=im[mid_frame+4,:,:]
-        out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 4*raw_img.shape[2]:5*raw_img.shape[2], cc]=im[mid_frame+8,:,:]
-        out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 5*raw_img.shape[2]:6*raw_img.shape[2], cc]=np.amax(im, axis=0)
-        '''
+
     row_index=1
     offset = 20
     im = seg + offset # make it brighter
@@ -124,14 +117,6 @@ def gt_sorting(raw_img, seg):
         out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 1*raw_img.shape[2]:2*raw_img.shape[2], cc]=im[mid_frame,:,:]
         out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 2*raw_img.shape[2]:3*raw_img.shape[2], cc]=im[mid_frame+4,:,:]
         out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 3*raw_img.shape[2]:4*raw_img.shape[2], cc]=np.amax(im, axis=0)
-        '''
-        out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 0*raw_img.shape[2]:1*raw_img.shape[2], cc]=im[mid_frame-8,:,:]
-        out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 1*raw_img.shape[2]:2*raw_img.shape[2], cc]=im[mid_frame-4,:,:]
-        out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 2*raw_img.shape[2]:3*raw_img.shape[2], cc]=im[mid_frame,:,:]
-        out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 3*raw_img.shape[2]:4*raw_img.shape[2], cc]=im[mid_frame+4,:,:]
-        out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 4*raw_img.shape[2]:5*raw_img.shape[2], cc]=im[mid_frame+8,:,:]
-        out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 5*raw_img.shape[2]:6*raw_img.shape[2], cc]=np.amax(im, axis=0)
-        '''
 
     # display the image for good/bad inspection
     fig = plt.figure()
@@ -254,13 +239,6 @@ class Args(object):
             log.debug("\t{}: {}".format(k, v))
 
 
-'''
-parent_path = '/allen/aics/assay-dev/Analysis/labelfree_predictions/'
-sample_csv = '/allen/aics/assay-dev/Analysis/labelfree_predictions/dna_samples.csv'
-df_sample = pd.read_csv(sample_csv)
-map_csv = parent_path + 'labelfree_results_original_resized.csv'
-df = pd.read_csv(map_csv)
-'''
 ###############################################################################
 
 class Executor(object):
