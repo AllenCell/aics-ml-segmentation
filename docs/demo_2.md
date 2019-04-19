@@ -1,14 +1,15 @@
 # Demo 2: Segmentation of Lamin B1 in 3D fluorescent microscopy images of hiPS cells 
 
-In this demo, we will show how we get the segmentation of Lamin B1 in 3D fluorescent microscopy images of hiPS cells. Before reading this demo, make sure to check out [demo 1: build a classic image segmentation workflow](./demo_1.md), and detailed documentation of each building block of our segmenter ([Binarizer](./bb1.md),[Curator](./bb2.md), [Trainer](./bb3.md)).
+In this demo, we will demonstrate how we get the segmentation of Lamin B1 in 3D fluorescent microscopy images of hiPS cells. Before reading this demo, make sure to check out [demo 1: build a classic image segmentation workflow](./demo_1.md), and detailed descriptions of each building block in our segmenter ([Binarizer](./bb1.md), [Curator](./bb2.md), [Trainer](./bb3.md)).
 
-## Stage 1: Run **Binarizer** (a classic image segmentation workflow)
+## Stage 1: Run **Binarizer** (classic image segmentation workflow) and Assess Results
 
-Suppose we already have work out a classic image segmentation workflow and save it as `seg_lmnb1_interphase.py` (i.e., `workflow_name=lmnb1_interphase`). So, we can run 
+Suppose we already worked out a classic image segmentation workflow and saved it as `seg_lmnb1_interphase.py` (i.e., `workflow_name=lmnb1_interphase`). So, we can run 
 
 ```bash
 batch_processing --workflow_name lmnb1_interphase --struct_ch 0 --output_dir /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_classic_workflow_segmentation_iter_1 per_dir --input_dir  /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_fluorescent --data_type .tiff
 ```
+to batch process multiple images in a folder and evaluate them.
 
 > Are they good?
 
