@@ -1,10 +1,10 @@
 # Building Block 3: **Trainer**
 
-The **Trainer** is used to train a deep learning based segmentation model. The input is the trained data prepared by **Curator** (see [documentation](./bb2.md)) and the output will be a model can be used in **Segmenter**.
+**Trainer** is used to train deep learning-based segmentation models. The input for **Trainer** should be data prepared by **Curator** (see [documentation](./bb2.md)) and the output should be a model that can be used in **Segmenter**.
 
 ![segmenter pic](./bb3_pic.png)
 
-Copy and paster the configuration file at './config/train.yaml' into a new one, for example '/home/config_files/train_lab.yaml' and check the parameters and make changes as needed. In general, you only need to change (1) choose the model from two options, (2)the path to data, (3) the output path for saveing the model. A detailed explaination of all parameters can be found [here](./doc_train_yaml.md). 
+Copy and paste the configuration file at './config/train.yaml' to create a new one, for example, '/home/config_files/train_lab.yaml'. Check the parameters and make changes if needed. You should only need to (1) choose model type from the two options, (2) insert the file path for input data, (3) insert the output file path for the model. A detailed explanation of all parameters can be found [here](./doc_train_yaml.md). 
 
 ```bash
 dl_train --config /home/config_files/train_lab.yaml
@@ -12,7 +12,7 @@ dl_train --config /home/config_files/train_lab.yaml
 
 ### When multiple GPUs are available
 
-By default, the **Trainer** takes the first available GPU to run the computation. If there are multiple GPUs on your machine, you can choose which GPU to use. Simply set `CUDA_VISIBLE_DEVICES` before the command, like 
+By default, **Trainer** will use the first available GPU for computation. If there are multiple GPUs on your machine, you can choose which GPU to use by setting `CUDA_VISIBLE_DEVICES` before running **Trainer**.
 
 ```bash
 CUDA_VISIBLE_DEVICES=2  dl_train --config /home/config_files/train_lab.yaml
