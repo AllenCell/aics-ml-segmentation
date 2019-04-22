@@ -231,7 +231,7 @@ class Executor(object):
 
         global draw_mask, ignore_img
         # part 1: do sorting
-        df = pd.read_csv(args.csv_name)
+        df = pd.read_csv(args.csv_name, index_col=False)
 
         for index, row in df.iterrows():
 
@@ -297,7 +297,7 @@ class Executor(object):
                     df['excluding_mask'].iloc[index]=mask_fn
 
 
-            df.to_csv(args.csv_name)
+            df.to_csv(args.csv_name, index=False)
             
 
         #########################################

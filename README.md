@@ -4,9 +4,11 @@
 
 0. prerequisite:
 
-NVIDIA is the leading vendor of GPUs for deep learning at various scales with full support for Linux. We assume an [NVIDIA GPU](https://www.nvidia.com/en-us/deep-learning-ai/developer/) has been set up properly on a machine running a Linux operation system (we recommend Ubuntu).  
+To use the deep learning part of this package, we assume an [NVIDIA GPU](https://www.nvidia.com/en-us/deep-learning-ai/developer/) has been set up properly on a machine running a Linux operation system (we recommend Ubuntu).  
 
-Also, make sure to check if a GPU supports at least CUDA 8.0 (CUDA 9.0 and up is preferred): [NVIDIA Driver check](https://www.nvidia.com/Download/index.aspx?lang=en-us).
+Also, make sure to check if your GPU supports at least CUDA 8.0 (CUDA 9.0 and up is preferred): [NVIDIA Driver check](https://www.nvidia.com/Download/index.aspx?lang=en-us).
+
+> We are investigating alternative cloud computing service to deploy our package and will have updates in the next few months. Stay tuned :)  
 
 
 1. create a conda environment: 
@@ -47,10 +49,6 @@ pip install -e .
 See [documentation and tutorials](./docs/overview.md)
 
 
-External resources:
+## Computing resource:
 
-[Which GPU to buy? A guide in 2018](https://blog.slavv.com/picking-a-gpu-for-deep-learning-3d4795c273b9)
-
-
-[Python Development in Visual Studio Code](https://realpython.com/python-development-visual-studio-code/)
-
+The GPUs we used to develop and test our package are two types: (1) GeForce GTX 1080 Ti GPU (about 11GB GPU memory), (2) Tesla V100 for PCIe (with about 33GB memory), two common chips for personal workstation and data center, respectively.
