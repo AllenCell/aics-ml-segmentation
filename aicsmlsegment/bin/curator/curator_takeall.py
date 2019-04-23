@@ -90,6 +90,7 @@ class Args(object):
         p.add_argument('--d', '--debug', action='store_true', dest='debug',
                        help='If set debug log output is enabled')
         p.add_argument('--raw_path', required=True, help='path to raw images')
+        p.add_argument('--data_type', required=True, help='the type of raw images')
         p.add_argument('--input_channel', default=0, type=int)
         p.add_argument('--seg_path', required=True, help='path to segmentation results')
         p.add_argument('--train_path', required=True, help='path to output training data')
@@ -125,48 +126,54 @@ class Executor(object):
 
     def execute(self, args):
 
-        df = pd.read_csv(args.csv_name)
+        if not args.data_type.startswith('.'):
+            args.data_type = '.' + args.data_type
+
+        filenames = glob(args.raw_path + '/*' + args.data_type)
+        filenames.sort()
+
         training_data_count = 0
-        for _, row in df.iterrows():
-            if row['score']==1:
-                training_data_count += 1
-                input_channel = row['raw_input_ch']
-                # load raw image
-                reader = AICSImage(row['raw'])
-                img = reader.data.astype(np.float32)
-                struct_img = img[0,[input_channel],:,:,:].copy()
+        for _, fn in enumerate(filenames):
+            
+            training_data_count += 1
+            
+            # load raw
+            reader = AICSImage(fn)
+            img = reader.data.astype(np.float32)
+            assert img.shape[0]==1
+            img = img[0,:,:,:,:]
+            if img.shape[0] > img.shape[1]:
+                img = np.transpose(img,(1,0,2,3))
+            struct_img = input_normalization(img[[args.input_channel],:,:,:], args)
 
-                struct_img = input_normalization(struct_img, args)
+            # load seg
+            seg_fn = args.seg_path + os.sep + os.path.basename(fn)[:-1*len(args.data_type)] + '_struct_segmentation.tiff'
+            reader = AICSImage(seg_fn)
+            img = reader.data
+            assert img.shape[0]==1 and img.shape[1]==1
+            seg = img[0,0,:,:,:]>0
+            seg = seg.astype(np.uint8)
+            seg[seg>0]=1
 
-                #img_smooth = ndi.gaussian_filter(img_raw, sigma=50, mode='nearest', truncate=3.0)
-                #img_smooth_sub = img_raw - img_smooth
-                #struct_img = (img_smooth_sub - img_smooth_sub.min())/(img_smooth_sub.max()-img_smooth_sub.min())
-
-                # load segmentation gt
-                reader = AICSImage(row['seg'])
+            # excluding mask
+            cmap = np.ones(seg.shape, dtype=np.float32)
+            mask_fn = args.mask_path + os.sep + os.path.basename(fn)[:-1*len(args.data_type)] + '_mask.tiff'
+            if os.path.isfile(mask_fn):
+                reader = AICSImage(mask_fn)
                 img = reader.data
                 assert img.shape[0]==1 and img.shape[1]==1
-                seg = img[0,0,:,:,:]>0
-                seg = seg.astype(np.uint8)
-                seg[seg>0]=1
+                mask = img[0,0,:,:,:]
+                cmap[mask==0]=0
 
-                cmap = np.ones(seg.shape, dtype=np.float32)
-                if os.path.isfile(str(row['mask'])):
-                    # load segmentation gt
-                    reader = AICSImage(row['mask'])
-                    img = reader.data
-                    assert img.shape[0]==1 and img.shape[1]==1
-                    mask = img[0,0,:,:,:]
-                    cmap[mask>0]=0
 
-                writer = omeTifWriter.OmeTifWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '.ome.tif')
-                writer.save(struct_img)
+            writer = omeTifWriter.OmeTifWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '.ome.tif')
+            writer.save(struct_img)
 
-                writer = omeTifWriter.OmeTifWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '_GT.ome.tif')
-                writer.save(seg)
+            writer = omeTifWriter.OmeTifWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '_GT.ome.tif')
+            writer.save(seg)
 
-                writer = omeTifWriter.OmeTifWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '_CM.ome.tif')
-                writer.save(cmap)
+            writer = omeTifWriter.OmeTifWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '_CM.ome.tif')
+            writer.save(cmap)
 
 
 def main():

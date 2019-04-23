@@ -61,22 +61,23 @@ def gt_sorting_callback(event):
 def draw_polygons(event):
     global pts, draw_img, draw_ax, draw_mask
     if event.button == 1:
-        pts.append([event.xdata,event.ydata])
-        if len(pts)>1:
-            rr, cc = line(int(round(pts[-1][0])), int(round(pts[-1][1])), int(round(pts[-2][0])), int(round(pts[-2][1])) )
-            draw_img[cc,rr,:1]=255
-        draw_ax.imshow(draw_img)
-        plt.show()
+        if not (event.ydata == None or event.xdata == None):
+            pts.append([event.xdata,event.ydata])
+            if len(pts)>1:
+                rr, cc = line(int(round(pts[-1][0])), int(round(pts[-1][1])), int(round(pts[-2][0])), int(round(pts[-2][1])) )
+                draw_img[cc,rr,:1]=255
+                draw_ax.set_data(draw_img)
+                plt.draw()
     elif event.button == 3:
         if len(pts)>2:
             # draw polygon
             pts_array = np.asarray(pts)
             rr, cc = polygon(pts_array[:,0], pts_array[:,1])
             draw_img[cc,rr,:1]=255
-            draw_ax.imshow(draw_img)
+            draw_ax.set_data(draw_img)
             draw_mask[cc,rr]=1
             pts.clear()
-            plt.show()
+            plt.draw()
         else:
             print('need at least three clicks before finishing annotation')
 
@@ -103,14 +104,7 @@ def gt_sorting(raw_img, seg):
         out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 1*raw_img.shape[2]:2*raw_img.shape[2], cc]=im[mid_frame,:,:]
         out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 2*raw_img.shape[2]:3*raw_img.shape[2], cc]=im[mid_frame+4,:,:]
         out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 3*raw_img.shape[2]:4*raw_img.shape[2], cc]=np.amax(im, axis=0)
-        '''
-        out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 0*raw_img.shape[2]:1*raw_img.shape[2], cc]=im[mid_frame-8,:,:]
-        out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 1*raw_img.shape[2]:2*raw_img.shape[2], cc]=im[mid_frame-4,:,:]
-        out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 2*raw_img.shape[2]:3*raw_img.shape[2], cc]=im[mid_frame,:,:]
-        out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 3*raw_img.shape[2]:4*raw_img.shape[2], cc]=im[mid_frame+4,:,:]
-        out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 4*raw_img.shape[2]:5*raw_img.shape[2], cc]=im[mid_frame+8,:,:]
-        out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 5*raw_img.shape[2]:6*raw_img.shape[2], cc]=np.amax(im, axis=0)
-        '''
+
     row_index=1
     offset = 20
     im = seg + offset # make it brighter
@@ -123,14 +117,6 @@ def gt_sorting(raw_img, seg):
         out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 1*raw_img.shape[2]:2*raw_img.shape[2], cc]=im[mid_frame,:,:]
         out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 2*raw_img.shape[2]:3*raw_img.shape[2], cc]=im[mid_frame+4,:,:]
         out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 3*raw_img.shape[2]:4*raw_img.shape[2], cc]=np.amax(im, axis=0)
-        '''
-        out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 0*raw_img.shape[2]:1*raw_img.shape[2], cc]=im[mid_frame-8,:,:]
-        out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 1*raw_img.shape[2]:2*raw_img.shape[2], cc]=im[mid_frame-4,:,:]
-        out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 2*raw_img.shape[2]:3*raw_img.shape[2], cc]=im[mid_frame,:,:]
-        out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 3*raw_img.shape[2]:4*raw_img.shape[2], cc]=im[mid_frame+4,:,:]
-        out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 4*raw_img.shape[2]:5*raw_img.shape[2], cc]=im[mid_frame+8,:,:]
-        out[row_index*raw_img.shape[1]:(row_index+1)*raw_img.shape[1], 5*raw_img.shape[2]:6*raw_img.shape[2], cc]=np.amax(im, axis=0)
-        '''
 
     # display the image for good/bad inspection
     fig = plt.figure()
@@ -179,12 +165,12 @@ def create_mask(raw_img, seg):
     figManager = plt.get_current_fig_manager() 
     figManager.full_screen_toggle() 
     ax = fig.add_subplot(111)
-    ax.imshow(img)
-    draw_ax = ax
+    draw_ax = ax.imshow(img)
     cid = fig.canvas.mpl_connect('button_press_event', draw_polygons)
     cid2 = fig.canvas.mpl_connect('key_press_event', quit_mask_drawing)
     plt.show()
     fig.canvas.mpl_disconnect(cid)
+    fig.canvas.mpl_disconnect(cid2)
 
 class Args(object):
     """
@@ -232,6 +218,7 @@ class Args(object):
         p.add_argument('--d', '--debug', action='store_true', dest='debug',
                        help='If set debug log output is enabled')
         p.add_argument('--raw_path', required=True, help='path to raw images')
+        p.add_argument('--data_type', required=True, help='the type of raw images')
         p.add_argument('--input_channel', default=0, type=int)
         p.add_argument('--seg_path', required=True, help='path to segmentation results')
         p.add_argument('--train_path', required=True, help='path to output training data')
@@ -252,13 +239,6 @@ class Args(object):
             log.debug("\t{}: {}".format(k, v))
 
 
-'''
-parent_path = '/allen/aics/assay-dev/Analysis/labelfree_predictions/'
-sample_csv = '/allen/aics/assay-dev/Analysis/labelfree_predictions/dna_samples.csv'
-df_sample = pd.read_csv(sample_csv)
-map_csv = parent_path + 'labelfree_results_original_resized.csv'
-df = pd.read_csv(map_csv)
-'''
 ###############################################################################
 
 class Executor(object):
@@ -269,13 +249,16 @@ class Executor(object):
             print('the csv file for saving sorting results exists, sorting will be resumed')
         else:
             print('no existing csv found, start a new sorting ')
-            filenames = glob(args.raw_path + '/*.tiff')
+            if not args.data_type.startswith('.'):
+                args.data_type = '.' + args.data_type
+
+            filenames = glob(args.raw_path + '/*' + args.data_type)
             filenames.sort()
             with open(args.csv_name, 'w') as csvfile:
                 filewriter = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
                 filewriter.writerow(['raw','seg','score','mask'])
                 for _, fn in enumerate(filenames):
-                    seg_fn = args.seg_path + os.sep + os.path.basename(fn)[:-5] + '_struct_segmentation.tiff'
+                    seg_fn = args.seg_path + os.sep + os.path.basename(fn)[:-1*len(args.data_type)] + '_struct_segmentation.tiff'
                     assert os.path.exists(seg_fn)
                     filewriter.writerow([fn, seg_fn , None , None])
 
@@ -283,12 +266,17 @@ class Executor(object):
 
         global draw_mask
         # part 1: do sorting
-        df = pd.read_csv(args.csv_name)
+        df = pd.read_csv(args.csv_name, index_col=False)
 
         for index, row in df.iterrows():
+
+            if not np.isnan(row['score']) and (row['score']==1 or row['score']==0):
+                continue
+
             reader = AICSImage(row['raw'])
             im_full = reader.data
             struct_img = im_full[0,args.input_channel,:,:,:]
+            struct_img[struct_img>5000] = struct_img.min()
             raw_img = (struct_img- struct_img.min() + 1e-8)/(struct_img.max() - struct_img.min() + 1e-8)
             raw_img = 255 * raw_img
             raw_img = raw_img.astype(np.uint8)
@@ -297,9 +285,6 @@ class Executor(object):
             im_seg_full = reader_seg.data
             assert im_seg_full.shape[0]==1 and im_seg_full.shape[1]==1
             seg = im_seg_full[0,0,:,:,:]
-
-            if not np.isnan(row['score']) and (row['score']==1 or row['score']==0):
-                continue
 
             score = gt_sorting(raw_img, seg)
             if score == 1:
@@ -320,7 +305,7 @@ class Executor(object):
             else:
                 df['score'].iloc[index]=0
 
-            df.to_csv(args.csv_name)
+            df.to_csv(args.csv_name, index=False)
 
         #########################################
         # generate training data:

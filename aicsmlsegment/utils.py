@@ -14,9 +14,6 @@ import torch
 import yaml
 
 def load_config(config_path):
-    #parser = argparse.ArgumentParser(description='UNet3D training')
-    #parser.add_argument('--config', type=str, help='Path to the YAML config file', required=True)
-    #args = parser.parse_args()
     config = _load_config_yaml(config_path)
     # Get a device to train on
     device_name = config.get('device', 'cuda:0')
@@ -87,6 +84,9 @@ def input_normalization(img, args):
             #struct_img = simple_norm(struct_img, 2.5, 10, 1000, 300)
             struct_img = simple_norm(struct_img, 2.5, 10)
             img[ch_idx,:,:,:] = struct_img[:,:,:]
+        elif args.Normalization == 4:
+            struct_img = simple_norm(struct_img, 1, 15)
+            img[ch_idx,:,:,:] = struct_img[:,:,:]
         elif args.Normalization == 7: # cardio_wga
             struct_img = simple_norm(struct_img, 1, 6)
             img[ch_idx,:,:,:] = struct_img[:,:,:]
@@ -104,11 +104,18 @@ def input_normalization(img, args):
             struct_img = simple_norm(struct_img, 2.5, 10)
             img[ch_idx,:,:,:] = struct_img[:,:,:]
             print('subtracted background')
+        elif args.Normalization == 11: 
+            struct_img = background_sub(struct_img,50)
+            #struct_img = simple_norm(struct_img, 2.5, 10)
+            img[ch_idx,:,:,:] = struct_img[:,:,:]
 
         elif args.Normalization == 15: 
             struct_img[struct_img>4000] = struct_img.min()
             struct_img = background_sub(struct_img,50)
             img[ch_idx,:,:,:] = struct_img[:,:,:]
+        else:
+            print('no normalization recipe found')
+            quit()
         
     
     return img

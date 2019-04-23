@@ -105,7 +105,7 @@ def train(args, model):
         print('use flip + rotation augmentation, with cost map, and also count valid pixels')
 
     # softmax for validation
-    softmax = nn.Softmax()
+    softmax = nn.Softmax(dim=1)
     softmax.cuda()
 
     for epoch in range(args.NumEpochs+1):
@@ -357,7 +357,11 @@ def main(args):
     model = model.cuda()
     if args.state: # resume
         try:
-            model.load_state_dict(torch.load(args.state, map_location=torch.device('cpu')))
+            state = torch.load(args.state, map_location=torch.device('cpu'))
+            if 'model_state_dict' in state:
+                model.load_state_dict(state['model_state_dict'])
+            else:
+                model.load_state_dict(state)
             print('the resuming succeeds!')
             model.to(torch.device('cuda'))
 

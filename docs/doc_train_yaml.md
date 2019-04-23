@@ -2,9 +2,12 @@
 
 This is a detailed description of the configuration for training a DL model in **Trainer**. There are a lot of parameters in the configuration file, which can be categorized into three types:
 
-1. Parameters specific to each training (need to change/check every time), marked by :pushpin:
-2. Parameters specific to each machine (only need to change once on a particular machine), marked by :computer:
-3. Parameters pre-defined for the general training scheme (no need to change for most problems and need basic knowledge of deep learning to adjust), marked by :ok:
+1. Need to change on every run (i.e., parameters specific to each execution), marked by :warning:
+    * `checkpoint_dir` (where to save trained models), `datafolder` (where are training data)
+2. Need to change for every segmentation problem (i.e., parameters specific to one problem), marked by :pushpin:
+    * `model`, `epochs`, `save_every_n_epoch`, ``PatchPerBuffer``
+3. Only need to change once on a particular machine (parameters specific to each machine), marked by :computer:
+4. No need to change for most problems (parameters pre-defined as a general training scheme and requires advacned deep learning knowledge to adjust), marked by :ok:
 
 
 ### Model related parameters
@@ -27,24 +30,32 @@ There may be probably more than 100 models in the literature for 3D image segmen
 nchannel: 1
 nclass: [2, 2, 2]
 ```
-These are related to the model architecture and fixed by default. 
+These are related to the model architecture and fixed by default. We assume the input image has only one channel.
 
-3. patch size (:computer:)
+3. patch size (:computer:) (:pushpin:)
 
 ```yaml 
-size_in: [48, 148, 148] 
-size_out: [20, 60, 60]
+size_in: [50, 156, 156] 
+size_out: [22, 68, 68]
 ```
-In most situations, we cannot fit the entire image into the memory of a single GPU. These are also related to `batch_size` (an data loader parameter), which will be discussed shortly. Here are some pre-calculated values for different models on different types of GPUs.
+In most situations, we cannot fit the entire image into the memory of a single GPU. These are also related to `batch_size` (an data loader parameter), which will be discussed shortly. `size_in` is the actual size of each patch fed into the model, while `size_out` is the size of the model's prediction. The prediction size is smaller than the input size is because the multiple convolution operations. The equation for calculating `size_in` and `size_out` is as follows.
 
-|                           | size_in           | size_out          |  batch_size   |
-| --------------------------|:-----------------:|:-----------------:|:-------------:|
-| unet_xy on 8GB GPU        |                   |                   |               |
-| unet_xy on 32GB GPU       | [48, 148, 148]    | [20, 60, 60]      |       8       |
-| unet_xy_zoom on 8GB GPU   |                   |                   |               |
-| unet_xy_zoom on 32GB GPU  | [52, 420, 420]    | [20, 152, 152]    |       8       |
+> For unet_xy, `size_in` = `[z, 8p+60, 8p+60]`, `size_out` = `[z-28, 8p-28, 8p-28]`
 
-4. model directory
+> For unet_xy_zoom, with `zoom_ratio`=`k`, `size_in` = `[z, 8kp+60k, 8kp+60k]` and `size_out` = `[z-32, 8kp-28k-4, 8kp-28k-4]`
+
+Here, `p` and `z` can be any positive integers that make `size_out` has all positive values.
+
+Here are some pre-calculated values for different models on different types of GPUs.
+
+|                                       | size_in           | size_out          |  batch_size   |
+| --------------------------------------|:-----------------:|:-----------------:|:-------------:|
+| unet_xy on 12GB GPU                   |  [44, 140, 140]   | [16, 52, 52]      |       4       |
+| unet_xy on 33GB GPU                   |  [50, 156, 156]   | [22, 68, 68]      |       8       |
+| unet_xy_zoom (ratio=3) on 12GB GPU    |  [52, 372, 372]   | [20, 104, 104]    |       4       |
+| unet_xy_zoom (ratio=3) on 33GB GPU    |  [52, 420, 420]   | [20, 152, 152]    |       8       |
+
+4. model directory (:warning:)
 ```yaml
 checkpoint_dir:  /home/model/xyz/
 resume: null
@@ -81,8 +92,8 @@ loader:
   epoch_shuffle: 5
   NumWorkers: 1
 ```
-`datafolder` and `PatchPerBuffer` (:pushpin:) need to check in each training. `datafolder` is the directory of training data. `PatchPerBuffer` is the number of sample patches randomly drawn in each epoch, which can be set as *number of patches to draw from each data* **x** *number of training data*. `name`, `epoch_shuffle` and `NumWorkers` (:ok:) are fixed by default. `batch_size` is related to GPU memory and patch size (see values presented with patch size).
+`datafolder` (:warning:) and `PatchPerBuffer` (:pushpin:) need to be specified for each problem. `datafolder` is the directory of training data. `PatchPerBuffer` is the number of sample patches randomly drawn in each epoch, which can be set as *number of patches to draw from each data* **x** *number of training data*. `name`, `epoch_shuffle` and `NumWorkers` (:ok:) are fixed by default. `batch_size` is related to GPU memory and patch size (see values presented with patch size).
 
 ### Validation related parameter
 
-In machine learning studies, we usually do a validation after every few epochs to make sure things are not going wrong. For most 3d microscopy image segmentation problems, the training data is very limited. We cannot save a portion from the training data for validation purpose. So, by default, validation is turn-off (:ok:) and may only be used for advanced users. 
+In machine learning studies, we usually do a validation after every few epochs to make sure things are not going wrong. For most 3d microscopy image segmentation problems, the training data is very limited. We cannot save a big portion (e.g., 20%) from the training data for validation purpose. So, by default, we use leave-one-out for validation (:ok:) and may only need to adjust for advanced users. 
