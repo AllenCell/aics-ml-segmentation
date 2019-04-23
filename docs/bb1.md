@@ -28,7 +28,7 @@ batch_processing --workflow_name FBL_HIPSC --struct_ch 0 --output_dir /home/data
 
 ## Option 2: Deep learning segmentation model
 
-Suppose you have already trained a model saved at '/home/data/models/seg.pytorch'
+Suppose you have already trained a model saved at `/home/data/models/seg.pytorch`
 
 ### Apply on one image
 
@@ -40,10 +40,10 @@ dl_predict --config /home/config_files/predict_file_lab.yaml
 
 ### Apply on a folder of images 
 
-Copy and paste the configuration file at `./config/predict_folder.yaml` into a new one, for example `/home/config_files/predict_folder_lab.yaml` and make sure to change (1) the path to the folder, (2) the type of files to be processed (3) the index of structure channel, (4) the output path in the new configuration file, (5) the path to the saved model.
+Copy and paste the configuration file at `./config/predict_folder.yaml` into a new one, for example `/home/config_files/predict_folder_lab.yaml` and make sure to change (1) the path to the folder, (2) the type of files to be processed (3) the index of structure channel, (4) the output path, (5) the path to the saved model.
 
 ```bash
 dl_predict --config /home/config_files/predict_folder_lab.yaml
 ```
 
-You can find the desciptions of all parameters in the configuration `.yaml` [here](./doc_pred_yaml).
+You can find the desciptions of all parameters in the configuration `.yaml` [here](./doc_pred_yaml.md).

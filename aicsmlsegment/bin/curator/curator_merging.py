@@ -359,7 +359,7 @@ class Executor(object):
                 writer.save(struct_img)
 
                 seg1 = seg1.astype(np.uint8)
-                seg1[seg1>0]=255
+                seg1[seg1>0]=1
                 writer = omeTifWriter.OmeTifWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '_GT.ome.tif')
                 writer.save(seg1)
 

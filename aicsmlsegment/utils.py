@@ -84,6 +84,9 @@ def input_normalization(img, args):
             #struct_img = simple_norm(struct_img, 2.5, 10, 1000, 300)
             struct_img = simple_norm(struct_img, 2.5, 10)
             img[ch_idx,:,:,:] = struct_img[:,:,:]
+        elif args.Normalization == 4:
+            struct_img = simple_norm(struct_img, 1, 15)
+            img[ch_idx,:,:,:] = struct_img[:,:,:]
         elif args.Normalization == 7: # cardio_wga
             struct_img = simple_norm(struct_img, 1, 6)
             img[ch_idx,:,:,:] = struct_img[:,:,:]
