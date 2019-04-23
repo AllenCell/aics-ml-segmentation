@@ -4,7 +4,7 @@
 
 ![segmenter pic](./bb3_pic.png)
 
-Copy and paste the configuration file at './config/train.yaml' to create a new one, for example, '/home/config_files/train_lab.yaml'. Check the parameters and make changes if needed. You should only need to (1) choose model type from the two options, (2) insert the file path for input data, (3) insert the output file path for the model. A detailed explanation of all parameters can be found [here](./doc_train_yaml.md). 
+Copy and paste the configuration file at './config/train.yaml' to create a new one, for example, '/home/config_files/train_lab.yaml'. Check the parameters and make changes if needed. Mostly, you only need to (1) specify the file path for input data, (2) specify the output file path for the model. A detailed explanation of all parameters can be found [here](./doc_train_yaml.md). 
 
 ```bash
 dl_train --config /home/config_files/train_lab.yaml
