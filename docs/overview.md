@@ -1,10 +1,16 @@
-# Tutorial:
+# Allen Cell Structure Segmenter Tutorials:
 
-This is a tutorial on how to use the *Allen Cell Structure Segmenter* including both the classic image segmentation workflow and the iterative deep learning workflow.
+The Allen Cell Structure Segmenter is an open source toolkit developed at the Allen Institute for Cell Science for 3D segmentation of intracellular structures in fluorescence microscope images, which brings together classic image segmentation and iterative deep learning workflows. Details including algorithms, validations, and examples can be found in our [bioRxiv paper](https://www.biorxiv.org/content/10.1101/491035v1) or [allencell.org/segmenter](allencell.org/segmenter). This tutorial will focus on how to run the *Allen Cell Structure Segmenter* (both classic image segmentation workflow and iterative DL workflow) to get an accurate segmentation. 
 
-The goal of the *Allen Cell Structure Segmenter* is to generate 3D segmentation of intracellular structures in fluorescence microscope images and the outputs of the segmenter are 3D binary images. Details including algorithms, validations, and examples can be found in our [bioRxiv paper](https://www.biorxiv.org/content/10.1101/491035v1). This tutorial will focus on how to run the *Allen Cell Structure Segmenter* (both classic image segmentation workflow and iterative DL workflow) to get an accurate segmentation. The execution of the segmenter is based on three building blocks: **Binarizer**, **Curator** and **Trainer**. We will explain how each building block works and demonstrate with real examples.
+The Allen Cell Structure Segmenter is implemented as two packages: [`aicssegmentation`](https://pypi.org/project/aicssegmentation/) (classic image segmentation) and [`aicsmlsegment`](https://pypi.org/project/aicsmlsegment/) (deep learning segmentation). The execution is based on three building blocks: **Binarizer**, **Curator** and **Trainer**. We will explain how each building block works and demonstrate with real examples.
 
-*Note: The image reader used in our package supports images in common formats, such as `.tiff`, `.tif`, `.ome.tif`. The only vendor specific format supported by the reader is `.czi` (the file format for ZEISS microscope). For other formats, images have to be converted to `.tiff` or `.ome.tif` in advance.* 
+*Note 1: The image reader used in our package supports images in common formats, such as `.tiff`, `.tif`, `.ome.tif`. The only vendor specific format supported by the reader is `.czi` (the file format for ZEISS microscope). For other formats, images have to be converted to `.tiff` or `.ome.tif` in advance.* 
+
+## Installation:
+
+* `aicssegmentation` (classic image segmentation): [Installation instruction](https://github.com/AllenInstitute/aics-segmentation) (available on Linux, MacOS, Windows)
+* `aicsmlsegment` (deep learning segmentation): [Installation instruction](../README.md) (requires NVIDIA GPU and Linux OS)
+
 
 ## Understanding each building block:
 
@@ -20,10 +26,9 @@ Deep learning (DL) is a very powerful approach for 3D image segmentation. But it
 
 ![overview pic](./overview_pic.png)
 
-The above flowchart is a simplified version of the segmenter showing the most important parts of the workflows. **Binarizer** can be either class segmentation algorithms or a DL model to compute the binary segmentation. **Curator** and **Trainer** are used to improve the segmentation from **Binarizer** when necessary. More details can be found in [bioRxiv paper](https://www.biorxiv.org/content/10.1101/491035v1)). Here, we will have demonstrations on two examples: first one only using **Binarizer** to solve the problem (i.e., a classic image segmentation workflow) and the other example requiring **Curator** and **Trainer** (makes up the iterative DL workflow).
+The above flowchart is a simplified version of the segmenter showing the most important parts of the workflows. **Binarizer** can be either class segmentation algorithms or a DL model to compute the binary segmentation. **Curator** and **Trainer** are used to improve the segmentation from **Binarizer** when necessary. More details can be found in [bioRxiv paper](https://www.biorxiv.org/content/10.1101/491035v1)). Here, we will have demonstrations on two examples: first one only using **Binarizer** to solve the problem (i.e., a classic image segmentation workflow) and the other example also requiring **Curator** and **Trainer** (makes up the iterative DL workflow).
 
-### Example 1: **Binarizer** 
-### Segmentation of ATP2A2 in 3D fluorescent microscopy images of hiPS cells 
+### Example 1: Segmentation of ATP2A2 in 3D fluorescent microscopy images of hiPS cells 
 
 ![demo1 pic](./demo1_pic.png)
 
@@ -31,8 +36,7 @@ The above flowchart is a simplified version of the segmenter showing the most im
 
 Link to the demo video
 
-### Example 2: **Curator** and  **Trainer** 
-### Segmentation of Lamin B1 in 3D fluorescent microscopy images of hiPS cells 
+### Example 2: Segmentation of Lamin B1 in 3D fluorescent microscopy images of hiPS cells 
 
 ![demo2 pic](./demo2_pic.png)
 
