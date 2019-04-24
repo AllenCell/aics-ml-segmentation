@@ -7,7 +7,12 @@ In this demo, we will demonstrate how to get the segmentation of Lamin B1 in 3D 
 Suppose you already worked out a classic image segmentation workflow and saved it as `seg_lmnb1_interphase.py` (i.e., `workflow_name=lmnb1_interphase`). You can run 
 
 ```bash
-batch_processing --workflow_name lmnb1_interphase --struct_ch 0 --output_dir /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_classic_workflow_segmentation_iter_1 per_dir --input_dir  /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_fluorescent --data_type .tiff
+batch_processing \
+    --workflow_name lmnb1_interphase \
+    --struct_ch 0 \
+    --output_dir /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_classic_workflow_segmentation_iter_1 per_dir \
+    --input_dir  /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_fluorescent \
+    --data_type .tiff
 ```
 to batch process all Lamin B1 images in a folder and evaluate them.
 
@@ -46,7 +51,7 @@ Depending on the size of your training data, the training process can take 8~32 
 
 ## Stage 4: Run **Binarizer**
 
-The trained is finished, the model will be saved at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_saved_model_iter_1/checkpoint_epoch_400.pytorch`. After updating the paths in the prediction configuration file `predict_folder_config.yaml`, you can run
+The trained is finished, the model will be saved at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_saved_model_iter_1/checkpoint_epoch_400.pytorch`. Find the `.yaml` file for processing a folder of images (e.g., `./config/predict_folder.yaml`) and make sure to follow the list [**here**](./doc_pred_yaml.md) to change the parameters, such as the image folder path, the output path, the model path, etc.. Then you can run
 
 ```bash
 dl_predict --config /allen/aics/assay-dev/Segmentation/DeepLearning/aics-ml-segmentation/configs/predict_folder_config.yaml
@@ -55,19 +60,25 @@ to apply the model on your data.
 
 Looking at the results, you can probably notice that Lamin B1 in all interphase cells were segmented very well, but the model still failed to correctly segment the structure in mitotic cells. To improve the model accuracy, you can develop another classic image segmentation workflow specifically for Lamin B1 in mitotic cells and call it `lmnb1_mitotic`.
 
-In this demo, to be more efficient, we will use a set of samples from mitotic enriched experiments, where there is usually at least one mitotic cell in each FOV. All the images can be found at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_fluorescent_mitosis`. 
+In this demo, to be more efficient, we will use a mitotic dataset, where each image has at least one mitotic cell. All the images can be found at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_fluorescent_mitosis`. 
 
 Then run the **Binarizer** twices:
-* first run with the DL model (better for interphase) and save at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_DL_iter_2`
+* first run with the DL model (better for interphase) and save the segmentation at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_DL_iter_2`. (Again, make sure to follow the list [**here**](./doc_pred_yaml.md) to change the parameters)
 
 ```bash
 dl_predict --config /allen/aics/assay-dev/Segmentation/DeepLearning/aics-ml-segmentation/configs/predict_folder_config.yaml
 ```
 
-* second run with the `lmnb1_mitotic` workflow (better for mitosis), and save at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_classic_workflow_segmentation_iter_2`
+* second run with the `lmnb1_mitotic` workflow (better for mitosis), and save the segmentation at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_classic_workflow_segmentation_iter_2`
 
 ```bash
-batch_processing --workflow_name lmnb1_mitotic --struct_ch 0 --output_dir /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_classic_workflow_segmentation_iter_2 per_dir --input_dir /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_fluorescent_mitosis --data_type .tiff
+batch_processing \
+    --workflow_name lmnb1_mitotic \
+    --struct_ch 0 \
+    --output_dir /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_classic_workflow_segmentation_iter_2 \
+    per_dir \
+    --input_dir /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_fluorescent_mitosis \
+    --data_type .tiff
 ```
 
 ## Stage 5: Run **Curator**
@@ -98,7 +109,7 @@ to start training of the model.
 
 ## Stage 7: Run *Binarizer*
 
-The trained model will be saved at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_saved_model_iter_2/checkpoint_epoch_400.pytorch`. After updating the paths in the prediction configuration file `predict_folder_config.yaml`, you can run
+The trained model will be saved at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_saved_model_iter_2/checkpoint_epoch_400.pytorch`. Find the `.yaml` file for processing a folder of images (e.g., `./config/predict_folder.yaml`) and make sure to follow the list [**here**](./doc_pred_yaml.md) to change the parameters. Then you can run
 
 ```bash
 dl_predict --config /allen/aics/assay-dev/Segmentation/DeepLearning/aics-ml-segmentation/configs/predict_folder_config.yaml

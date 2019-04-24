@@ -13,12 +13,19 @@ There are three scenarios that the current version of **Curator** can handle. Th
 
 ## Sorting:
 
-Suppose you have a set of images saved at `/home/data/original/`. In each image, the structure channel is the third one (so index=2, zero-base). The current binary segmentations are saved at `/home/data/segmentation_v1/` and you can save the training data at `/home/data/training_v1/` when they are ready. A `.csv` file needs be generated to track and resumes the process when necessary and you can name it `/home/data/curator_v1_tracker.csv`. You might also want to create excluding masks (see special note 1 below) for one or more original image and save them at `/home/data/sorting_excluding_mask_v1/`. Additionally, make sure to check special note 2 for input image normalization. In the following code example below, we are using normalization 15. 
+Suppose you have a set of raw images and their segmentations, and each raw image is multi-channel with the structure channel in the third (so `--input_channel`=2, zero-base). Training data will be generated automatically at the end of sorting. A `.csv` file needs be generated to track and resumes the process when necessary and you can name it `curator_sorting_tracker.csv`. You might also want to create excluding masks (see special note 1 below) for one or more images. If so, you can specify as `--mask_path`. Additionally, make sure to check special note 2 for input image normalization. In the following code example below, we are using "normalization recipe" 15. 
 
 ### How to run?
 
 ```bash
-curator_sorting --raw_path /home/data/original/ --input_channel 2 --seg_path /home/data/segmentation_v1/ --train_path /home/data/training_v1/ --csv_name /home/data/curator_v1_tracker.csv --mask_path  /home/data/sorting_excluding_mask_v1/  --Normalization 15
+curator_sorting \
+    --raw_path /path/to/raw/image/ \
+    --input_channel 2 \
+    --seg_path /path/to/segmentation/ \
+    --train_path /path/to/training_data/ \
+    --csv_name /path/to/curator_sorting_tracker.csv \
+    --mask_path  /path/to/excluding_mask/  \
+    --Normalization 15
 ```
 
 ### How to use?
@@ -38,12 +45,21 @@ If an image is labeled as 'Good' (i.e., after a right-click), users will be aske
 
 ## Merging: 
 
-Suppose you have a set of images saved at `/home/data/original/` and in each image, the structure channel is the third one (so, index=2, zero-base). Two different versions of preliminary structure segmentations are saved at `/home/data/segmentation_v1/` and `/home/data/segmentation_v2/`. The masks for merging the two versions will need to be created and saved at `/home/data/merging_mask_v1/`. For each mask, you will need to draw polygons on a 2D image (max z-projection) to indicate the areas to use `segmentation_v1` and the areas outside the polygons will use `segmentation_v2` by default. (*It is important to properly assign v1 and v2 to workflows.*) All masks drawn in 2D will be duplicated on every z-slice (see Note 3 below for more details). When the training data are ready, you would want to save them at `/home/data/training_v1/`. A `.csv` file needs to be generayed to track and resume the process when necessary and you can name it  `/home/data/curator_v2_tracker.csv`. You might also want to create excluding masks (see special note 1 below about excluding masks) for one or more image and save them at `/home/data/merging_excluding_mask_v1/`. Additionally, make sure to check special note 2 for input image normalization. In the following code example below, we are using normalization 15. 
+Suppose you have a set of raw images which are multi-channel with the structure channel in the third (so `--input_channel`=2, zero-base). Also, suppose we have two different versions of segmentations, say `seg1` and `seg2`, each of which is more suitable for certain cells in each image. The merging masks for combining the two versions will need to be created. For each mask, you will need to draw polygons on a 2D image to indicate the areas to use `seg1` and the areas outside the polygons will use `seg2` by default. (*It is important to properly assign which version is named `seg1` and which is named `seg2`.*) All masks drawn in 2D will be duplicated on every z-slice (see Note 3 below for more details). Training data will be generated automatically at the end of merging curation. A `.csv` file needs be generated to track and resumes the process when necessary and you can name it `curator_merging_tracker.csv`. You might also want to create excluding masks (see special note 1 below) for one or more images. If so, you can specify as `--ex_mask_path`. Additionally, make sure to check special note 2 for input image normalization. In the following code example below, we are using "normalization recipe" 15. 
 
 ### How to run?
 
 ```bash
-curator_sorting --raw_path /home/data/original/ --input_channel 2 --seg1_path /home/data/segmentation_v1/ --seg2_path /home/data/segmentation_v2/ --train_path /home/data/training_v1/ --csv_name /home/data/curator_v1_tracker.csv --mask_path  /home/data/merging_mask_v1/ --ex_mask_path  /home/data/merging_excluding_mask_v1/ --Normalization 15
+curator_sorting \
+    --raw_path /path/to/raw/image/ \
+    --input_channel 2 \
+    --seg1_path /path/to/seg1/ \
+    --seg2_path /path/to/seg2/ \
+    --train_path /path/to/training_data/ \
+    --csv_name /path/to/curator_merging_tracker.csv \
+    --mask_path  /path/to/merging_mask/ \
+    --ex_mask_path  /path/to/excluding_mask/ \
+    --Normalization 15
 ```
 
 ### How to use?
@@ -68,7 +84,13 @@ If you already have ground truth data (e.g., by manual annotation or you are usi
 You can use the following code example to use this version of **Curator**.
 
 ```bash
-curator_takeall --raw_path /home/data/original/ --input_channel 2 --seg_path /home/data/segmentation_v1/ --train_path /home/data/training_v1/ --Normalization 15 
+curator_takeall \
+    --raw_path /path/to/raw/image/ \
+    --input_channel 2 \
+    --seg_path /path/to/segmentation/ \
+    --train_path /path/to/training_data/ \
+    --mask_path /path/to/excluding_mask/ \
+    --Normalization 15 
 ```
 
 =======================

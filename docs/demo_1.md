@@ -52,9 +52,18 @@ Or, you can also use these scripts (`aicssegmentation/bin/run_toolkit.sh` for li
 
 ## Stage 2: Evaluation
 
-The goal of the Jupyter Notebook "playground" is to design and assess the overall workflow on one or a few images. You may need several rounds of finetuning of the parameters in batch mode (i.e., adjusting parameters in `seg_atp2a2.py` in this demo) to make sure the parameters are optimized for a large set of images.  
+The goal of the Jupyter Notebook "playground" is to design and assess the overall workflow on one or a couple of images. After applying on more images (ideally representing possible variations in the full dataset to be analyzed), we want to make sure the workflow works well on different examples. 
 
-In this demo, we found that the results from the classic segmentation workflow were pretty good just after the first round of adjustments. In other cases, you may notice that some parameters need to be further adjusted after evaluating the segmentation results. When this happens, you can go back to your structure wrapper file, e.g., `seg_atp2a2.py`, to make changes and re-run it. You may not have to go back to the Jupyter Notebook file since the notebook is only meant to help you quickly test out the overall workflow and get reasonable parameters.
+### Case 1:
 
+If everything looks good, the script is ready for processing new data for analysis.
+
+### Case 2: 
+
+If the results are okay/aceptable on all images, but may need a little tuning (e.g., decreasing the cutoff value of `filament_3d_wrapper` to be more permissive), you can adjust the paramters in `seg_atp2a2.py`. You may need several rounds of finetuning of the parameters in batch mode to finally achieve the most satisfactory results on all representative images. You may not have to go back to the Jupyter Notebook file since the notebook is only meant to help you quickly test out the overall workflow and get reasonable parameters.
+
+### Case 3: 
+
+If the results are good on some images, but bad on others, or the results are only good on certain cells, you may consider use the iterative deep learning workflow to improve the segmentation quality. See [demo 2](./demo_2.md) for details.
 
 
