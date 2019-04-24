@@ -1,12 +1,13 @@
 
-
-## Installation 
+## Installation:
 
 0. prerequisite:
 
-To use the deep learning part of this package, we assume an [NVIDIA GPU](https://www.nvidia.com/en-us/deep-learning-ai/developer/) has been set up properly on a machine running a Linux operation system (we recommend Ubuntu).  
+To use the deep learning part of this package, we assume an [NVIDIA GPU](https://www.nvidia.com/en-us/deep-learning-ai/developer/) has been set up properly on a machine running a Linux operating system (we recommend Ubuntu).  
 
 Also, make sure to check if your GPU supports at least CUDA 8.0 (CUDA 9.0 and up is preferred): [NVIDIA Driver check](https://www.nvidia.com/Download/index.aspx?lang=en-us).
+
+The GPUs we used to develop and test our package are two types: (1) GeForce GTX 1080 Ti GPU (about 11GB GPU memory), (2) Tesla V100 for PCIe (with about 33GB memory), two common chips for personal workstation and data center, respectively.
 
 > We are investigating alternative cloud computing service to deploy our package and will have updates in the next few months. Stay tuned :)  
 
@@ -39,16 +40,9 @@ conda install pytorch torchvision -c pytorch
 4. Install Allen Cell Segmenter (deep learning part)
 
 ```bash
-git clone https://aicsbitbucket.corp.alleninstitute.org/scm/assay/aics-ml-segmentation.git
+git clone https://github.com/AllenInstitute/aics-ml-segmentation.git
 cd ./aics-ml-segmentation
 pip install -e .
 ```
 
-## Documentation:
-
-See [documentation and tutorials](./docs/overview.md)
-
-
-## Computing resource:
-
-The GPUs we used to develop and test our package are two types: (1) GeForce GTX 1080 Ti GPU (about 11GB GPU memory), (2) Tesla V100 for PCIe (with about 33GB memory), two common chips for personal workstation and data center, respectively.
+# Link to [Documentations and Tutorials](./docs/overview.md)
