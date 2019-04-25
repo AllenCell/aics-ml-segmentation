@@ -3,7 +3,7 @@
 This is a detailed description of the configuration for training a DL model in **Trainer**. There are a lot of parameters in the configuration file, which can be categorized into three types:
 
 1. Need to change on every run (i.e., parameters specific to each execution), marked by :warning:
-    * `checkpoint_dir` (where to save trained models), `datafolder` (where are training data)
+    * `checkpoint_dir` (where to save trained models), `datafolder` (where are training data), `resume` (whether to start from a previous model)
 2. Need to change for every segmentation problem (i.e., parameters specific to one problem), marked by :pushpin:
     * `model`, `epochs`, `save_every_n_epoch`, ``PatchPerBuffer``
 3. Only need to change once on a particular machine (parameters specific to each machine), marked by :computer:
@@ -25,14 +25,22 @@ model:
 ```
 There may be probably more than 100 models in the literature for 3D image segmentation. The two models we implemented here are carefully designed for cell structure segmentation in 3D microscopy images. Model `unet_xy` is suitable for smaller-scale structures, like severl voxels thick (e.g., tubulin, lamin b1). Model `unet_xy_zoom` is more suitable for larger-scale structures, like more than 100 voxels in diameter (e.g., nucleus), while the `zoom_ratio` is an integer (e.g., 2 or 3) and can be estimated by average diameter of target object in voxels divided by 150. 
 
-2. input and output type (:ok:)
+2. start from an existing model? (:warning:)
+
+```yaml
+resume: null
+```
+
+When doing iterative deep learning, it may be useful to start from the model trained in the previous step. The model can be specified at `resume`. If `null`, a new model will be trained from scratch. 
+
+3. input and output type (:ok:)
 ```yaml
 nchannel: 1
 nclass: [2, 2, 2]
 ```
 These are related to the model architecture and fixed by default. We assume the input image has only one channel.
 
-3. patch size (:computer:) (:pushpin:)
+4. patch size (:computer:) (:pushpin:)
 
 ```yaml 
 size_in: [50, 156, 156] 
@@ -55,7 +63,7 @@ Here are some pre-calculated values for different models on different types of G
 | unet_xy_zoom (ratio=3) on 12GB GPU    |  [52, 372, 372]   | [20, 104, 104]    |       4       |
 | unet_xy_zoom (ratio=3) on 33GB GPU    |  [52, 420, 420]   | [20, 152, 152]    |       8       |
 
-4. model directory (:warning:)
+5. model directory (:warning:)
 ```yaml
 checkpoint_dir:  /home/model/xyz/
 resume: null
