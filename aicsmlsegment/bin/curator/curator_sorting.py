@@ -315,7 +315,12 @@ class Executor(object):
         #  this may waster i/o time on reloading images)
         # #######################################
         print('finish merging, start building the training data ...')
-        training_data_count = 0
+
+        existing_files = glob(args.train_path+'/img_*.ome.tif')
+        print(len(existing_files))
+
+        training_data_count = len(existing_files)//3 + 1
+        
         for index, row in df.iterrows():
             if row['score']==1:
                 training_data_count += 1

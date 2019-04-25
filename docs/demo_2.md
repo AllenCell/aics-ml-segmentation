@@ -40,7 +40,7 @@ curator_sorting \
 
 ## Stage 3: Run **Trainer** 
 
-After clicking through all images, the training data will be automatically generated and saved at `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_training_data_iter_1`. After manually updating the paths in the training configuration file in 'train.yaml', you can simply run
+Find/build the `.yaml` file for training (e.g, './config/train.yaml') and make sure to following the list [**here**](./doc_train_yaml.md) to change the parameters, such as the training data path, the path for saving the model, etc..
 
 ```bash
 dl_train --config /allen/aics/assay-dev/Segmentation/DeepLearning/aics-ml-segmentation/configs/train_config.yaml
@@ -89,6 +89,7 @@ Now with the combined results from the DL model and the classic segmentation wor
 curator_merging \
     --raw_path /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_fluorescent_mitosis/  \
     --input_ch 0  \
+    --data_type .tiff \
     --seg1_path /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_DL_iter_2/ \
     --seg2_path /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_classic_workflow_segmentation_iter_2 \
     --mask_path /allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_mask_iter_2   \
@@ -100,7 +101,7 @@ curator_merging \
 
 ## Stage 6: Run **Trainer**
 
-After clicking through all images, the training data will be saved in `/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_training_data_iter_2`. After manually updating the paths in the training configuration file in 'train.yaml', you can run
+Find/build the `.yaml` file for training (e.g, './config/train.yaml') and make sure to following the list [**here**](./doc_train_yaml.md) to change the parameters, such as the training data path, the path for saving the model, etc..
 
 ```bash
 dl_train --config /allen/aics/assay-dev/Segmentation/DeepLearning/aics-ml-segmentation/configs/train_config.yaml

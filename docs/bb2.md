@@ -2,6 +2,8 @@
 
 **Curator** is used to prepare training data for **Trainer**. It really emphasizes the iterative part of the DL workflow we presented in the [paper](https://www.biorxiv.org/content/10.1101/491035v1). Namely, after having some preliminary segmentation results, you can improve the performance by training a deep learning model with curated segmentations in an iterative fashion. 
 
+*Annotating images is a way to imcorporate human knowledge into training the deep learning based segmentation model. But, we never want to directly draw the segmentation manually. That could very time consuming and subjective. Instead, we want to draw areas to guide the model on whether the  automatic segmentation result is realiable or which segmentation (always from automatic algorithms) to use in different areas.*
+
 ![segmenter pic](./bb2_pic.png)
 
 There are three scenarios that the current version of **Curator** can handle. The same "curation" idea can be adapted based on the current scripts for your special needs. 
@@ -21,6 +23,7 @@ Suppose you have a set of raw images and their segmentations, and each raw image
 curator_sorting \
     --raw_path /path/to/raw/image/ \
     --input_channel 2 \
+    --data_type .tiff \
     --seg_path /path/to/segmentation/ \
     --train_path /path/to/training_data/ \
     --csv_name /path/to/curator_sorting_tracker.csv \
@@ -53,6 +56,7 @@ Suppose you have a set of raw images which are multi-channel with the structure 
 curator_sorting \
     --raw_path /path/to/raw/image/ \
     --input_channel 2 \
+    --data_type .tiff \
     --seg1_path /path/to/seg1/ \
     --seg2_path /path/to/seg2/ \
     --train_path /path/to/training_data/ \
@@ -86,6 +90,7 @@ You can use the following code example to use this version of **Curator**.
 ```bash
 curator_takeall \
     --raw_path /path/to/raw/image/ \
+    --data_type .tiff \
     --input_channel 2 \
     --seg_path /path/to/segmentation/ \
     --train_path /path/to/training_data/ \
@@ -118,7 +123,7 @@ List of current pre-defined recipes:
 
 #### Techincal consideration
 
-Currently, the interface of merging/sorting is implemented only using `matplotlib` without any advanced packages for interface building. Our goal is to keep it simple and easy to setup. It should be robust across different platforms and easy to be hacked so that users can customize their own curation interface when necessary. 
+Currently, the interface of merging/sorting is implemented only using `matplotlib` without any advanced packages for interface building. Our goal is to keep it simple and easy to setup. It should be robust across different machines and easy to be hacked so that users can customize their own curation interface when necessary. We are also investigating other ways for implementing the interphase that is both more user friendly, easy to setup and robust across different machines. 
 
 #### Human computer interaction consideration
 
