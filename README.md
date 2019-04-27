@@ -1,3 +1,8 @@
+## Overview
+
+The Allen Cell Structure Segmenter is a Python-based open source toolkit developed for 3D segmentation of intracellular structures in fluorescence microscope images, developed at the Allen Institute for Cell Science. This toolkit consists of two complementary elements, a classic image segmentation workflow with a restricted set of algorithms and parameters and an iterative deep learning segmentation workflow. We created a collection of 20 classic image segmentation workflows based on 20 distinct and representative intracellular structure localization patterns as a lookup table reference and starting point for users. The iterative deep learning workflow can take over when the classic segmentation workflow is insufficient. Two straightforward human-in-the-loop curation strategies convert a set of classic image segmentation workflow results into a set of 3D ground truth images for iterative model training without the need for manual painting in 3D. The Allen Cell Structure Segmenter thus leverages state of the art computer vision algorithms in an accessible way to facilitate their application by the experimental biology researcher. More details including algorithms, validations, and examples can be found in our [bioRxiv paper](https://www.biorxiv.org/content/10.1101/491035v1) or [allencell.org/segmenter](allencell.org/segmenter).
+
+**Note: This repository is only for the "Iterative Deep Learning Workflow". The classic part can be found at [https://github.com/AllenInstitute/aics-segmentation](https://github.com/AllenInstitute/aics-segmentation)**
 
 ## Installation:
 
@@ -44,5 +49,9 @@ git clone https://github.com/AllenInstitute/aics-ml-segmentation.git
 cd ./aics-ml-segmentation
 pip install -e .
 ```
+
+## Level of Support
+We are offering it to the community AS IS; we have used the toolkit within our organization. We are not able to provide guarantees of support. However, we welcome feedback and submission of issues. Users are encouraged to sign up on our [Allen Cell Discussion Forum](https://forum.allencell.org/) for community quesitons and comments.
+
 
 # Link to [Documentations and Tutorials](./docs/overview.md)

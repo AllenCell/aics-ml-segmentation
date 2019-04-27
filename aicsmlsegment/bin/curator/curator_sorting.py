@@ -319,7 +319,7 @@ class Executor(object):
         existing_files = glob(args.train_path+'/img_*.ome.tif')
         print(len(existing_files))
 
-        training_data_count = len(existing_files)//3 + 1
+        training_data_count = len(existing_files)//3
         
         for index, row in df.iterrows():
             if row['score']==1:
