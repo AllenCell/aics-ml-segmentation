@@ -4,7 +4,7 @@ The Allen Cell Structure Segmenter is an open source toolkit developed at the Al
 
 The Allen Cell Structure Segmenter is implemented as two packages: [`aicssegmentation`](https://pypi.org/project/aicssegmentation/) (classic image segmentation) and [`aicsmlsegment`](https://pypi.org/project/aicsmlsegment/) (deep learning segmentation). The execution is based on three building blocks: **Binarizer**, **Curator** and **Trainer**. We will explain how each building block works and demonstrate with real examples.
 
-*Note 1: The image reader used in our package supports images in common formats, such as `.tiff`, `.tif`, `.ome.tif`. The only vendor specific format supported by the reader is `.czi` (the file format for ZEISS microscope). For other formats, images have to be converted to `.tiff` or `.ome.tif` in advance.* 
+*Note: The image reader used in our package supports images in common formats, such as `.tiff`, `.tif`, `.ome.tif`. The only vendor specific format supported by the reader is `.czi` (the file format for ZEISS microscope). For other formats, images have to be converted to `.tiff` or `.ome.tif` in advance.* 
 
 ## Installation:
 

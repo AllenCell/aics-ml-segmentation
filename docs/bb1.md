@@ -1,7 +1,7 @@
-# Building Block 1: **Segmenter**
+# Building Block 1: **Binarizer**
 
 
-The **Segmenter** is the core building block actually doing the computation for getting segmentation by either a classic image segmentation workflow or a model trained by an iterative DL workflow. We refer [this documentation](https://github.com/AllenInstitute/aics-segmentation/blob/master/docs/jupyter_lookup_table.md) for quick development of a classic image segmentation workflow for a specific type of image, and [Curator tutorial](./bb2.md) + [trainer tutorial](./bb3.md) for how to train a deep learning based segmentation model. 
+The **Binarizer** is the core building block actually doing the computation for getting segmentation by either a classic image segmentation workflow or a model trained by an iterative deep learning workflow. We refer [this documentation](./demo_1.md) for a demo on how to develope a classic image segmentation workflow for a specific cell structure, and [Curator tutorial](./bb2.md) + [Trainer tutorial](./bb3.md) for how to train a deep learning based segmentation model. 
 
 ![segmenter pic](./bb1_pic.png)
 

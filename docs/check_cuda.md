@@ -18,7 +18,7 @@ Running command `nvcc --version` in your terminal will give an overview of your 
 
 ![cuda](./cuda.png)
 
-You cannot see this message if CUDA is not setup on your machine. Now you need to install CUDA. In order to determine which CUDA version fits your GPU, check this [chart](https://stackoverflow.com/questions/30820513/what-is-the-correct-version-of-cuda-for-my-nvidia-driver/30820690#30820690). For our case (Driver Version = 390.87), CUDA 9.0 or higher is good for us. 
+You cannot see this message if CUDA is not setup on your machine. If so, you need to install CUDA. In order to determine which CUDA version fits your GPU, check this [chart](https://stackoverflow.com/questions/30820513/what-is-the-correct-version-of-cuda-for-my-nvidia-driver/30820690#30820690). For our case (Driver Version = 390.87), CUDA 9.0 or higher is good for us. 
 
 Go to [CUDA website](https://developer.nvidia.com/cuda-toolkit) and follow the download and installation instruction to install CUDA.
 
