@@ -19,7 +19,7 @@ from random import shuffle
 from scipy import stats
 from skimage.io import imsave
 from skimage.draw import line, polygon
-import cv2
+#import cv2
 
 from aicssegmentation.core.utils import histogram_otsu
 from aicsimageio import AICSImage, omeTifWriter
@@ -80,7 +80,7 @@ def quit_mask_drawing(event):
         plt.close()
 
 
-def create_merge_mask(raw_img, seg1, seg2):
+def create_merge_mask(raw_img, seg1, seg2, drawing_aim):
     global pts, draw_img, draw_mask, draw_ax
    
     offset = 20
@@ -126,6 +126,8 @@ def create_merge_mask(raw_img, seg1, seg2):
     figManager = plt.get_current_fig_manager() 
     figManager.full_screen_toggle() 
     ax = fig.add_subplot(111)
+    ax.set_title('Interface for annotating '+drawing_aim+'. Left: raw, Middle: segmentation v1, Right: segmentation v2. \n' \
+        +'Top row: max z projection, Bottom row: middle z slice. Please draw in the upper left panel \n')
     draw_ax = ax.imshow(img)
     cid = fig.canvas.mpl_connect('button_press_event', draw_polygons)
     cid2 = fig.canvas.mpl_connect('key_press_event', quit_mask_drawing)
@@ -147,7 +149,7 @@ class Args(object):
 
     def __init__(self, log_cmdline=True):
         self.debug = False
-        self.output_dir = './'
+        self.output_dir = '.'+os.sep
         self.struct_ch = 0
         self.xy = 0.108
 
@@ -215,7 +217,7 @@ class Executor(object):
             if not args.data_type.startswith('.'):
                 args.data_type = '.' + args.data_type
 
-            filenames = glob(args.raw_path + '/*' + args.data_type)
+            filenames = glob(args.raw_path + os.sep +'*' + args.data_type)
             filenames.sort()
             with open(args.csv_name, 'w') as csvfile:
                 filewriter = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
@@ -263,7 +265,7 @@ class Executor(object):
             else:
                 seg2 = im_seg2_full[0,:,0,:,:]>0
             
-            create_merge_mask(raw_img, seg1.astype(np.uint8), seg2.astype(np.uint8))
+            create_merge_mask(raw_img, seg1.astype(np.uint8), seg2.astype(np.uint8), 'merging_mask')
 
             if ignore_img:
                 df['score'].iloc[index]=0
@@ -283,7 +285,7 @@ class Executor(object):
 
                 need_mask = input('Do you need to add an excluding mask for this image, enter y or n:  ')
                 if need_mask == 'y':
-                    create_merge_mask(raw_img, seg1.astype(np.uint8), seg2.astype(np.uint8))
+                    create_merge_mask(raw_img, seg1.astype(np.uint8), seg2.astype(np.uint8), 'excluding mask')
 
                     mask_fn = args.ex_mask_path + os.sep + os.path.basename(row['raw'])[:-5] + '_mask.tiff'
                     crop_mask = np.zeros(seg1.shape, dtype=np.uint8)
@@ -308,7 +310,7 @@ class Executor(object):
         #  this may waster i/o time on reloading images)
         # #######################################
         print('finish merging, start building the training data ...')
-        existing_files = glob(args.train_path+'/img_*.ome.tif')
+        existing_files = glob(args.train_path+os.sep+'img_*.ome.tif')
         print(len(existing_files))
 
         training_data_count = len(existing_files)//3 

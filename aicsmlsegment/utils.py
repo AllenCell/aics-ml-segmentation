@@ -1,8 +1,6 @@
-import torch.nn as nn
 import numpy as np
 import logging
 import sys
-from torch.utils.data import sampler as torch_sampler
 from aicsimageio import AICSImage
 from aicsimageprocessing import resize
 import os
@@ -10,10 +8,10 @@ from scipy import ndimage as ndi
 from scipy import stats
 import argparse
 
-import torch
 import yaml
 
 def load_config(config_path):
+    import torch
     config = _load_config_yaml(config_path)
     # Get a device to train on
     device_name = config.get('device', 'cuda:0')
@@ -26,7 +24,7 @@ def _load_config_yaml(config_file):
     return yaml.load(open(config_file, 'r'))
 
 def get_samplers(num_training_data, validation_ratio, my_seed):
-
+    from torch.utils.data import sampler as torch_sampler
     indices = list(range(num_training_data))
     split = int(np.floor(validation_ratio * num_training_data))
 

@@ -54,7 +54,7 @@ setup(name=PACKAGE_NAME,
           'aicsimageprocessing',
           'tqdm',
           'pyyaml',
-          'tensorboardX'
+          #'tensorboardX'
           #'pytorch=1.0.0'
       ],
 

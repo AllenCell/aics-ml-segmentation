@@ -58,7 +58,7 @@ class Args(object):
 
     def __init__(self, log_cmdline=True):
         self.debug = False
-        self.output_dir = './'
+        self.output_dir = '.' + os.sep
         self.struct_ch = 0
         self.xy = 0.108
 
@@ -110,13 +110,6 @@ class Args(object):
             log.debug("\t{}: {}".format(k, v))
 
 
-'''
-parent_path = '/allen/aics/assay-dev/Analysis/labelfree_predictions/'
-sample_csv = '/allen/aics/assay-dev/Analysis/labelfree_predictions/dna_samples.csv'
-df_sample = pd.read_csv(sample_csv)
-map_csv = parent_path + 'labelfree_results_original_resized.csv'
-df = pd.read_csv(map_csv)
-'''
 ###############################################################################
 
 class Executor(object):
@@ -129,10 +122,13 @@ class Executor(object):
         if not args.data_type.startswith('.'):
             args.data_type = '.' + args.data_type
 
-        filenames = glob(args.raw_path + '/*' + args.data_type)
+        filenames = glob(args.raw_path + os.sep +'*' + args.data_type)
         filenames.sort()
 
-        training_data_count = 0
+        existing_files = glob(args.train_path+os.sep+'img_*.ome.tif')
+        print(len(existing_files))
+
+        training_data_count = len(existing_files)//3
         for _, fn in enumerate(filenames):
             
             training_data_count += 1
@@ -200,40 +196,3 @@ def main():
 if __name__ == "__main__":
     main()
 
-'''
-sample_fn = '/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_classic_workflow_segmentation_iter_1/image_040_struct_segmentation.tiff'
-mpx, mpy = -1, -1
-
-
-
-# Create a black image, a window and bind the function to window
-reader = AICSImage(sample_fn)
-data = reader.data 
-img = np.amax(data[0,0,:,:,:]>0, axis=0)
-img = img.astype(np.uint8)
-img[img>0]=255
-img = np.stack([img,img,img],axis=2)
-mask = np.zeros_like(img)
-cv2.namedWindow('image')
-cv2.setMouseCallback('image',draw_polygons)
-
-while(1):
-    cv2.imshow('image',img)
-    if len(pts)>0:
-        cv2.polylines(img, [np.asarray(pts).astype(np.int32)], False, (0,255,255))
-    k = cv2.waitKey(50)
-    if k == 27:
-        break
-    elif k == ord('d'):
-        pts.append(pts[0])
-        cv2.fillPoly(img, [np.asarray(pts).astype(np.int32)], (0,255,255))
-        cv2.fillPoly(mask, [np.asarray(pts).astype(np.int32)], (255,0,0))
-        pts=[]
-
-
-print(mask.shape)
-mask = mask[:,:,0]
-imsave('test.tiff',mask)
-    
-cv2.destroyAllWindows()
-'''

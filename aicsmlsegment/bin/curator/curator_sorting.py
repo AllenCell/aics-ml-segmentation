@@ -94,7 +94,7 @@ def gt_sorting(raw_img, seg):
         z_profile[zz] = np.count_nonzero(bw[zz,:,:])
     mid_frame = round(histogram_otsu(z_profile)*bw.shape[0]).astype(int)
 
-    #create 2x5 mosaic
+    #create 2x4 mosaic
     out = np.zeros((2*raw_img.shape[1], 4*raw_img.shape[2], 3),dtype=np.uint8)
     row_index=0
     im = raw_img
@@ -124,6 +124,9 @@ def gt_sorting(raw_img, seg):
     figManager.full_screen_toggle() 
     ax = fig.add_subplot(111)
     ax.imshow(out)
+    ax.set_title('Interface for Sorting. Left click = BAD. Right click = GOOD \n'
+        + 'Columns left to right: 4 z slice below middle z slice, middle z slice, 4 z slice above middle z slice, max z projection'
+        + 'Top row: raw image; bottom row: segmentation. \n ')
     #plt.tight_layout()
     cid = fig.canvas.mpl_connect('button_press_event', gt_sorting_callback)
     plt.show()
@@ -165,6 +168,9 @@ def create_mask(raw_img, seg):
     figManager = plt.get_current_fig_manager() 
     figManager.full_screen_toggle() 
     ax = fig.add_subplot(111)
+    ax.set_title('Interface for annotating excluding mask. \n' \
+        +'Left: Middle z slice of raw. Middle: Middle z slice of segmentation. Right: Max z projection of segmentation \n' \
+        +'Please draw in the left panel')
     draw_ax = ax.imshow(img)
     cid = fig.canvas.mpl_connect('button_press_event', draw_polygons)
     cid2 = fig.canvas.mpl_connect('key_press_event', quit_mask_drawing)
@@ -186,7 +192,7 @@ class Args(object):
 
     def __init__(self, log_cmdline=True):
         self.debug = False
-        self.output_dir = './'
+        self.output_dir = '.'+os.sep
         self.struct_ch = 0
         self.xy = 0.108
 
@@ -252,7 +258,7 @@ class Executor(object):
             if not args.data_type.startswith('.'):
                 args.data_type = '.' + args.data_type
 
-            filenames = glob(args.raw_path + '/*' + args.data_type)
+            filenames = glob(args.raw_path + os.sep +'*' + args.data_type)
             filenames.sort()
             with open(args.csv_name, 'w') as csvfile:
                 filewriter = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
@@ -316,7 +322,7 @@ class Executor(object):
         # #######################################
         print('finish merging, start building the training data ...')
 
-        existing_files = glob(args.train_path+'/img_*.ome.tif')
+        existing_files = glob(args.train_path+os.sep+'img_*.ome.tif')
         print(len(existing_files))
 
         training_data_count = len(existing_files)//3
