@@ -52,10 +52,10 @@ Depending on the size of your training data, the training process can take 8~32 
 
 ## Stage 4: Run **Binarizer**
 
-After the training is finished, find the `.yaml` file for processing a folder of images (e.g., `./config/predict_folder.yaml`) and make sure to follow the list [**here**](./doc_pred_yaml.md) to change the parameters, such as the image folder path, the output path, the model path, etc.. Then you can run
+After the training is finished, you can either apply the model on one image or a folder of image. Simply find the `.yaml` file for processing a folder of images (e.g., `./config/predict_folder.yaml`) or the `.yaml` file for processing a single image (e.g., `./config/predict_file.yaml`). Make sure to follow the list [**here**](./doc_pred_yaml.md) to change the parameters, such as the image path, the output path, the model path, etc.. Then you can run
 
 ```bash
-dl_predict --config /path/to/predict_folder_config.yaml
+dl_predict --config /path/to/predict_file_config.yaml
 ```
 to apply the model on your data.
 
