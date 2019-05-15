@@ -230,6 +230,9 @@ class BasicFolderTrainer:
         if loader_config['name']=='default':
             from aicsmlsegment.DataLoader3D.Universal_Loader import RR_FH_M0 as train_loader
             train_set_loader = DataLoader(train_loader(train_filenames, loader_config['PatchPerBuffer'], config['size_in'], config['size_out']), num_workers=loader_config['NumWorkers'], batch_size=loader_config['batch_size'], shuffle=True)
+        elif loader_config['name']=='focus':
+            from aicsmlsegment.DataLoader3D.Universal_Loader import RR_FH_M0C as train_loader
+            train_set_loader = DataLoader(train_loader(train_filenames, loader_config['PatchPerBuffer'], config['size_in'], config['size_out']), num_workers=loader_config['NumWorkers'], batch_size=loader_config['batch_size'], shuffle=True)
         else:
             print('other loader not support yet')
             quit()
@@ -249,6 +252,7 @@ class BasicFolderTrainer:
             # check if re-load on training data in needed
             if num_epoch>0 and  num_epoch % loader_config['epoch_shuffle'] ==0:
                 print('shuffling data')
+                train_set_loader = None
                 train_set_loader = DataLoader(train_loader(train_filenames, loader_config['PatchPerBuffer'], config['size_in'], config['size_out']), num_workers=loader_config['NumWorkers'], batch_size=loader_config['batch_size'], shuffle=True)
 
             # Training starts ...

@@ -198,6 +198,9 @@ class RR_FH_M0C(Dataset):
 
         for img_idx, fn in tqdm(enumerate(filenames)):
 
+            if len(self.img)==num_patch:
+                break
+
             label_reader = AICSImage(fn+'_GT.ome.tif')  #CZYX
             label = label_reader.data
             label = np.squeeze(label,axis=0) # 4-D after squeeze
@@ -272,7 +275,7 @@ class RR_FH_M0C(Dataset):
                     raw_p0[ci,zz,:,:] = (new_str_image.astype(float))/255.0 
 
             new_patch_num = 0
-            
+
             while new_patch_num < num_patch_per_img[img_idx]:
                 
                 pz = random.randint(0, label.shape[1] - size_out[0])
@@ -283,7 +286,7 @@ class RR_FH_M0C(Dataset):
                 # check if this is a good crop
                 #ref_patch_raw = raw_p0[0,pz:pz+size_in[0],py:py+size_in[1],px:px+size_in[2]] 
                 ref_patch_cmap = costmap[pz:pz+size_out[0],py:py+size_out[1],px:px+size_out[2]]
-                if np.count_nonzero(ref_patch_cmap>1e-5) < 1000: #not too large padding 
+                if np.count_nonzero(ref_patch_cmap>1e-5) < 2500: #enough valida samples
                     continue
                 
 
@@ -299,14 +302,12 @@ class RR_FH_M0C(Dataset):
         image_tensor = from_numpy(self.img[index].astype(float))
         cmap_tensor = from_numpy(self.cmap[index].astype(float))
 
+        label_tensor = []
         if self.gt[index].shape[0]>0:
-            label_tensor = []
             for zz in range(self.gt[index].shape[0]):
-                tmp_tensor = from_numpy(self.gt[index][zz,:,:,:].astype(float))
-                label_tensor.append(tmp_tensor.float())
+                label_tensor.append(from_numpy(self.gt[index][zz,:,:,:].astype(float)).float())
         else: 
-            label_tensor = from_numpy(self.gt[index].astype(float))
-            label_tensor = label_tensor.float()
+            label_tensor.append(from_numpy(self.gt[index].astype(float)).float())
 
         return image_tensor.float(), label_tensor, cmap_tensor.float()
 

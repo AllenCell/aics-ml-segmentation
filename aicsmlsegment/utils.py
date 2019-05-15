@@ -106,8 +106,15 @@ def input_normalization(img, args):
             struct_img = background_sub(struct_img,50)
             #struct_img = simple_norm(struct_img, 2.5, 10)
             img[ch_idx,:,:,:] = struct_img[:,:,:]
-
-        elif args.Normalization == 15: 
+        elif args.Normalization == 13: # cellmask
+            struct_img[struct_img>10000] = struct_img.min()
+            struct_img = background_sub(struct_img,50)
+            struct_img = simple_norm(struct_img, 2, 11)
+            img[ch_idx,:,:,:] = struct_img[:,:,:]
+        elif args.Normalization == 14:
+            struct_img = simple_norm(struct_img, 1, 10)
+            img[ch_idx,:,:,:] = struct_img[:,:,:]
+        elif args.Normalization == 15: # lamin
             struct_img[struct_img>4000] = struct_img.min()
             struct_img = background_sub(struct_img,50)
             img[ch_idx,:,:,:] = struct_img[:,:,:]
@@ -117,6 +124,36 @@ def input_normalization(img, args):
         
     
     return img
+
+
+def image_normalization(img, config):
+
+    ops = config['ops']
+    nchannel = img.shape[0]
+    assert len(ops) == nchannel
+    for ch_idx in range(nchannel):
+        ch_ops = ops[ch_idx]['ch']
+        struct_img = img[ch_idx,:,:,:]
+        for transform in ch_ops:
+            if transform['name'] == 'background_sub':
+                struct_img = background_sub(struct_img, transform['sigma'])
+            elif transform['name'] =='auto_contrast':
+                param = transform['param']
+                if len(param)==2:
+                    struct_img = simple_norm(struct_img, param[0], param[1])
+                elif len(param)==4:
+                    struct_img = simple_norm(struct_img, param[0], param[1], param[2], param[3])
+                else: 
+                    print('bad paramter for auto contrast')
+                    quit()
+            else: 
+                print(transform['name'])
+                print('other normalization methods are not supported yet')
+                quit()
+            
+            img[ch_idx,:,:,:] = struct_img[:,:,:]
+    return img
+
         
 
 def load_single_image(args, fn, time_flag=False):

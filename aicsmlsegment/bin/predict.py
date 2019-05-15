@@ -13,7 +13,7 @@ from skimage.morphology import remove_small_objects
 from aicsimageio import AICSImage, omeTifWriter
 from aicsimageprocessing import resize
 
-from aicsmlsegment.utils import load_config, load_single_image, input_normalization
+from aicsmlsegment.utils import load_config, load_single_image, input_normalization, image_normalization
 from aicsmlsegment.utils import get_logger
 from aicsmlsegment.model_utils import build_model, load_checkpoint, model_inference
 
@@ -149,6 +149,7 @@ def main():
                 img = np.transpose(img,(1,0,2,3))
             img = img[config['InputCh'],:,:,:]
             img = input_normalization(img, args_norm)
+            #img = image_normalization(img, config['Normalization'])
 
             if len(config['ResizeRatio'])>0:
                 img = resize(img, (1, config['ResizeRatio'][0], config['ResizeRatio'][1], config['ResizeRatio'][2]), method='cubic')
