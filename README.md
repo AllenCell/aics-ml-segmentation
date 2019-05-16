@@ -8,11 +8,11 @@ The Allen Cell Structure Segmenter is a Python-based open source toolkit develop
 
 0. prerequisite:
 
-To use the deep learning part of this package on a local machine, we assume an [NVIDIA GPU](https://www.nvidia.com/en-us/deep-learning-ai/developer/) has been set up properly on a Linux operating system (we recommend Ubuntu). Make sure to check if your GPU supports at least CUDA 8.0 (CUDA 9.0 and up is preferred): [NVIDIA Driver check](https://www.nvidia.com/Download/index.aspx?lang=en-us).
+To perform training/prediction of the deep learning models in this package, we assume an [NVIDIA GPU](https://www.nvidia.com/en-us/deep-learning-ai/developer/) has been set up properly on a Linux operating system, either on a local machine or on a remote computation cluster. Make sure to check if your GPU supports at least CUDA 8.0 (CUDA 9.0 and up is preferred): [NVIDIA Driver check](https://www.nvidia.com/Download/index.aspx?lang=en-us).
 
 The GPUs we used to develop and test our package are two types: (1) GeForce GTX 1080 Ti GPU (about 11GB GPU memory), (2) Tesla V100 for PCIe (with about 33GB memory), two common chips for personal workstation and data center, respectively.
 
-**Note 1:** There are other scenarios where GPUs are set up on a remote cluster. In such cases, theoretically everything except the model training/testing could be performed on a local machine with any Liunx/MacOS/Windows operating system, while runing the model training/testing on the GPU cluster. Such GPU cluster could be set up differently from institute to institute, we will assume a local machine use case through out the installation and demos.
+**Note 1:** As remote GPU clusters could be set up differently from institute to institute, we will assume a local machine use case through out the installation and demos.
 
 **Note 2:** We are investigating alternative cloud computing service to deploy our package and will have updates in the next few months. Stay tuned :)  
 
