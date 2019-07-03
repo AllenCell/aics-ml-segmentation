@@ -14,7 +14,7 @@ SUPPORTED_MODELS = ['unet_xy_zoom', 'unet_xy']
 def weights_init(m):
     classname = m.__class__.__name__
     if classname.find('Conv3d') != -1:
-        torch.nn.init.kaiming_normal(m.weight)
+        torch.nn.init.kaiming_normal_(m.weight)
         m.bias.data.zero_()
 
 def apply_on_image(model, input_img, softmax, args):
@@ -215,5 +215,7 @@ def build_model(config):
         from aicsmlsegment.Net3D.unet_xy_enlarge import UNet3D as DNN
         model = DNN(config['nchannel'], config['nclass'], model_config.get('zoom_ratio',3))
     
+    model = model.apply(weights_init)
+    print('model initialization succeeds !')
     model = model.to(config['device'])
     return model

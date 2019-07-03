@@ -73,8 +73,10 @@ def main():
                 if len(config['OutputCh']) == 2:
                     writer = omeTifWriter.OmeTifWriter(config['OutputDir'] + os.sep + pathlib.PurePosixPath(fn).stem + '_T_'+ f'{tt:03}' +'_struct_segmentation.tiff')
                     out = output_img[0]
+                    out = (out - out.min()) / (out.max()-out.min())
                     if len(config['ResizeRatio'])>0:
                         out = resize(out, (1.0, 1/config['ResizeRatio'][0], 1/config['ResizeRatio'][1], 1/config['ResizeRatio'][2]), method='cubic')
+                    out = out.astype(np.float32)
                     if config['Threshold']>0:
                         out = out > config['Threshold']
                         out = out.astype(np.uint8)
@@ -84,8 +86,10 @@ def main():
                     for ch_idx in range(len(config['OutputCh'])//2):
                         writer = omeTifWriter.OmeTifWriter(config['OutputDir'] + os.sep + pathlib.PurePosixPath(fn).stem + '_T_'+ f'{tt:03}' +'_seg_'+ str(config['OutputCh'][2*ch_idx])+'.tiff')
                         out = output_img[ch_idx]
+                        out = (out - out.min()) / (out.max()-out.min())
                         if len(config['ResizeRatio'])>0:
                             out = resize(out, (1.0, 1/config['ResizeRatio'][0], 1/config['ResizeRatio'][1], 1/config['ResizeRatio'][2]), method='cubic')
+                        out = out.astype(np.float32)
                         if config['Threshold']>0:
                             out = out > config['Threshold']
                             out = out.astype(np.uint8)
@@ -112,8 +116,11 @@ def main():
             # extract the result and write the output
             if len(config['OutputCh']) == 2:
                 out = output_img[0] 
+                out = (out - out.min()) / (out.max()-out.min())
                 if len(config['ResizeRatio'])>0:
                     out = resize(out, (1.0, 1/config['ResizeRatio'][0], 1/config['ResizeRatio'][1], 1/config['ResizeRatio'][2]), method='cubic')
+                out = out.astype(np.float32)
+                print(out.shape)
                 if config['Threshold']>0:
                     out = out > config['Threshold']
                     out = out.astype(np.uint8)
@@ -123,8 +130,10 @@ def main():
             else:
                 for ch_idx in range(len(config['OutputCh'])//2):
                     out = output_img[ch_idx] 
+                    out = (out - out.min()) / (out.max()-out.min())
                     if len(config['ResizeRatio'])>0:
                         out = resize(out, (1.0, 1/config['ResizeRatio'][0], 1/config['ResizeRatio'][1], 1/config['ResizeRatio'][2]), method='cubic')
+                    out = out.astype(np.float32)
                     if config['Threshold']>0:
                         out = out > config['Threshold']
                         out = out.astype(np.uint8)
@@ -165,7 +174,14 @@ def main():
             if len(config['OutputCh'])==2:
                 writer = omeTifWriter.OmeTifWriter(config['OutputDir'] + os.sep + pathlib.PurePosixPath(fn).stem + '_struct_segmentation.tiff')
                 if config['Threshold']<0:
-                    writer.save(output_img[0].astype(float))
+                    out = output_img[0]
+                    out = (out - out.min()) / (out.max()-out.min())
+                    print(out.shape)
+                    if len(config['ResizeRatio'])>0:
+                        out = resize(out, (1.0, 1/config['ResizeRatio'][0], 1/config['ResizeRatio'][1], 1/config['ResizeRatio'][2]), method='cubic')
+                    out = out.astype(np.float32)
+                    out = (out - out.min()) / (out.max()-out.min())
+                    writer.save(out)
                 else:
                     out = remove_small_objects(output_img[0] > config['Threshold'], min_size=2, connectivity=1) 
                     out = out.astype(np.uint8)
@@ -175,7 +191,9 @@ def main():
                 for ch_idx in range(len(config['OutputCh'])//2):
                     writer = omeTifWriter.OmeTifWriter(config['OutputDir'] + os.sep + pathlib.PurePosixPath(fn).stem + '_seg_'+ str(config['OutputCh'][2*ch_idx])+'.ome.tif')
                     if config['Threshold']<0:
-                        writer.save(output_img[ch_idx].astype(float))
+                        out = output_img[ch_idx]
+                        out = (out - out.min()) / (out.max()-out.min())
+                        writer.save(out.astype(np.float32))
                     else:
                         out = output_img[ch_idx] > config['Threshold']
                         out = out.astype(np.uint8)

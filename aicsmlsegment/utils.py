@@ -118,6 +118,18 @@ def input_normalization(img, args):
             struct_img[struct_img>4000] = struct_img.min()
             struct_img = background_sub(struct_img,50)
             img[ch_idx,:,:,:] = struct_img[:,:,:]
+        elif args.Normalization == 16: # lamin/h2b
+            struct_img = background_sub(struct_img,50)
+            struct_img = simple_norm(struct_img, 1.5, 6)
+            img[ch_idx,:,:,:] = struct_img[:,:,:]
+        elif args.Normalization == 17: # lamin
+            struct_img = background_sub(struct_img,50)
+            struct_img = simple_norm(struct_img, 1, 10)
+            img[ch_idx,:,:,:] = struct_img[:,:,:]
+        elif args.Normalization == 18: # h2b
+            struct_img = background_sub(struct_img,50)
+            struct_img = simple_norm(struct_img, 1.5, 10)
+            img[ch_idx,:,:,:] = struct_img[:,:,:]
         else:
             print('no normalization recipe found')
             quit()
