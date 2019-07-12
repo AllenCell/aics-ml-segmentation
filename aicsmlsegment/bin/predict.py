@@ -15,7 +15,7 @@ from aicsimageprocessing import resize
 
 from aicsmlsegment.utils import load_config, load_single_image, input_normalization, image_normalization
 from aicsmlsegment.utils import get_logger
-from aicsmlsegment.model_utils import build_model, load_checkpoint, model_inference
+from aicsmlsegment.model_utils import build_model, load_checkpoint, model_inference, apply_on_image
 
 def main():
 
@@ -43,6 +43,7 @@ def main():
     args_inference.size_out = config['size_out']
     args_inference.OutputCh = config['OutputCh']
     args_inference.nclass =  config['nclass'] 
+    args_inference.RuntimeAug = config['RuntimeAug'] 
 
     # run
     inf_config = config['mode']
@@ -67,7 +68,8 @@ def main():
                         img[ch_idx,:,:,:] = struct_img
 
                 # apply the model
-                output_img = model_inference(model, img, model.final_activation, args_inference)
+                #output_img = model_inference(model, img, model.final_activation, args_inference)
+                output_img = apply_on_image(model, img, model.final_activation, args_inference)
 
                 # extract the result and write the output
                 if len(config['OutputCh']) == 2:
@@ -111,7 +113,8 @@ def main():
                     img[ch_idx,:,:,:] = struct_img
 
             # apply the model
-            output_img = model_inference(model, img, model.final_activation, args_inference)
+            #output_img = model_inference(model, img, model.final_activation, args_inference)
+            output_img = apply_on_image(model, img, model.final_activation, args_inference)
 
             # extract the result and write the output
             if len(config['OutputCh']) == 2:
@@ -168,7 +171,8 @@ def main():
                     img[ch_idx,:,:,:] = struct_img
 
             # apply the model
-            output_img = model_inference(model, img, model.final_activation, args_inference)
+            #output_img = model_inference(model, img, model.final_activation, args_inference)
+            output_img = apply_on_image(model, img, model.final_activation, args_inference)
 
             # extract the result and write the output
             if len(config['OutputCh'])==2:
