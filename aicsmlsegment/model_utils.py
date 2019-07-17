@@ -18,10 +18,8 @@ def weights_init(m):
         m.bias.data.zero_()
 
 def apply_on_image(model, input_img, softmax, args):
-    
-    print(args)
 
-    if args.RuntimeAug == 'None':
+    if not args.RuntimeAug:
         return model_inference(model, input_img, softmax, args)
     else:
         from PIL import Image

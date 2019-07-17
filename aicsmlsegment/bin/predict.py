@@ -9,7 +9,7 @@ import pathlib
 import numpy as np
 
 from skimage.morphology import remove_small_objects
-
+from skimage.io import imsave
 from aicsimageio import AICSImage, omeTifWriter
 from aicsimageprocessing import resize
 
@@ -43,7 +43,10 @@ def main():
     args_inference.size_out = config['size_out']
     args_inference.OutputCh = config['OutputCh']
     args_inference.nclass =  config['nclass'] 
-    args_inference.RuntimeAug = config['RuntimeAug'] 
+    if config['RuntimeAug'] <=0:
+        args_inference.RuntimeAug = False
+    else:
+        args_inference.RuntimeAug = True
 
     # run
     inf_config = config['mode']
@@ -176,7 +179,7 @@ def main():
 
             # extract the result and write the output
             if len(config['OutputCh'])==2:
-                writer = omeTifWriter.OmeTifWriter(config['OutputDir'] + os.sep + pathlib.PurePosixPath(fn).stem + '_struct_segmentation.tiff')
+                #writer = omeTifWriter.OmeTifWriter(config['OutputDir'] + os.sep + pathlib.PurePosixPath(fn).stem + '_struct_segmentation.tiff')
                 if config['Threshold']<0:
                     out = output_img[0]
                     out = (out - out.min()) / (out.max()-out.min())
@@ -185,12 +188,14 @@ def main():
                         out = resize(out, (1.0, 1/config['ResizeRatio'][0], 1/config['ResizeRatio'][1], 1/config['ResizeRatio'][2]), method='cubic')
                     out = out.astype(np.float32)
                     out = (out - out.min()) / (out.max()-out.min())
-                    writer.save(out)
+                    imsave(config['OutputDir'] + os.sep + pathlib.PurePosixPath(fn).stem + '_struct_segmentation.tiff', out)
+                    #writer.save(out)
                 else:
                     out = remove_small_objects(output_img[0] > config['Threshold'], min_size=2, connectivity=1) 
                     out = out.astype(np.uint8)
                     out[out>0]=255
-                    writer.save(out)
+                    imsave(config['OutputDir'] + os.sep + pathlib.PurePosixPath(fn).stem + '_struct_segmentation.tiff', out)
+                    #writer.save(out)
             else:
                 for ch_idx in range(len(config['OutputCh'])//2):
                     writer = omeTifWriter.OmeTifWriter(config['OutputDir'] + os.sep + pathlib.PurePosixPath(fn).stem + '_seg_'+ str(config['OutputCh'][2*ch_idx])+'.ome.tif')
