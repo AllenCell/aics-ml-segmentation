@@ -33,10 +33,6 @@ def main():
     print(f'Loading model from {model_path}...')
     load_checkpoint(model_path, model)
 
-    # extract the parameters for preparing the input image
-    args_norm = lambda:None
-    args_norm.Normalization = config['Normalization']
-
     # extract the parameters for running the model inference
     args_inference=lambda:None
     args_inference.size_in = config['size_in']
@@ -61,7 +57,7 @@ def main():
             for tt in range(img0.shape[0]):
                 # Assume:  dimensions = TCZYX
                 img = img0[tt, config['InputCh'],:,:,:].astype(float)
-                img = input_normalization(img, args_norm)
+                img = image_normalization(img, config['Normalization'])
 
                 if len(config['ResizeRatio'])>0:
                     img = resize(img, (1, config['ResizeRatio'][0], config['ResizeRatio'][1], config['ResizeRatio'][2]), method='cubic')
@@ -71,12 +67,10 @@ def main():
                         img[ch_idx,:,:,:] = struct_img
 
                 # apply the model
-                #output_img = model_inference(model, img, model.final_activation, args_inference)
                 output_img = apply_on_image(model, img, model.final_activation, args_inference)
 
                 # extract the result and write the output
                 if len(config['OutputCh']) == 2:
-                    writer = omeTifWriter.OmeTifWriter(config['OutputDir'] + os.sep + pathlib.PurePosixPath(fn).stem + '_T_'+ f'{tt:03}' +'_struct_segmentation.tiff')
                     out = output_img[0]
                     out = (out - out.min()) / (out.max()-out.min())
                     if len(config['ResizeRatio'])>0:
@@ -86,10 +80,9 @@ def main():
                         out = out > config['Threshold']
                         out = out.astype(np.uint8)
                         out[out>0]=255
-                    writer.save(out)
+                    imsave(config['OutputDir'] + os.sep + pathlib.PurePosixPath(fn).stem + '_T_'+ f'{tt:03}' +'_struct_segmentation.tiff', out)
                 else:
                     for ch_idx in range(len(config['OutputCh'])//2):
-                        writer = omeTifWriter.OmeTifWriter(config['OutputDir'] + os.sep + pathlib.PurePosixPath(fn).stem + '_T_'+ f'{tt:03}' +'_seg_'+ str(config['OutputCh'][2*ch_idx])+'.tiff')
                         out = output_img[ch_idx]
                         out = (out - out.min()) / (out.max()-out.min())
                         if len(config['ResizeRatio'])>0:
@@ -99,14 +92,14 @@ def main():
                             out = out > config['Threshold']
                             out = out.astype(np.uint8)
                             out[out>0]=255
-                        writer.save(out)
+                        imsave(config['OutputDir'] + os.sep + pathlib.PurePosixPath(fn).stem + '_T_'+ f'{tt:03}' +'_seg_'+ str(config['OutputCh'][2*ch_idx])+'.tiff',out)
         else:
             img = img0[0,:,:,:,:].astype(float)
             print(f'processing one image of size {img.shape}')
             if img.shape[1] < img.shape[0]:
                 img = np.transpose(img,(1,0,2,3))
             img = img[config['InputCh'],:,:,:]
-            img = input_normalization(img, args_norm)
+            img = image_normalization(img, config['Normalization'])
 
             if len(config['ResizeRatio'])>0:
                 img = resize(img, (1, config['ResizeRatio'][0], config['ResizeRatio'][1], config['ResizeRatio'][2]), method='cubic')
@@ -116,7 +109,6 @@ def main():
                     img[ch_idx,:,:,:] = struct_img
 
             # apply the model
-            #output_img = model_inference(model, img, model.final_activation, args_inference)
             output_img = apply_on_image(model, img, model.final_activation, args_inference)
 
             # extract the result and write the output
@@ -126,13 +118,11 @@ def main():
                 if len(config['ResizeRatio'])>0:
                     out = resize(out, (1.0, 1/config['ResizeRatio'][0], 1/config['ResizeRatio'][1], 1/config['ResizeRatio'][2]), method='cubic')
                 out = out.astype(np.float32)
-                print(out.shape)
                 if config['Threshold']>0:
                     out = out > config['Threshold']
                     out = out.astype(np.uint8)
                     out[out>0]=255
-                writer = omeTifWriter.OmeTifWriter(config['OutputDir'] + os.sep + pathlib.PurePosixPath(fn).stem +'_struct_segmentation.tiff')
-                writer.save(out)
+                imsave(config['OutputDir'] + os.sep + pathlib.PurePosixPath(fn).stem +'_struct_segmentation.tiff', out)
             else:
                 for ch_idx in range(len(config['OutputCh'])//2):
                     out = output_img[ch_idx] 
@@ -144,15 +134,15 @@ def main():
                         out = out > config['Threshold']
                         out = out.astype(np.uint8)
                         out[out>0]=255
-                    writer = omeTifWriter.OmeTifWriter(config['OutputDir'] + os.sep + pathlib.PurePosixPath(fn).stem +'_seg_'+ str(config['OutputCh'][2*ch_idx])+'.tiff')
-                    writer.save(out)
+                    imsave(config['OutputDir'] + os.sep + pathlib.PurePosixPath(fn).stem +'_seg_'+ str(config['OutputCh'][2*ch_idx])+'.tiff', out)
             print(f'Image {fn} has been segmented')
 
     elif inf_config['name'] == 'folder':
         from glob import glob
         filenames = glob(inf_config['InputDir'] + '/*' + inf_config['DataType'])
         filenames.sort()
-        #print(filenames)
+        print('files to be processed:')
+        print(filenames)
 
         for _, fn in enumerate(filenames):
 
@@ -163,8 +153,7 @@ def main():
             if img.shape[1] < img.shape[0]:
                 img = np.transpose(img,(1,0,2,3))
             img = img[config['InputCh'],:,:,:]
-            img = input_normalization(img, args_norm)
-            #img = image_normalization(img, config['Normalization'])
+            img = image_normalization(img, config['Normalization'])
 
             if len(config['ResizeRatio'])>0:
                 img = resize(img, (1, config['ResizeRatio'][0], config['ResizeRatio'][1], config['ResizeRatio'][2]), method='cubic')
@@ -174,40 +163,33 @@ def main():
                     img[ch_idx,:,:,:] = struct_img
 
             # apply the model
-            #output_img = model_inference(model, img, model.final_activation, args_inference)
             output_img = apply_on_image(model, img, model.final_activation, args_inference)
 
             # extract the result and write the output
             if len(config['OutputCh'])==2:
-                #writer = omeTifWriter.OmeTifWriter(config['OutputDir'] + os.sep + pathlib.PurePosixPath(fn).stem + '_struct_segmentation.tiff')
                 if config['Threshold']<0:
                     out = output_img[0]
                     out = (out - out.min()) / (out.max()-out.min())
-                    print(out.shape)
                     if len(config['ResizeRatio'])>0:
                         out = resize(out, (1.0, 1/config['ResizeRatio'][0], 1/config['ResizeRatio'][1], 1/config['ResizeRatio'][2]), method='cubic')
                     out = out.astype(np.float32)
                     out = (out - out.min()) / (out.max()-out.min())
-                    imsave(config['OutputDir'] + os.sep + pathlib.PurePosixPath(fn).stem + '_struct_segmentation.tiff', out)
-                    #writer.save(out)
                 else:
                     out = remove_small_objects(output_img[0] > config['Threshold'], min_size=2, connectivity=1) 
                     out = out.astype(np.uint8)
                     out[out>0]=255
-                    imsave(config['OutputDir'] + os.sep + pathlib.PurePosixPath(fn).stem + '_struct_segmentation.tiff', out)
-                    #writer.save(out)
+                imsave(config['OutputDir'] + os.sep + pathlib.PurePosixPath(fn).stem + '_struct_segmentation.tiff', out)
             else:
                 for ch_idx in range(len(config['OutputCh'])//2):
-                    writer = omeTifWriter.OmeTifWriter(config['OutputDir'] + os.sep + pathlib.PurePosixPath(fn).stem + '_seg_'+ str(config['OutputCh'][2*ch_idx])+'.ome.tif')
                     if config['Threshold']<0:
                         out = output_img[ch_idx]
                         out = (out - out.min()) / (out.max()-out.min())
-                        writer.save(out.astype(np.float32))
+                        out = out.astype(np.float32)
                     else:
                         out = output_img[ch_idx] > config['Threshold']
                         out = out.astype(np.uint8)
                         out[out>0]=255
-                        writer.save(out)
+                    imsave(config['OutputDir'] + os.sep + pathlib.PurePosixPath(fn).stem + '_seg_'+ str(config['OutputCh'][2*ch_idx])+'.ome.tif', out)
             
             print(f'Image {fn} has been segmented')
 

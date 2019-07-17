@@ -38,9 +38,10 @@ class RR_FH_M0(Dataset):
         total_out_count = size_out[0] * size_out[1] * size_out[2]
 
         num_data = len(filenames)
+        shuffle(filenames)
         num_patch_per_img = np.zeros((num_data,), dtype=int)
         if num_data >= num_patch:
-            print('suggest to use more patch in each buffer')
+            # all one
             num_patch_per_img[:num_patch]=1
         else: 
             basic_num = num_patch // num_data
@@ -164,15 +165,7 @@ class RR_FH_M0C(Dataset):
         padding = [(x-y)//2 for x,y in zip(size_in, size_out)]
         
         num_data = len(filenames)
-
-        ##### TEMP HACK!!!!!!!
-        if num_data>715:
-            list_a = filenames[-60:]
-            list_b = filenames[:-60]
-            shuffle(list_b)
-            filenames = list_a + list_b
-        else:
-            shuffle(filenames)
+        shuffle(filenames)
 
         num_trial_round = 0
         while len(self.img) < num_patch:
@@ -185,7 +178,7 @@ class RR_FH_M0C(Dataset):
             num_patch_to_obtain = num_patch - len(self.img)
             num_patch_per_img = np.zeros((num_data,), dtype=int)
             if num_data >= num_patch_to_obtain:
-                #print('suggest to use more patch in each buffer')
+                # all one
                 num_patch_per_img[:num_patch_to_obtain]=1
             else: 
                 basic_num = num_patch_to_obtain // num_data
@@ -319,9 +312,10 @@ class NOAUG_M(Dataset):
         total_out_count = size_out[0] * size_out[1] * size_out[2]
 
         num_data = len(filenames)
+        shuffle(filenames)
         num_patch_per_img = np.zeros((num_data,), dtype=int)
         if num_data >= num_patch:
-            print('suggest to use more patch in each buffer')
+            # all one
             num_patch_per_img[:num_patch]=1
         else: 
             basic_num = num_patch // num_data
