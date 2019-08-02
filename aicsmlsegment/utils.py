@@ -133,40 +133,42 @@ def input_normalization(img, args):
         else:
             print('no normalization recipe found')
             quit()
-        
-    
     return img
-
 
 def image_normalization(img, config):
 
-    ops = config['ops']
-    nchannel = img.shape[0]
-    assert len(ops) == nchannel
-    for ch_idx in range(nchannel):
-        ch_ops = ops[ch_idx]['ch']
-        struct_img = img[ch_idx,:,:,:]
-        for transform in ch_ops:
-            if transform['name'] == 'background_sub':
-                struct_img = background_sub(struct_img, transform['sigma'])
-            elif transform['name'] =='auto_contrast':
-                param = transform['param']
-                if len(param)==2:
-                    struct_img = simple_norm(struct_img, param[0], param[1])
-                elif len(param)==4:
-                    struct_img = simple_norm(struct_img, param[0], param[1], param[2], param[3])
+    if type(config) is dict:
+        ops = config['ops']
+        nchannel = img.shape[0]
+        assert len(ops) == nchannel
+        for ch_idx in range(nchannel):
+            ch_ops = ops[ch_idx]['ch']
+            struct_img = img[ch_idx,:,:,:]
+            for transform in ch_ops:
+                if transform['name'] == 'background_sub':
+                    struct_img = background_sub(struct_img, transform['sigma'])
+                elif transform['name'] =='auto_contrast':
+                    param = transform['param']
+                    if len(param)==2:
+                        struct_img = simple_norm(struct_img, param[0], param[1])
+                    elif len(param)==4:
+                        struct_img = simple_norm(struct_img, param[0], param[1], param[2], param[3])
+                    else: 
+                        print('bad paramter for auto contrast')
+                        quit()
                 else: 
-                    print('bad paramter for auto contrast')
+                    print(transform['name'])
+                    print('other normalization methods are not supported yet')
                     quit()
-            else: 
-                print(transform['name'])
-                print('other normalization methods are not supported yet')
-                quit()
-            
-            img[ch_idx,:,:,:] = struct_img[:,:,:]
-    return img
+                
+                img[ch_idx,:,:,:] = struct_img[:,:,:]
+    else:
+        args_norm = lambda:None
+        args_norm.Normalization = config
 
-        
+        img = input_normalization(img, args_norm)
+
+    return img
 
 def load_single_image(args, fn, time_flag=False):
 

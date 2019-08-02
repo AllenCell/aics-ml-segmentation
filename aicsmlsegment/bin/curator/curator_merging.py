@@ -78,6 +78,8 @@ def quit_mask_drawing(event):
     elif event.key == 'b':
         ignore_img = True
         plt.close()
+    elif event.key == 'q':
+        exit()
 
 
 def create_merge_mask(raw_img, seg1, seg2, drawing_aim):
