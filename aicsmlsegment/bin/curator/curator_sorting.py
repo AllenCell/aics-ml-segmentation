@@ -129,8 +129,10 @@ def gt_sorting(raw_img, seg):
         + 'Top row: raw image; bottom row: segmentation. \n ')
     #plt.tight_layout()
     cid = fig.canvas.mpl_connect('button_press_event', gt_sorting_callback)
+    cid2 = fig.canvas.mpl_connect('key_press_event', quit_curation)
     plt.show()
     fig.canvas.mpl_disconnect(cid)
+    fig.canvas.mpl_disconnect(cid2)
 
     score = 0
     if button == 3:
