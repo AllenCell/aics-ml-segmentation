@@ -6,7 +6,6 @@ import os
 
 import numpy as np
 import torch
-from tensorboardX import SummaryWriter
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
