@@ -1,0 +1,46 @@
+##########################################################################################################
+# model settings
+##########################################################################################################
+model: 
+  name: unet_xy
+# path to the trained model
+model_path: '/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_saved_model_iter_2/checkpoint_epoch_400.pytorch'
+# number of input channels to the model
+nchannel: 1
+# number of output channels
+nclass: [2,2,2]
+# the channel to extract from output tensors
+OutputCh: [0, 1]
+# input patch size given to the network (adapt to fit in your GPU memory, generally bigger patches are better)
+size_in: [88, 180, 180] #[62, 420, 420]
+# prediction patch size from the network (change according to input size)
+size_out: [60, 92, 92] # [30, 152, 152]
+
+##########################################################################################################
+# Data Info
+##########################################################################################################
+# the path to output folder
+OutputDir: '/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_test/400'
+# the index of the input channel
+InputCh: [0]
+# the ratio to resize the image
+ResizeRatio: [1.0, 1.0, 1.0]
+# the method to normalize your data
+Normalization: 10
+# the threshold to be applied on your data
+Threshold: 0.5 #0.5 # 0.3
+# whether to use run time augmentation (may improve the accuracy, but takes much longer to run)
+RuntimeAug: False
+
+##########################################################################################################
+# Execution mode: all files of specific type within a directory
+##########################################################################################################
+mode:
+  name: folder
+  # paths to the file
+  InputDir: '/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_test'
+  # the type of images to be processed in this folder
+  DataType: .tiff
+  
+  
+  

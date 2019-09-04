@@ -1,0 +1,47 @@
+##########################################################################################################
+# model settings
+##########################################################################################################
+model: 
+  name: unet_xy_zoom
+  zoom_ratio: 3
+# path to the trained model
+model_path: '//allen/aics/assay-dev/Segmentation/DeepLearning/SavedModel/LAMINB1/20190204_01/unet_xy_p3-300-default.pth'
+# number of input channels to the model
+nchannel: 1
+# number of output channels
+nclass: [2,2,2]
+# the channel to extract from output tensors
+OutputCh: [0, 1]
+# input patch size given to the network (adapt to fit in your GPU memory, generally bigger patches are better)
+size_in: [52, 420, 420]
+# prediction patch size from the network (change according to input size)
+size_out: [20, 152, 152]
+
+##########################################################################################################
+# Data Info
+##########################################################################################################
+# the path to output folder
+OutputDir: '/allen/aics/assay-dev/Segmentation/Lamin_segmentation/'
+# the index of the input channel
+InputCh: [-1]
+# the ratio to resize the image
+ResizeRatio: [1.0,1.0,1.0]
+# the method to normalize your data
+Normalization: 10
+# the threshold to be applied on your data
+Threshold: 0.5
+# whether to use run time augmentation (may improve the accuracy, but takes much longer to run)
+RuntimeAug: False
+
+##########################################################################################################
+# Execution mode: single file
+##########################################################################################################
+mode:
+  name: file
+  # paths to the file
+  InputFile: '/allen/aics/assay-dev/Segmentation/Lamin_segmentation/raw/3/3500000943_100X_20170530_1-Scene-3-P3-E04.czi'
+  # is this file a timelapse image
+  timelapse: False
+  
+  
+  
