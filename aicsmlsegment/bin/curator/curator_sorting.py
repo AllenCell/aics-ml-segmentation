@@ -46,6 +46,10 @@ logging.basicConfig(level=logging.INFO,
 logging.getLogger("matplotlib").setLevel(logging.INFO)
 ####################################################################################################
 
+def quit_curation(event):
+    if event.key == 'q':
+        exit()
+
 def gt_sorting_callback(event):
     global button
     while(1):
@@ -84,6 +88,8 @@ def draw_polygons(event):
 def quit_mask_drawing(event):
     if event.key == 'd':
         plt.close()
+    elif event.key == 'q':
+        exit()
 
 def gt_sorting(raw_img, seg):
     global button
@@ -125,7 +131,9 @@ def gt_sorting(raw_img, seg):
     ax = fig.add_subplot(111)
     ax.imshow(out)
     ax.set_title('Interface for Sorting. Left click = BAD. Right click = GOOD \n'
-        + 'Columns left to right: 4 z slice below middle z slice, middle z slice, 4 z slice above middle z slice, max z projection'
+        + 'Press Q to quit the current curation (can be resumed later)\n' \
+        + 'Columns left to right: 4 z slice below middle z slice, middle z slice, \n' \
+        + '4 z slice above middle z slice, max z projection \n'
         + 'Top row: raw image; bottom row: segmentation. \n ')
     #plt.tight_layout()
     cid = fig.canvas.mpl_connect('button_press_event', gt_sorting_callback)
@@ -172,7 +180,9 @@ def create_mask(raw_img, seg):
     ax = fig.add_subplot(111)
     ax.set_title('Interface for annotating excluding mask. \n' \
         +'Left: Middle z slice of raw. Middle: Middle z slice of segmentation. Right: Max z projection of segmentation \n' \
-        +'Please draw in the left panel')
+        +'Please draw in the left panel \n' \
+        +'Left click to add a vertex; Right click to close the current polygon \n' \
+        +'Press D to finish annotating mask, Press Q to quit curation (can resume later)')
     draw_ax = ax.imshow(img)
     cid = fig.canvas.mpl_connect('button_press_event', draw_polygons)
     cid2 = fig.canvas.mpl_connect('key_press_event', quit_mask_drawing)

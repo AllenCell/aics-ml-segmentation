@@ -129,7 +129,10 @@ def create_merge_mask(raw_img, seg1, seg2, drawing_aim):
     figManager.full_screen_toggle() 
     ax = fig.add_subplot(111)
     ax.set_title('Interface for annotating '+drawing_aim+'. Left: raw, Middle: segmentation v1, Right: segmentation v2. \n' \
-        +'Top row: max z projection, Bottom row: middle z slice. Please draw in the upper left panel \n')
+        +'Top row: max z projection, Bottom row: middle z slice. \n'\
+        +'Please draw in the upper left panel \n'\
+        +'Left click to add a vertex; Right click to close the current polygon \n' \
+        +'Press D to finish annotating mask, Press Q to quit curation (can resume later)')
     draw_ax = ax.imshow(img)
     cid = fig.canvas.mpl_connect('button_press_event', draw_polygons)
     cid2 = fig.canvas.mpl_connect('key_press_event', quit_mask_drawing)
