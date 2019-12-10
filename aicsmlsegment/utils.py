@@ -107,7 +107,7 @@ def input_normalization(img, args):
             #struct_img = simple_norm(struct_img, 2.5, 10)
             img[ch_idx,:,:,:] = struct_img[:,:,:]
         elif args.Normalization == 13: # cellmask
-            struct_img[struct_img>10000] = struct_img.min()
+            #struct_img[struct_img>10000] = struct_img.min()
             struct_img = background_sub(struct_img,50)
             struct_img = simple_norm(struct_img, 2, 11)
             img[ch_idx,:,:,:] = struct_img[:,:,:]
