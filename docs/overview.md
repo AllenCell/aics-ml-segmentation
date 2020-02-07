@@ -34,7 +34,7 @@ The above flowchart is a simplified version of the segmenter showing the most im
 
 [Link to the demo documentation](./demo_1.md)
 
-[Link to the demo video]((https://youtu.be/Ynl_Yt9N8p4))
+[Link to the demo video](https://youtu.be/Ynl_Yt9N8p4)
 
 ### Example 2: Segmentation of Lamin B1 in 3D fluorescent microscopy images of hiPS cells 
 
@@ -44,7 +44,7 @@ The above flowchart is a simplified version of the segmenter showing the most im
 
 [Link to demo data](https://open.quiltdata.com/b/allencell/packages/aics/laminb1_sample_data)
 
-[Link to the demo video]((https://youtu.be/5jBSp38ezG8))
+[Link to the demo video](https://youtu.be/5jBSp38ezG8)
 
 
 
