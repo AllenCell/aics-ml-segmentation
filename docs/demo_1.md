@@ -2,6 +2,8 @@
 
 In this demo, we will demonstrate how to get the segmentation of ATP2A2 in 3D fluorescent microscopy images of hiPS cells. 
 
+# Also available in [a video tutorial](https://youtu.be/Ynl_Yt9N8p4)
+
 *Note: This demo only uses the classic segmentation workflow and thus does not require a GPU. See package [aics-segmentation](https://github.com/AllenInstitute/aics-segmentation).
 
 ## Stage 1: Develop a classic image segmentation workflow

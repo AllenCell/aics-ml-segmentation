@@ -2,6 +2,8 @@
 
 In this demo, we will demonstrate how to get the segmentation of Lamin B1 in 3D fluorescent microscopy images of hiPS cells. Before starting this demo, make sure to check out [demo 1: build a classic image segmentation workflow](./demo_1.md), and detailed descriptions of the building blocks in our segmenter ([Binarizer](./bb1.md), [Curator](./bb2.md), [Trainer](./bb3.md)). The data used in this demo can be found on [allencell quilt bucket](https://open.quiltdata.com/b/allencell/packages/aics/laminb1_sample_data)/
 
+# Also available in [a video tutorial](https://youtu.be/5jBSp38ezG8)
+
 ## Stage 1: Run **Binarizer** (classic image segmentation workflow) and Assess Results
 
 Suppose you already worked out a classic image segmentation workflow and saved it as `seg_lmnb1_interphase.py` (i.e., setting `workflow_name` as `lmnb1_interphase`). You can run 
