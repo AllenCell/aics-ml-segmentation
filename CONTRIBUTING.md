@@ -1,7 +1,30 @@
-# Allen Institute Contribution Agreement
+# Contributing to Allen Cell Segmenter
+------
 
-## Contribution Status
-We use this for internal purpose and are currently not accepting pull requests. We are releasing it to the community AS IS. 
+Thank you for taking the time to read how to contribute to Allen Cell Segmenter! This is the basic guideline for contributing to two repositories of Allen Cell Segmenter:
+Classic Image Segmentation: https://github.com/AllenInstitute/aics-segmentation
+Iterative Deep Learning: https://github.com/AllenInstitute/aics-ml-segmentation
+
+
+## Pull Request
+
+Both repositories (referred as Allen-Repos below) are one-way mirrored from the internal bitbucket repositories, which are integrated with our internal building infrastructure. For this reason, we cannot support direct pull requests on our Allen-Repos. Instead, we would welcome pull requests following the steps below.
+
+Fork Allen-Repo
+Create a new branch in the forked repo and make changes
+Create an issue on Allen-Repo to notify us about the new branch on the forked repo to be viewed as a pull request
+We will do code review and building test, and merge the new branch into Allen-Repo when ready
+
+## Feature Request and Bug Report
+
+For feature request or bug report, we encourage people to leave a comment on allen cell discussion forum https://forum.allencell.org/c/software-code. Our internal notification system and issue tracker will keep us up to date and make updates as soon as we can.
+
+
+## Credit to contributors
+
+For pull request, if it is merged eventually, all the commit history in the original branch on the forked repo will be preserved. For feature requests and bug reports via allen cell discussion forum, the contributors cannot show up as in Github issue tracker. But, credits will be given to the contributors of pull requests, feature requests, bug reports. 
+
+
 
 <!-- ## Agreement
 

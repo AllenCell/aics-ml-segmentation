@@ -42,6 +42,8 @@ Link to the demo video
 
 [Link to the demo documentation](./demo_2.md)
 
+[Link to demo data](https://open.quiltdata.com/b/allencell/packages/aics/laminb1_sample_data)
+
 Link to the demo video
 
 
