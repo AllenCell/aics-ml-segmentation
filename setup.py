@@ -51,7 +51,7 @@ setup(name=PACKAGE_NAME,
           'scikit-image>=0.14.0',
           'pandas>=0.23.4',
           'aicsimageio==0.6.4',
-          'aicsimageprocessing',
+          'aicsimageprocessing==0.7.1',
           'tqdm',
           'pyyaml',
           #'tensorboardX'
