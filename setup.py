@@ -46,16 +46,13 @@ setup(name=PACKAGE_NAME,
           ]
       },
       install_requires=[
-          'tifffile==0.15.1',
           'numpy>=1.15.1',
           'scipy>=1.1.0',
           'scikit-image==0.15.0',
           'pandas>=0.23.4',
-          'aicsimageio==0.6.4',
-          'aicsimageprocessing==0.7.1',
+          'aicsimageio>3.3.0',
           'tqdm',
           'pyyaml',
-          #'tensorboardX'
           #'pytorch=1.0.0'
       ],
 

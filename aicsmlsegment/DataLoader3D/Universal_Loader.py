@@ -1,6 +1,5 @@
 import numpy as np
 import os
-from tifffile import imread, imsave
 from PIL import Image
 import random
 
@@ -56,29 +55,14 @@ class RR_FH_M0(Dataset):
             if len(self.img)==num_patch:
                 break
 
-            label_reader = AICSImage(fn+'_GT.ome.tif')  #CZYX
-            label = label_reader.data
-            label = np.squeeze(label,axis=0) # 4-D after squeeze
+            label_reader = AICSImage(fn+'_GT.ome.tif')
+            label = label_reader.get_image_data("CZYX", S=0, T=0)
 
-            # when the tif has only 1 channel, the loaded array may have falsely swaped dimensions (ZCYX). we want CZYX
-            # (This may also happen in different OS or different package versions)
-            # ASSUMPTION: we have more z slices than the number of channels 
-            if label.shape[1]<label.shape[0]: 
-                label = np.transpose(label,(1,0,2,3))
+            input_reader = AICSImage(fn+'.ome.tif')
+            input_img = input_reader.get_image_data("CZYX", S=0, T=0)
 
-            input_reader = AICSImage(fn+'.ome.tif') #CZYX  #TODO: check size
-            input_img = input_reader.data
-            input_img = np.squeeze(input_img,axis=0)
-            if input_img.shape[1] < input_img.shape[0]:
-                input_img = np.transpose(input_img,(1,0,2,3))
-
-            costmap_reader = AICSImage(fn+'_CM.ome.tif') # ZYX
-            costmap = costmap_reader.data
-            costmap = np.squeeze(costmap,axis=0)
-            if costmap.shape[0] == 1:
-                costmap = np.squeeze(costmap,axis=0)
-            elif costmap.shape[1] == 1:
-                costmap = np.squeeze(costmap,axis=1)
+            costmap_reader = AICSImage(fn+'_CM.ome.tif')
+            costmap = costmap_reader.get_image_data("ZYX", S=0, T=0, C=0)
 
             img_pad0 = np.pad(input_img, ((0,0),(0,0),(padding[1],padding[1]),(padding[2],padding[2])), 'constant')
             raw = np.pad(img_pad0, ((0,0),(padding[0],padding[0]),(0,0),(0,0)), 'constant')
@@ -194,29 +178,14 @@ class RR_FH_M0C(Dataset):
                 if len(self.img)==num_patch:
                     break
 
-                label_reader = AICSImage(fn+'_GT.ome.tif')  #CZYX
-                label = label_reader.data
-                label = np.squeeze(label,axis=0) # 4-D after squeeze
+                label_reader = AICSImage(fn+'_GT.ome.tif')
+                label = label_reader.get_image_data("CZYX", S=0, T=0)
 
-                # when the tif has only 1 channel, the loaded array may have falsely swaped dimensions (ZCYX). we want CZYX
-                # (This may also happen in different OS or different package versions)
-                # ASSUMPTION: we have more z slices than the number of channels 
-                if label.shape[1]<label.shape[0]: 
-                    label = np.transpose(label,(1,0,2,3))
+                input_reader = AICSImage(fn+'.ome.tif')
+                input_img = input_reader.get_image_data("CZYX", S=0, T=0)
 
-                input_reader = AICSImage(fn+'.ome.tif') #CZYX  #TODO: check size
-                input_img = input_reader.data
-                input_img = np.squeeze(input_img,axis=0)
-                if input_img.shape[1] < input_img.shape[0]:
-                    input_img = np.transpose(input_img,(1,0,2,3))
-
-                costmap_reader = AICSImage(fn+'_CM.ome.tif') # ZYX
-                costmap = costmap_reader.data
-                costmap = np.squeeze(costmap,axis=0)
-                if costmap.shape[0] == 1:
-                    costmap = np.squeeze(costmap,axis=0)
-                elif costmap.shape[1] == 1:
-                    costmap = np.squeeze(costmap,axis=1)
+                costmap_reader = AICSImage(fn+'_CM.ome.tif')
+                costmap = costmap_reader.get_image_data("ZYX", S=0, T=0, C=0)
 
                 img_pad0 = np.pad(input_img, ((0,0),(0,0),(padding[1],padding[1]),(padding[2],padding[2])), 'constant')
                 raw = np.pad(img_pad0, ((0,0),(padding[0],padding[0]),(0,0),(0,0)), 'constant')
@@ -328,29 +297,14 @@ class NOAUG_M(Dataset):
 
         for img_idx, fn in enumerate(filenames):
 
-            label_reader = AICSImage(fn+'_GT.ome.tif')  #CZYX
-            label = label_reader.data
-            label = np.squeeze(label,axis=0) # 4-D after squeeze
+            label_reader = AICSImage(fn+'_GT.ome.tif')
+            label = label_reader.get_image_data("CZYX", S=0, T=0)
 
-            # when the tif has only 1 channel, the loaded array may have falsely swaped dimensions (ZCYX). we want CZYX
-            # (This may also happen in different OS or different package versions)
-            # ASSUMPTION: we have more z slices than the number of channels 
-            if label.shape[1]<label.shape[0]: 
-                label = np.transpose(label,(1,0,2,3))
+            input_reader = AICSImage(fn+'.ome.tif')
+            input_img = input_reader.get_image_data("CZYX", S=0, T=0)
 
-            input_reader = AICSImage(fn+'.ome.tif') #CZYX  #TODO: check size
-            input_img = input_reader.data
-            input_img = np.squeeze(input_img,axis=0)
-            if input_img.shape[1] < input_img.shape[0]:
-                input_img = np.transpose(input_img,(1,0,2,3))
-
-            costmap_reader = AICSImage(fn+'_CM.ome.tif') # ZYX
-            costmap = costmap_reader.data
-            costmap = np.squeeze(costmap,axis=0)
-            if costmap.shape[0] == 1:
-                costmap = np.squeeze(costmap,axis=0)
-            elif costmap.shape[1] == 1:
-                costmap = np.squeeze(costmap,axis=1)
+            costmap_reader = AICSImage(fn+'_CM.ome.tif')
+            costmap = costmap_reader.get_image_data("ZYX", S=0, T=0, C=0)
 
             img_pad0 = np.pad(input_img, ((0,0),(0,0),(padding[1],padding[1]),(padding[2],padding[2])), 'symmetric')
             raw = np.pad(img_pad0, ((0,0),(padding[0],padding[0]),(0,0),(0,0)), 'constant')

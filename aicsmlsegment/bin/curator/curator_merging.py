@@ -9,7 +9,6 @@ import importlib
 import pathlib
 import csv
 
-
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt 
@@ -19,10 +18,10 @@ from random import shuffle
 from scipy import stats
 from skimage.io import imsave
 from skimage.draw import line, polygon
-#import cv2
 
 from aicssegmentation.core.utils import histogram_otsu
-from aicsimageio import AICSImage, omeTifWriter
+from aicsimageio import AICSImage
+from aicsimageio.writers import OmeTiffWriter
 from aicsmlsegment.utils import input_normalization
 
 matplotlib.use('TkAgg')
@@ -246,29 +245,16 @@ class Executor(object):
                 continue
 
             reader = AICSImage(row['raw'])
-            im_full = reader.data
-            struct_img = im_full[0,args.input_channel,:,:,:]
+            struct_img = reader.get_image_data("ZYX", S=0, T=0, C=args.input_channel)
             raw_img = (struct_img- struct_img.min() + 1e-8)/(struct_img.max() - struct_img.min() + 1e-8)
             raw_img = 255 * raw_img
             raw_img = raw_img.astype(np.uint8)
 
             reader_seg1 = AICSImage(row['seg1'])
-            im_seg1_full = reader_seg1.data
-            assert im_seg1_full.shape[0]==1
-            assert im_seg1_full.shape[1]==1 or im_seg1_full.shape[2]==1
-            if im_seg1_full.shape[1]==1:
-                seg1 = im_seg1_full[0,0,:,:,:]>0.1
-            else:
-                seg1 = im_seg1_full[0,:,0,:,:]>0.1
+            seg1 = reader_seg1.get_image_date("ZYX", S=0, T=0, C=0) > 0.01
 
             reader_seg2 = AICSImage(row['seg2'])
-            im_seg2_full = reader_seg2.data
-            assert im_seg2_full.shape[0]==1 
-            assert im_seg2_full.shape[1]==1 or im_seg2_full.shape[2]==1
-            if im_seg2_full.shape[1]==1:
-                seg2 = im_seg2_full[0,0,:,:,:]>0
-            else:
-                seg2 = im_seg2_full[0,:,0,:,:]>0
+            seg2 = reader_seg2.get_image_date("ZYX", S=0, T=0, C=0) > 0.01
             
             create_merge_mask(raw_img, seg1.astype(np.uint8), seg2.astype(np.uint8), 'merging_mask')
 
@@ -284,8 +270,8 @@ class Executor(object):
 
                 crop_mask = crop_mask.astype(np.uint8)
                 crop_mask[crop_mask>0]=255
-                writer = omeTifWriter.OmeTifWriter(mask_fn)
-                writer.save(crop_mask)
+                with OmeTiffWriter(mask_fn) as writer:
+                    writer.save(crop_mask)
                 df['merging_mask'].iloc[index]=mask_fn
 
                 need_mask = input('Do you need to add an excluding mask for this image, enter y or n:  ')
@@ -299,8 +285,8 @@ class Executor(object):
 
                     crop_mask = crop_mask.astype(np.uint8)
                     crop_mask[crop_mask>0]=255
-                    writer = omeTifWriter.OmeTifWriter(mask_fn)
-                    writer.save(crop_mask)
+                    with OmeTiffWriter(mask_fn) as writer:
+                        writer.save(crop_mask)
                     df['excluding_mask'].iloc[index]=mask_fn
 
 
@@ -325,33 +311,19 @@ class Executor(object):
 
                 # load raw image
                 reader = AICSImage(row['raw'])
-                img = reader.data.astype(np.float32)
-                struct_img = input_normalization(img[0,[args.input_channel],:,:,:], args)
+                img = reader.get_image_data("CZYX", S=0, T=0, C=[args.input_channel]).astype(np.float32)
+                struct_img = input_normalization(img, args)
                 struct_img= struct_img[0,:,:,:]
 
                 reader_seg1 = AICSImage(row['seg1'])
-                im_seg1_full = reader_seg1.data
-                assert im_seg1_full.shape[0]==1
-                assert im_seg1_full.shape[1]==1 or im_seg1_full.shape[2]==1
-                if im_seg1_full.shape[1]==1:
-                    seg1 = im_seg1_full[0,0,:,:,:]>0.1
-                else:
-                    seg1 = im_seg1_full[0,:,0,:,:]>0.1
+                seg1 = reader_seg.get_image_data("ZYX", S=0, T=0, C=0) > 0.01
 
                 reader_seg2 = AICSImage(row['seg2'])
-                im_seg2_full = reader_seg2.data
-                assert im_seg2_full.shape[0]==1 
-                assert im_seg2_full.shape[1]==1 or im_seg2_full.shape[2]==1
-                if im_seg2_full.shape[1]==1:
-                    seg2 = im_seg2_full[0,0,:,:,:]>0
-                else:
-                    seg2 = im_seg2_full[0,:,0,:,:]>0
+                seg2 = reader_seg2.get_image_data("ZYX", S=0, T=0, C=0) > 0.01
 
                 if os.path.isfile(str(row['merging_mask'])):
                     reader = AICSImage(row['merging_mask'])
-                    img = reader.data
-                    assert img.shape[0]==1 and img.shape[1]==1
-                    mask = img[0,0,:,:,:]>0
+                    mask = reader.get_image_data("ZYX", S=0, T=0, C=0)
                     seg1[mask>0]=0
                     seg2[mask==0]=0
                     seg1 = np.logical_or(seg1,seg2)
@@ -359,22 +331,19 @@ class Executor(object):
                 cmap = np.ones(seg1.shape, dtype=np.float32)
                 if os.path.isfile(str(row['excluding_mask'])):
                     reader = AICSImage(row['excluding_mask'])
-                    img = reader.data
-                    assert img.shape[0]==1 and img.shape[1]==1
-                    ex_mask = img[0,0,:,:,:]>0
+                    ex_mask = reader.get_image_date("ZYX", S=0, T=0, C=0) > 0.01
                     cmap[ex_mask>0]=0
- 
-                
-                writer = omeTifWriter.OmeTifWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '.ome.tif')
-                writer.save(struct_img)
+                    
+                with OmeTiffWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '.ome.tif') as writer:
+                    writer.save(struct_img)
 
                 seg1 = seg1.astype(np.uint8)
                 seg1[seg1>0]=1
-                writer = omeTifWriter.OmeTifWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '_GT.ome.tif')
-                writer.save(seg1)
+                with OmeTiffWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '_GT.ome.tif') as writer:
+                    writer.save(seg1)
 
-                writer = omeTifWriter.OmeTifWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '_CM.ome.tif')
-                writer.save(cmap)
+                with OmeTiffWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '_CM.ome.tif') as writer:
+                    writer.save(cmap)
         print('training data is ready')
 
 

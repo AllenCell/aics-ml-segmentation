@@ -115,60 +115,6 @@ class BasicFolderTrainer:
         #self.loaders = loaders
         self.config = config
 
-        '''
-        self.size_in = config['size_in']
-        self.size_out = config['size_out']
-
-        # training setting
-        self.checkpoint_dir = config['checkpoint_dir']
-        self.max_num_epochs = config['epochs']
-        self.save_every_n_epoch = config['save_every_n_epoch']
-
-        # validation setting
-        self.validation_config = config['validation']
-        self.leaveout = self.validation_config['leaveout']
-        self.OutputCh = self.validation_config['OutputCh']
-        self.validate_every_n_epoch = self.validation_config['validate_every_n_epoch']
-
-        self.writer = SummaryWriter(
-            log_dir=os.path.join(self.checkpoint_dir, 'logs'))
-
-        # dataloader config 
-        loader_config = config['loader']
-        self.batch_size = loader_config['batch_size']
-        self.PatchPerBuffer = loader_config['PatchPerBuffer']
-        self.NumWorkers = loader_config['NumWorkers']
- 
-        self.epoch_shuffle = loader_config['epoch_shuffle']
-        self.datafolder = loader_config['datafolder']
-        
-        #TODO: these parameters could be updated when resuming
-        self.num_iterations = 0
-        self.num_epoch = 0
-        
-        ##### customized loader ######
-        if self.validation_config['metric'] is not None:
-            # prepare the training/validattion filenames
-            train_filenames, valid_filenames = shuffle_split_filenames(self.datafolder, self.validation_config['leaveout'])
-            self.valid_filenames = valid_filenames
-            self.train_filenames = train_filenames
-            self.args_inference=lambda:None
-            self.args_inference.size_in = config['size_in']
-            self.args_inference.size_out = config['size_out']
-            self.args_inference.OutputCh = self.OutputCh
-            self.args_inference.nclass =  config['nclass'] 
-
-        else:
-            filenames = glob(self.datafolder + '/*_GT.ome.tif')
-            filenames.sort()
-            self.train_filenames = []
-            self.valid_filenames = []
-            for fi, fn in enumerate(filenames):
-                self.train_filenames.append(fn[:-11])
-            
-
-        self.train_loader =  DataLoader(self.loaders(self.train_filenames, self.PatchPerBuffer, self.size_in, self.size_out), num_workers=self.NumWorkers, batch_size=self.batch_size, shuffle=True)
-        '''
 
     def train(self):
 
@@ -293,30 +239,15 @@ class BasicFolderTrainer:
 
                     # target 
                     label_reader = AICSImage(fn+'_GT.ome.tif')  #CZYX
-                    label = label_reader.data
-                    label = np.squeeze(label,axis=0) # 4-D after squeeze
-
-                    # when the tif has only 1 channel, the loaded array may have falsely swaped dimensions (ZCYX). we want CZYX
-                    # (This may also happen in different OS or different package versions)
-                    # ASSUMPTION: we have more z slices than the number of channels 
-                    if label.shape[1]<label.shape[0]: 
-                        label = np.transpose(label,(1,0,2,3))
+                    label = label_reader.get_image_data('CZYX', S=0, T=0, C=[0]) # need 4D output
 
                     # input image
-                    input_reader = AICSImage(fn+'.ome.tif') #CZYX  #TODO: check size
-                    input_img = input_reader.data
-                    input_img = np.squeeze(input_img,axis=0)
-                    if input_img.shape[1] < input_img.shape[0]:
-                        input_img = np.transpose(input_img,(1,0,2,3))
+                    input_reader = AICSImage(fn+'.ome.tif')
+                    input_img = input_reader.get_image_data('CZYX', S=0, T=0, C=[0])  # need 4D output
 
                     # cmap tensor
                     costmap_reader = AICSImage(fn+'_CM.ome.tif') # ZYX
-                    costmap = costmap_reader.data
-                    costmap = np.squeeze(costmap,axis=0)
-                    if costmap.shape[0] == 1:
-                        costmap = np.squeeze(costmap,axis=0)
-                    elif costmap.shape[1] == 1:
-                        costmap = np.squeeze(costmap,axis=1)
+                    costmap = costmap_reader.get_image_data('CZYX', S=0, T=0, C=[0])  # need 4D output
 
                     # output 
                     outputs = model_inference(model, input_img, model.final_activation, args_inference)
@@ -349,74 +280,6 @@ class BasicFolderTrainer:
             num_epoch += 1
 
         # TODO: add validation step
-
-
-    '''
-    def validate(self):
-        self.logger.info('Validating...')
-
-        try:
-            with torch.no_grad():
-
-                # Validation starts ...
-                validation_loss = np.zeros((len(self.OutputCh)//2,))
-                self.model.eval() 
-
-                for _, fn in enumerate(self.valid_filenames):
-
-                    # target 
-                    label_reader = AICSImage(fn+'_GT.ome.tif')  #CZYX
-                    label = label_reader.data
-                    label = np.squeeze(label,axis=0) # 4-D after squeeze
-
-                    # when the tif has only 1 channel, the loaded array may have falsely swaped dimensions (ZCYX). we want CZYX
-                    # (This may also happen in different OS or different package versions)
-                    # ASSUMPTION: we have more z slices than the number of channels 
-                    if label.shape[1]<label.shape[0]: 
-                        label = np.transpose(label,(1,0,2,3))
-
-                    # input image
-                    input_reader = AICSImage(fn+'.ome.tif') #CZYX  #TODO: check size
-                    input_img = input_reader.data
-                    input_img = np.squeeze(input_img,axis=0)
-                    if input_img.shape[1] < input_img.shape[0]:
-                        input_img = np.transpose(input_img,(1,0,2,3))
-
-                    # cmap tensor
-                    costmap_reader = AICSImage(fn+'_CM.ome.tif') # ZYX
-                    costmap = costmap_reader.data
-                    costmap = np.squeeze(costmap,axis=0)
-                    if costmap.shape[0] == 1:
-                        costmap = np.squeeze(costmap,axis=0)
-                    elif costmap.shape[1] == 1:
-                        costmap = np.squeeze(costmap,axis=1)
-
-                    #input_img, label, costmap = input_img.to(self.device), label.to(self.device), costmap.to(self.device)
-                    
-                    # output 
-                    args=lambda:None
-                    args.size_in = self.size_in
-                    args.size_out = self.size_out
-                    args.OutputCh = self.OutputCh
-                    args.nclass = [self.model.numClass, self.model.numClass1, self.model.numClass2] ####HACK#####
-                    outputs = model_inference(self.model, input_img, self.model.final_activation, args)
-                    assert len(self.OutputCh)//2 == len(outputs)
-
-                    for vi in range(len(outputs)):
-                        if label.shape[0]==1: # the same label for all output
-                            validation_loss[vi] += compute_iou(outputs[vi][0,:,:,:]>0.5, label[0,:,:,:]==self.OutputCh[2*vi+1], costmap)
-                        else:
-                            validation_loss[vi] += compute_iou(outputs[vi][0,:,:,:]>0.5, label[vi,:,:,:]==self.OutputCh[2*vi+1], costmap)
-
-                # print loss 
-                average_validation_loss = validation_loss[0] / len(self.valid_filenames)
-                self.writer.add_scalar('validation_score', average_validation_loss, self.num_iterations)
-                self.logger.info(f'Validation finished. Evaluation score: {average_validation_loss}')
-                return average_validation_loss
-
-        finally:
-            self.model.train()
-    '''
 
     def _log_lr(self):
         lr = self.optimizer.param_groups[0]['lr']

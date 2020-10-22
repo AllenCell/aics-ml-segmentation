@@ -10,8 +10,7 @@ import numpy as np
 
 from skimage.morphology import remove_small_objects
 from skimage.io import imsave
-from aicsimageio import AICSImage, omeTifWriter
-from aicsimageprocessing import resize
+from aicsimageio import AICSImage
 from scipy.ndimage import zoom
 
 from aicsmlsegment.utils import load_config, load_single_image, input_normalization, image_normalization
@@ -50,19 +49,17 @@ def main():
     if inf_config['name'] == 'file':
         fn = inf_config['InputFile']
         data_reader = AICSImage(fn)
-        img0 = data_reader.data
 
         if inf_config['timelapse']:
-            assert img0.shape[0]>1
+            assert data_reader.shape[1] > 1, "not a timelapse, check you data"
 
-            for tt in range(img0.shape[0]):
+            for tt in range(data_reader.shape[1]):
                 # Assume:  dimensions = TCZYX
-                img = img0[tt, config['InputCh'],:,:,:].astype(float)
+                img = data_reader.get_image_data("CZYX", S=0, T=tt, C=config['InputCh']).astype(float)
                 img = image_normalization(img, config['Normalization'])
 
                 if len(config['ResizeRatio'])>0:
                     img = zoom(img, (1, config['ResizeRatio'][0], config['ResizeRatio'][1], config['ResizeRatio'][2]), order=2, mode='reflect')
-                    #img = resize(img, (1, config['ResizeRatio'][0], config['ResizeRatio'][1], config['ResizeRatio'][2]), method='cubic')
                     for ch_idx in range(img.shape[0]):
                         struct_img = img[ch_idx,:,:,:]
                         struct_img = (struct_img - struct_img.min())/(struct_img.max() - struct_img.min())
@@ -77,7 +74,6 @@ def main():
                     out = (out - out.min()) / (out.max()-out.min())
                     if len(config['ResizeRatio'])>0:
                         out = zoom(out, (1.0, 1/config['ResizeRatio'][0], 1/config['ResizeRatio'][1], 1/config['ResizeRatio'][2]), order=2, mode='reflect')
-                        #out = resize(out, (1.0, 1/config['ResizeRatio'][0], 1/config['ResizeRatio'][1], 1/config['ResizeRatio'][2]), method='cubic')
                     out = out.astype(np.float32)
                     if config['Threshold']>0:
                         out = out > config['Threshold']
@@ -90,7 +86,6 @@ def main():
                         out = (out - out.min()) / (out.max()-out.min())
                         if len(config['ResizeRatio'])>0:
                             out = zoom(out, (1.0, 1/config['ResizeRatio'][0], 1/config['ResizeRatio'][1], 1/config['ResizeRatio'][2]), order=2, mode='reflect')
-                            #out = resize(out, (1.0, 1/config['ResizeRatio'][0], 1/config['ResizeRatio'][1], 1/config['ResizeRatio'][2]), method='cubic')
                         out = out.astype(np.float32)
                         if config['Threshold']>0:
                             out = out > config['Threshold']
@@ -98,16 +93,11 @@ def main():
                             out[out>0]=255
                         imsave(config['OutputDir'] + os.sep + pathlib.PurePosixPath(fn).stem + '_T_'+ f'{tt:03}' +'_seg_'+ str(config['OutputCh'][2*ch_idx])+'.tiff',out)
         else:
-            img = img0[0,:,:,:,:].astype(float)
-            print(f'processing one image of size {img.shape}')
-            if img.shape[1] < img.shape[0]:
-                img = np.transpose(img,(1,0,2,3))
-            img = img[config['InputCh'],:,:,:]
+            img = data_reader.get_image_data("CZYX", S=0, T=0, C=config['InputCh']).astype(float)
             img = image_normalization(img, config['Normalization'])
 
             if len(config['ResizeRatio'])>0:
                 img = zoom(img, (1, config['ResizeRatio'][0], config['ResizeRatio'][1], config['ResizeRatio'][2]), order=2, mode='reflect')
-                #img = resize(img, (1, config['ResizeRatio'][0], config['ResizeRatio'][1], config['ResizeRatio'][2]), method='cubic')
                 for ch_idx in range(img.shape[0]):
                     struct_img = img[ch_idx,:,:,:] # note that struct_img is only a view of img, so changes made on struct_img also affects img
                     struct_img = (struct_img - struct_img.min())/(struct_img.max() - struct_img.min())
@@ -122,7 +112,6 @@ def main():
                 out = (out - out.min()) / (out.max()-out.min())
                 if len(config['ResizeRatio'])>0:
                     out = zoom(out, (1.0, 1/config['ResizeRatio'][0], 1/config['ResizeRatio'][1], 1/config['ResizeRatio'][2]), order=2, mode='reflect')
-                    #out = resize(out, (1.0, 1/config['ResizeRatio'][0], 1/config['ResizeRatio'][1], 1/config['ResizeRatio'][2]), method='cubic')
                 out = out.astype(np.float32)
                 if config['Threshold']>0:
                     out = out > config['Threshold']
@@ -135,7 +124,6 @@ def main():
                     out = (out - out.min()) / (out.max()-out.min())
                     if len(config['ResizeRatio'])>0:
                         out = zoom(out, (1.0, 1/config['ResizeRatio'][0], 1/config['ResizeRatio'][1], 1/config['ResizeRatio'][2]), order=2, mode='reflect')
-                        #out = resize(out, (1.0, 1/config['ResizeRatio'][0], 1/config['ResizeRatio'][1], 1/config['ResizeRatio'][2]), method='cubic')
                     out = out.astype(np.float32)
                     if config['Threshold']>0:
                         out = out > config['Threshold']
@@ -155,17 +143,9 @@ def main():
 
             # load data
             data_reader = AICSImage(fn)
-            img0 = data_reader.data
-            img = img0[0,:,:,:,:].astype(float)
-            if img.shape[1] < img.shape[0]:
-                img = np.transpose(img,(1,0,2,3))
-            img = img[config['InputCh'],:,:,:]
+            img = data_reader.get_image_data('CZYX', S=0, T=0, C=config['InputCh']).astype(float)
             if len(config['ResizeRatio'])>0:
                 img = zoom(img, (1,config['ResizeRatio'][0], config['ResizeRatio'][1], config['ResizeRatio'][2]), order=2, mode='reflect')
-                #for ch_idx in range(img.shape[0]):
-                #    struct_img = img[ch_idx,:,:,:] # note that struct_img is only a view of img, so changes made on struct_img also affects img
-                #    struct_img = (struct_img - struct_img.min())/(struct_img.max() - struct_img.min())
-                #    img[ch_idx,:,:,:] = struct_img
             img = image_normalization(img, config['Normalization'])
 
             # apply the model
@@ -178,7 +158,6 @@ def main():
                     out = (out - out.min()) / (out.max()-out.min())
                     if len(config['ResizeRatio'])>0:
                         out = zoom(out, (1.0, 1/config['ResizeRatio'][0], 1/config['ResizeRatio'][1], 1/config['ResizeRatio'][2]), order=2, mode='reflect')
-                        #out = resize(out, (1.0, 1/config['ResizeRatio'][0], 1/config['ResizeRatio'][1], 1/config['ResizeRatio'][2]), method='cubic')
                     out = out.astype(np.float32)
                     out = (out - out.min()) / (out.max()-out.min())
                 else:

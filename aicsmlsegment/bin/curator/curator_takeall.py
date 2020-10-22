@@ -19,7 +19,8 @@ from skimage.draw import line, polygon
 from scipy import ndimage as ndi
 
 from aicssegmentation.core.utils import histogram_otsu
-from aicsimageio import AICSImage, omeTifWriter
+from aicsimageio import AICSImage
+from aicsimageio.writers import OmeTiffWriter
 
 from aicsmlsegment.utils import input_normalization
 
@@ -135,19 +136,13 @@ class Executor(object):
             
             # load raw
             reader = AICSImage(fn)
-            img = reader.data.astype(np.float32)
-            assert img.shape[0]==1
-            img = img[0,:,:,:,:]
-            if img.shape[0] > img.shape[1]:
-                img = np.transpose(img,(1,0,2,3))
-            struct_img = input_normalization(img[[args.input_channel],:,:,:], args)
+            struct_img = reader.get_image_data("CZYX", S=0, T=0, C=[args.input_channel]).astype(np.float32)
+            struct_img = input_normalization(img, args)
 
             # load seg
             seg_fn = args.seg_path + os.sep + os.path.basename(fn)[:-1*len(args.data_type)] + '_struct_segmentation.tiff'
             reader = AICSImage(seg_fn)
-            img = reader.data
-            assert img.shape[0]==1 and img.shape[1]==1
-            seg = img[0,0,:,:,:]>0
+            seg = reader.get_image_data("ZYX", S=0, T=0, C=0) > 0.01
             seg = seg.astype(np.uint8)
             seg[seg>0]=1
 
@@ -156,20 +151,17 @@ class Executor(object):
             mask_fn = args.mask_path + os.sep + os.path.basename(fn)[:-1*len(args.data_type)] + '_mask.tiff'
             if os.path.isfile(mask_fn):
                 reader = AICSImage(mask_fn)
-                img = reader.data
-                assert img.shape[0]==1 and img.shape[1]==1
-                mask = img[0,0,:,:,:]
+                mask = reader.get_image_data("ZYX", S=0, T=0, C=0)
                 cmap[mask==0]=0
 
+            with OmeTiffWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '.ome.tif') as writer:
+                writer.save(struct_img)
 
-            writer = omeTifWriter.OmeTifWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '.ome.tif')
-            writer.save(struct_img)
-
-            writer = omeTifWriter.OmeTifWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '_GT.ome.tif')
-            writer.save(seg)
-
-            writer = omeTifWriter.OmeTifWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '_CM.ome.tif')
-            writer.save(cmap)
+            with OmeTiffWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '_GT.ome.tif') as writer:
+                writer.save(seg)
+            
+            with OmeTiffWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '_CM.ome.tif') as writer:
+                writer.save(cmap)
 
 
 def main():

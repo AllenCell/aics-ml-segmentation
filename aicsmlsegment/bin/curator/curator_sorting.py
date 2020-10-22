@@ -20,7 +20,8 @@ from skimage.draw import line, polygon
 from scipy import ndimage as ndi
 
 from aicssegmentation.core.utils import histogram_otsu
-from aicsimageio import AICSImage, omeTifWriter
+from aicsimageio import AICSImage
+from aicsimageio.writers import OmeTiffWriter
 from aicsmlsegment.utils import input_normalization
 
 matplotlib.use('TkAgg')
@@ -292,17 +293,14 @@ class Executor(object):
                 continue
 
             reader = AICSImage(row['raw'])
-            im_full = reader.data
-            struct_img = im_full[0,args.input_channel,:,:,:]
-            struct_img[struct_img>5000] = struct_img.min()
+            struct_img = reader.get_image_data("ZYX", S=0, T=0, C=args.input_channel)
+            struct_img[struct_img>5000] = struct_img.min()  # adjust contrast
             raw_img = (struct_img- struct_img.min() + 1e-8)/(struct_img.max() - struct_img.min() + 1e-8)
             raw_img = 255 * raw_img
             raw_img = raw_img.astype(np.uint8)
 
             reader_seg = AICSImage(row['seg'])
-            im_seg_full = reader_seg.data
-            assert im_seg_full.shape[0]==1 and im_seg_full.shape[1]==1
-            seg = im_seg_full[0,0,:,:,:]
+            seg = reader_seg.get_image_date("ZYX", S=0, T=0, C=0)
 
             score = gt_sorting(raw_img, seg)
             if score == 1:
@@ -345,15 +343,13 @@ class Executor(object):
 
                 # load raw image
                 reader = AICSImage(row['raw'])
-                img = reader.data.astype(np.float32)
-                struct_img = input_normalization(img[0,[args.input_channel],:,:,:], args)
+                img = reader.get_image_data("CZYX", S=0, T=0, C=[args.input_channel]).astype(np.float32)
+                struct_img = input_normalization(img, args)
                 struct_img= struct_img[0,:,:,:]
 
                 # load segmentation gt
                 reader = AICSImage(row['seg'])
-                img = reader.data
-                assert img.shape[0]==1 and img.shape[1]==1
-                seg = img[0,0,:,:,:]>0
+                seg = reader.get_image_data("ZYX", S=0, T=0, C=0) > 0.01
                 seg = seg.astype(np.uint8)
                 seg[seg>0]=1
 
@@ -361,19 +357,18 @@ class Executor(object):
                 if os.path.isfile(str(row['mask'])):
                     # load segmentation gt
                     reader = AICSImage(row['mask'])
-                    img = reader.data
-                    assert img.shape[0]==1 and img.shape[1]==1
-                    mask = img[0,0,:,:,:]
+                    mask = reader.get_image_data("ZYX", S=0, T=0, C=0)
                     cmap[mask>0]=0
 
-                writer = omeTifWriter.OmeTifWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '.ome.tif')
-                writer.save(struct_img)
+                with OmeTiffWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '.ome.tif') as writer:
+                    writer.save(struct_img)
 
-                writer = omeTifWriter.OmeTifWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '_GT.ome.tif')
-                writer.save(seg)
+                with OmeTiffWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '_GT.ome.tif') as writer:
+                    writer.save(seg)
+                
+                with OmeTiffWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '_CM.ome.tif') as writer:
+                    writer.save(cmap)
 
-                writer = omeTifWriter.OmeTifWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '_CM.ome.tif')
-                writer.save(cmap)
         print('training data is ready')
 
 def main():

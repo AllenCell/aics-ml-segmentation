@@ -1,8 +1,9 @@
 import numpy as np
 import logging
 import sys
+from typing import List
 from aicsimageio import AICSImage
-from aicsimageprocessing import resize
+from scipy.ndimage import zoom
 import os
 from scipy import ndimage as ndi
 from scipy import stats
@@ -61,9 +62,6 @@ def background_sub(img, r):
 
 def input_normalization(img, args):
 
-    #from aicsimageio import omeTifWriter
-    #writer = omeTifWriter.OmeTifWriter('/allen/aics/assay-dev/Segmentation/DeepLearning/DNA_Labelfree_Evaluation/final_evaluation/test_before_norm.tiff')
-    #writer.save(img[0,:,:,:])
     nchannel = img.shape[0]
     args.Normalization = int(args.Normalization)
     for ch_idx in range(nchannel):
@@ -178,19 +176,11 @@ def load_single_image(args, fn, time_flag=False):
         img = np.transpose(img, axes=(1,0,2,3))
     else:
         data_reader = AICSImage(fn)
-        img = data_reader.data  #TCZYX
-        if img.shape[0]==1:
-            img = np.squeeze(img,axis=0)
-        elif img.shape[1]==1:
-            img = np.squeeze(img,axis=1)
+        if isinstance(args.InputCh, List):
+            channel_list = args.InputCh
         else:
-            print('error in data dimension')
-            print(img.shape)
-            quit()
-        img = img.astype(float)
-        if img.shape[1] < img.shape[0]:
-                img = np.transpose(img,(1,0,2,3))
-        img = img[args.InputCh,:,:,:] #  fancy indexing atually creates a copy, not a view
+            channel_list = [args.InputCh]
+        img = data_reader.get_image_data('CZYX', S=0, T=0, C=channel_list)
 
     # normalization
     if args.mode == 'train':
@@ -202,11 +192,7 @@ def load_single_image(args, fn, time_flag=False):
     
     # rescale
     if len(args.ResizeRatio)>0:
-        img = resize(img, (1, args.ResizeRatio[0], args.ResizeRatio[1], args.ResizeRatio[2]), method='cubic')
-        for ch_idx in range(img.shape[0]):
-            struct_img = img[ch_idx,:,:,:] # note that struct_img is only a view of img, so changes made on struct_img also affects img
-            struct_img = (struct_img - struct_img.min())/(struct_img.max() - struct_img.min())
-            img[ch_idx,:,:,:] = struct_img
+        img = zoom(img, (1, args.ResizeRatio[0], args.ResizeRatio[1], args.ResizeRatio[2]), order=1)
 
     return img
 

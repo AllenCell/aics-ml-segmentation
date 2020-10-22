@@ -24,8 +24,6 @@ def apply_on_image(model, input_img, softmax, args):
     else:
         from PIL import Image
         print('doing runtime augmentation')
-        #import pathlib
-        #from aicsimageio import omeTifWriter
 
         input_img_aug = input_img.copy()
         for ch_idx in range(input_img_aug.shape[0]):
