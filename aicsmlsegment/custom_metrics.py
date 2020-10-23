@@ -63,8 +63,8 @@ class MeanIoU:
             target[mask] = 0
 
         # convert to uint8 just in case
-        binary_prediction = binary_prediction.byte()
-        target = target.byte()
+        binary_prediction = binary_prediction.bool()
+        target = target.bool()
 
         per_channel_iou = []
         for c in range(n_classes):

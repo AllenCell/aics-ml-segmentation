@@ -18,7 +18,7 @@ class ElementNLLLoss(torch.nn.Module):
 		row_num = target_np.shape[0]
 		mask = np.zeros((row_num,self.num_class )) 
 		mask[np.arange(row_num), target_np]=1
-		class_x = torch.masked_select(input, Variable(torch.from_numpy(mask).cuda().byte()))
+		class_x = torch.masked_select(input, Variable(torch.from_numpy(mask).cuda().bool()))
 
 		out = torch.mul(class_x,weight)
 		loss = torch.mean(torch.neg(out),0)

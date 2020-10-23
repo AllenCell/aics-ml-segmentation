@@ -48,7 +48,7 @@ setup(name=PACKAGE_NAME,
       install_requires=[
           'numpy>=1.15.1',
           'scipy>=1.1.0',
-          'scikit-image==0.15.0',
+          'scikit-image',
           'pandas>=0.23.4',
           'aicsimageio>3.3.0',
           'tqdm',
