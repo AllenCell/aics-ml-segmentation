@@ -4,7 +4,7 @@ from PIL import Image
 import random
 
 from torch import from_numpy
-from aicsimageio import AICSImage
+from aicsimageio import imread
 from random import shuffle
 import time
 from torchvision.transforms import ToTensor
@@ -55,14 +55,19 @@ class RR_FH_M0(Dataset):
             if len(self.img)==num_patch:
                 break
 
-            label_reader = AICSImage(fn+'_GT.ome.tif')
-            label = label_reader.get_image_data("CZYX", S=0, T=0)
+            label = np.squeeze(imread(fn+'_GT.ome.tif'))
+            label = np.expand_dims(label, axis=0)
 
-            input_reader = AICSImage(fn+'.ome.tif')
-            input_img = input_reader.get_image_data("CZYX", S=0, T=0)
+            input_img = np.squeeze(imread(fn+'.ome.tif'))
+            if len(input_img.shape) == 3:
+                # add channel dimension
+                input_img = np.expand_dims(input_img, axis=0)
+            elif len(input_img.shape) == 4:
+                # assume number of channel < number of Z, make sure channel dim comes first
+                if input_img.shape[0] > input_img.shape[1]:
+                    input_img = np.transpose(input_img, (1, 0, 2, 3))
 
-            costmap_reader = AICSImage(fn+'_CM.ome.tif')
-            costmap = costmap_reader.get_image_data("ZYX", S=0, T=0, C=0)
+            costmap = np.squeeze(imread(fn+'_CM.ome.tif'))
 
             img_pad0 = np.pad(input_img, ((0,0),(0,0),(padding[1],padding[1]),(padding[2],padding[2])), 'constant')
             raw = np.pad(img_pad0, ((0,0),(padding[0],padding[0]),(0,0),(0,0)), 'constant')
@@ -178,14 +183,19 @@ class RR_FH_M0C(Dataset):
                 if len(self.img)==num_patch:
                     break
 
-                label_reader = AICSImage(fn+'_GT.ome.tif')
-                label = label_reader.get_image_data("CZYX", S=0, T=0)
+                label = np.squeeze(imread(fn+'_GT.ome.tif'))
+                label = np.expand_dims(label, axis=0)
 
-                input_reader = AICSImage(fn+'.ome.tif')
-                input_img = input_reader.get_image_data("CZYX", S=0, T=0)
+                input_img = np.squeeze(imread(fn+'.ome.tif'))
+                if len(input_img.shape) == 3:
+                    # add channel dimension
+                    input_img = np.expand_dims(input_img, axis=0)
+                elif len(input_img.shape) == 4:
+                    # assume number of channel < number of Z, make sure channel dim comes first
+                    if input_img.shape[0] > input_img.shape[1]:
+                        input_img = np.transpose(input_img, (1, 0, 2, 3))
 
-                costmap_reader = AICSImage(fn+'_CM.ome.tif')
-                costmap = costmap_reader.get_image_data("ZYX", S=0, T=0, C=0)
+                costmap = np.squeeze(imread(fn+'_CM.ome.tif'))
 
                 img_pad0 = np.pad(input_img, ((0,0),(0,0),(padding[1],padding[1]),(padding[2],padding[2])), 'constant')
                 raw = np.pad(img_pad0, ((0,0),(padding[0],padding[0]),(0,0),(0,0)), 'constant')
@@ -297,14 +307,19 @@ class NOAUG_M(Dataset):
 
         for img_idx, fn in enumerate(filenames):
 
-            label_reader = AICSImage(fn+'_GT.ome.tif')
-            label = label_reader.get_image_data("CZYX", S=0, T=0)
+            label = np.squeeze(imread(fn+'_GT.ome.tif'))
+            label = np.expand_dims(label, axis=0)
 
-            input_reader = AICSImage(fn+'.ome.tif')
-            input_img = input_reader.get_image_data("CZYX", S=0, T=0)
+            input_img = np.squeeze(imread(fn+'.ome.tif'))
+            if len(input_img.shape) == 3:
+                # add channel dimension
+                input_img = np.expand_dims(input_img, axis=0)
+            elif len(input_img.shape) == 4:
+                # assume number of channel < number of Z, make sure channel dim comes first
+                if input_img.shape[0] > input_img.shape[1]:
+                    input_img = np.transpose(input_img, (1, 0, 2, 3))
 
-            costmap_reader = AICSImage(fn+'_CM.ome.tif')
-            costmap = costmap_reader.get_image_data("ZYX", S=0, T=0, C=0)
+            costmap = np.squeeze(imread(fn+'_CM.ome.tif'))
 
             img_pad0 = np.pad(input_img, ((0,0),(0,0),(padding[1],padding[1]),(padding[2],padding[2])), 'symmetric')
             raw = np.pad(img_pad0, ((0,0),(padding[0],padding[0]),(0,0),(0,0)), 'constant')

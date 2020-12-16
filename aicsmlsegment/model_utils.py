@@ -32,18 +32,6 @@ def apply_on_image(model, input_img, softmax, args):
             
         out1 = model_inference(model, input_img_aug, softmax, args)
 
-        '''
-        for ch_idx in range(len(args.OutputCh)//2):
-            writer = omeTifWriter.OmeTifWriter(args.OutputDir + 'test_seg_aug1_'+ str(args.OutputCh[2*ch_idx])+'.ome.tif')
-            if args.Threshold<0:
-                writer.save(out1[ch_idx].astype(float))
-            else:
-                out = out1[ch_idx] > args.Threshold
-                out = out.astype(np.uint8)
-                out[out>0]=255
-                writer.save(out)
-        '''
-
         input_img_aug = []
         input_img_aug = input_img.copy()
         for ch_idx in range(input_img_aug.shape[0]):
@@ -52,18 +40,6 @@ def apply_on_image(model, input_img, softmax, args):
         
         out2 = model_inference(model, input_img_aug, softmax, args)
 
-        '''
-        for ch_idx in range(len(args.OutputCh)//2):
-            writer = omeTifWriter.OmeTifWriter(args.OutputDir + 'test_seg_aug2_'+ str(args.OutputCh[2*ch_idx])+'.ome.tif')
-            if args.Threshold<0:
-                writer.save(out2[ch_idx].astype(float))
-            else:
-                out = out2[ch_idx] > args.Threshold
-                out = out.astype(np.uint8)
-                out[out>0]=255
-                writer.save(out)
-        '''
-
         input_img_aug = []
         input_img_aug = input_img.copy()
         for ch_idx in range(input_img_aug.shape[0]):
@@ -71,18 +47,6 @@ def apply_on_image(model, input_img, softmax, args):
             input_img_aug[ch_idx,:,:,:] = np.flip(str_im, axis=0)
         
         out3 = model_inference(model, input_img_aug, softmax, args)
-
-        '''
-        for ch_idx in range(len(args.OutputCh)//2):
-            writer = omeTifWriter.OmeTifWriter(args.OutputDir + 'test_seg_aug3_'+ str(args.OutputCh[2*ch_idx])+'.ome.tif')
-            if args.Threshold<0:
-                writer.save(out3[ch_idx].astype(float))
-            else:
-                out = out3[ch_idx] > args.Threshold
-                out = out.astype(np.uint8)
-                out[out>0]=255
-                writer.save(out)
-        '''
 
         out0 = model_inference(model, input_img, softmax, args)        
 

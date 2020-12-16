@@ -20,7 +20,7 @@ from skimage.draw import line, polygon
 from scipy import ndimage as ndi
 
 from aicssegmentation.core.utils import histogram_otsu
-from aicsimageio import AICSImage
+from aicsimageio import AICSImage, imread
 from aicsimageio.writers import OmeTiffWriter
 from aicsmlsegment.utils import input_normalization
 
@@ -299,8 +299,7 @@ class Executor(object):
             raw_img = 255 * raw_img
             raw_img = raw_img.astype(np.uint8)
 
-            reader_seg = AICSImage(row['seg'])
-            seg = reader_seg.get_image_date("ZYX", S=0, T=0, C=0)
+            seg = np.squeeze(imread(row['seg']))
 
             score = gt_sorting(raw_img, seg)
             if score == 1:
@@ -348,16 +347,14 @@ class Executor(object):
                 struct_img= struct_img[0,:,:,:]
 
                 # load segmentation gt
-                reader = AICSImage(row['seg'])
-                seg = reader.get_image_data("ZYX", S=0, T=0, C=0) > 0.01
+                seg = np.squeeze(imread(row['seg'])) > 0.01
                 seg = seg.astype(np.uint8)
                 seg[seg>0]=1
 
                 cmap = np.ones(seg.shape, dtype=np.float32)
                 if os.path.isfile(str(row['mask'])):
                     # load segmentation gt
-                    reader = AICSImage(row['mask'])
-                    mask = reader.get_image_data("ZYX", S=0, T=0, C=0)
+                    mask = np.squeeze(imread(row['mask']))
                     cmap[mask>0]=0
 
                 with OmeTiffWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '.ome.tif') as writer:
