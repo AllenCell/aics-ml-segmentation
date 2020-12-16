@@ -8,7 +8,7 @@ The Allen Cell Structure Segmenter is implemented as two packages: [`aicssegment
 
 ## Installation:
 
-* `aicssegmentation` (classic image segmentation): [Installation instruction](https://github.com/AllenInstitute/aics-segmentation) (available on Linux, MacOS, Windows)
+* `aicssegmentation` (classic image segmentation): [Installation instruction](https://github.com/AllenCell/aics-segmentation) (available on Linux, MacOS, Windows)
 * `aicsmlsegment` (deep learning segmentation): [Installation instruction](../README.md) (requires NVIDIA GPU and Linux OS)
 
 

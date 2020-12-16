@@ -2,8 +2,8 @@
 ------
 
 Thank you for taking the time to read how to contribute to Allen Cell Segmenter! This is the basic guideline for contributing to two repositories of Allen Cell Segmenter:
-Classic Image Segmentation: https://github.com/AllenInstitute/aics-segmentation
-Iterative Deep Learning: https://github.com/AllenInstitute/aics-ml-segmentation
+Classic Image Segmentation: https://github.com/AllenCell/aics-segmentation
+Iterative Deep Learning: https://github.com/AllenCell/aics-ml-segmentation
 
 
 ## Pull Request
