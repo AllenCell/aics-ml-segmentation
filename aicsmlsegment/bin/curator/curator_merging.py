@@ -20,7 +20,7 @@ from skimage.io import imsave
 from skimage.draw import line, polygon
 
 from aicssegmentation.core.utils import histogram_otsu
-from aicsimageio import AICSImage
+from aicsimageio import AICSImage, imread
 from aicsimageio.writers import OmeTiffWriter
 from aicsmlsegment.utils import input_normalization
 
@@ -250,11 +250,8 @@ class Executor(object):
             raw_img = 255 * raw_img
             raw_img = raw_img.astype(np.uint8)
 
-            reader_seg1 = AICSImage(row['seg1'])
-            seg1 = reader_seg1.get_image_date("ZYX", S=0, T=0, C=0) > 0.01
-
-            reader_seg2 = AICSImage(row['seg2'])
-            seg2 = reader_seg2.get_image_date("ZYX", S=0, T=0, C=0) > 0.01
+            seg1 = np.squeeze(imread(row['seg1'])) > 0.01
+            seg2 = np.squeeze(imread(row['seg2'])) > 0.01
             
             create_merge_mask(raw_img, seg1.astype(np.uint8), seg2.astype(np.uint8), 'merging_mask')
 
@@ -315,23 +312,18 @@ class Executor(object):
                 struct_img = input_normalization(img, args)
                 struct_img= struct_img[0,:,:,:]
 
-                reader_seg1 = AICSImage(row['seg1'])
-                seg1 = reader_seg.get_image_data("ZYX", S=0, T=0, C=0) > 0.01
-
-                reader_seg2 = AICSImage(row['seg2'])
-                seg2 = reader_seg2.get_image_data("ZYX", S=0, T=0, C=0) > 0.01
+                seg1 = np.squeeze(imread(row['seg1'])) > 0.01
+                seg2 = np.squeeze(imread(row['seg2'])) > 0.01
 
                 if os.path.isfile(str(row['merging_mask'])):
-                    reader = AICSImage(row['merging_mask'])
-                    mask = reader.get_image_data("ZYX", S=0, T=0, C=0)
+                    mask = np.squeeze(imread(row['merging_mask']))
                     seg1[mask>0]=0
                     seg2[mask==0]=0
                     seg1 = np.logical_or(seg1,seg2)
                 
                 cmap = np.ones(seg1.shape, dtype=np.float32)
                 if os.path.isfile(str(row['excluding_mask'])):
-                    reader = AICSImage(row['excluding_mask'])
-                    ex_mask = reader.get_image_date("ZYX", S=0, T=0, C=0) > 0.01
+                    ex_mask = np.squeeze(imread(row['excluding_mask'])) > 0.01
                     cmap[ex_mask>0]=0
                     
                 with OmeTiffWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '.ome.tif') as writer:

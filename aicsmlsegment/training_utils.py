@@ -15,7 +15,7 @@ import random
 from glob import glob
 from tqdm import tqdm
 
-from aicsimageio import AICSImage
+from aicsimageio import imread
 
 from aicsmlsegment.custom_loss import MultiAuxillaryElementNLLLoss
 from aicsmlsegment.custom_metrics import DiceCoefficient, MeanIoU, AveragePrecision
@@ -238,16 +238,21 @@ class BasicFolderTrainer:
                 for img_idx, fn in enumerate(valid_filenames):
 
                     # target 
-                    label_reader = AICSImage(fn+'_GT.ome.tif')  #CZYX
-                    label = label_reader.get_image_data('CZYX', S=0, T=0, C=[0]) # need 4D output
+                    label = np.squeeze(imread(fn+'_GT.ome.tif'))
+                    label = np.expand_dims(label, axis=0)
 
                     # input image
-                    input_reader = AICSImage(fn+'.ome.tif')
-                    input_img = input_reader.get_image_data('CZYX', S=0, T=0, C=[0])  # need 4D output
+                    input_img = np.squeeze(imread(fn+'.ome.tif'))
+                    if len(input_img.shape) == 3:
+                        # add channel dimension
+                        input_img = np.expand_dims(input_img, axis=0)
+                    elif len(input_img.shape) == 4:
+                        # assume number of channel < number of Z, make sure channel dim comes first
+                        if input_img.shape[0] > input_img.shape[1]:
+                            input_img = np.transpose(input_img, (1, 0, 2, 3))
 
                     # cmap tensor
-                    costmap_reader = AICSImage(fn+'_CM.ome.tif') # ZYX
-                    costmap = costmap_reader.get_image_data('CZYX', S=0, T=0, C=[0])  # need 4D output
+                    costmap = np.squeeze(imread(fn+'_CM.ome.tif'))
 
                     # output 
                     outputs = model_inference(model, input_img, model.final_activation, args_inference)
@@ -260,8 +265,6 @@ class BasicFolderTrainer:
                         else:
                             validation_loss[vi] += compute_iou(outputs[vi][0,:,:,:]>0.5, label[vi,:,:,:]==validation_config['OutputCh'][2*vi+1], costmap)
 
-
-                
                 average_validation_loss = validation_loss / len(valid_filenames)
                 print(f'Epoch: {num_epoch}, Training Loss: {average_training_loss}, Validation loss: {average_validation_loss}')
             else:

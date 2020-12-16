@@ -19,7 +19,7 @@ from skimage.draw import line, polygon
 from scipy import ndimage as ndi
 
 from aicssegmentation.core.utils import histogram_otsu
-from aicsimageio import AICSImage
+from aicsimageio import AICSImage, imread
 from aicsimageio.writers import OmeTiffWriter
 
 from aicsmlsegment.utils import input_normalization
@@ -141,8 +141,7 @@ class Executor(object):
 
             # load seg
             seg_fn = args.seg_path + os.sep + os.path.basename(fn)[:-1*len(args.data_type)] + '_struct_segmentation.tiff'
-            reader = AICSImage(seg_fn)
-            seg = reader.get_image_data("ZYX", S=0, T=0, C=0) > 0.01
+            seg = np.squeeze(imread(seg_fn)) > 0.01
             seg = seg.astype(np.uint8)
             seg[seg>0]=1
 
@@ -150,8 +149,7 @@ class Executor(object):
             cmap = np.ones(seg.shape, dtype=np.float32)
             mask_fn = args.mask_path + os.sep + os.path.basename(fn)[:-1*len(args.data_type)] + '_mask.tiff'
             if os.path.isfile(mask_fn):
-                reader = AICSImage(mask_fn)
-                mask = reader.get_image_data("ZYX", S=0, T=0, C=0)
+                mask = np.squeeze(imread(mask_fn))
                 cmap[mask==0]=0
 
             with OmeTiffWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '.ome.tif') as writer:
