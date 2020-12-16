@@ -2,7 +2,7 @@
 
 In this demo, we will demonstrate how to get the segmentation of ATP2A2 in 3D fluorescent microscopy images of hiPS cells. 
 
-*Note: This demo only uses the classic segmentation workflow and thus does not require a GPU. See package [aics-segmentation](https://github.com/AllenInstitute/aics-segmentation).
+*Note: This demo only uses the classic segmentation workflow and thus does not require a GPU. See package [aics-segmentation](https://github.com/AllenCell/aics-segmentation).
 
 ## Stage 1: Develop a classic image segmentation workflow
 
@@ -26,7 +26,7 @@ In this example, ATP2A2 localizes to the nuclear periphery and ER tubules, very 
 
 #### Step 2: Go to Jupyter Notebook and tune the workflow
 
-First, start your Jupyter Notebook App (make sure to activate your conda environment, see package [aics-segmentation](https://github.com/AllenInstitute/aics-segmentation) for details).
+First, start your Jupyter Notebook App (make sure to activate your conda environment, see package [aics-segmentation](https://github.com/AllenCell/aics-segmentation) for details).
 
 ```bash
 jupyter notebook

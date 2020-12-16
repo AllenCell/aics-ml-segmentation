@@ -2,7 +2,7 @@
 
 The Allen Cell Structure Segmenter is a Python-based open source toolkit developed for 3D segmentation of intracellular structures in fluorescence microscope images, developed at the Allen Institute for Cell Science. This toolkit consists of two complementary elements, a classic image segmentation workflow with a restricted set of algorithms and parameters and an iterative deep learning segmentation workflow. We created a collection of 20 classic image segmentation workflows based on 20 distinct and representative intracellular structure localization patterns as a lookup table reference and starting point for users. The iterative deep learning workflow can take over when the classic segmentation workflow is insufficient. Two straightforward human-in-the-loop curation strategies convert a set of classic image segmentation workflow results into a set of 3D ground truth images for iterative model training without the need for manual painting in 3D. The Allen Cell Structure Segmenter thus leverages state of the art computer vision algorithms in an accessible way to facilitate their application by the experimental biology researcher. More details including algorithms, validations, examples, and video tutorials can be found at [allencell.org/segmenter](allencell.org/segmenter) or in our [bioRxiv paper](https://www.biorxiv.org/content/10.1101/491035v1).
 
-**Note: This repository has only the code for the "Iterative Deep Learning Workflow". The classic part can be found at [https://github.com/AllenInstitute/aics-segmentation](https://github.com/AllenInstitute/aics-segmentation)**
+**Note: This repository has only the code for the "Iterative Deep Learning Workflow". The classic part can be found at [https://github.com/AllenCell/aics-segmentation](https://github.com/AllenCell/aics-segmentation)**
 
 ## Installation:
 
@@ -20,7 +20,7 @@ The GPUs we used to develop and test our package are two types: (1) GeForce GTX 
 1. create a conda environment: 
 
 ```bash
-conda create --name mlsegmenter python=3.6
+conda create --name mlsegmenter python=3.7
 ```
 
 (For how to install conda, see [here](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html#installing-conda-on-a-system-that-has-other-python-installations-or-packages))
@@ -47,9 +47,9 @@ Go to [PyTorch website](https://pytorch.org/get-started/locally/), and find the 
 4. Install Allen Cell Segmenter (deep learning part)
 
 ```bash
-git clone https://github.com/AllenInstitute/aics-ml-segmentation.git
+git clone https://github.com/AllenCell/aics-ml-segmentation.git
 cd ./aics-ml-segmentation
-pip install -e .
+pip install -e .[all]
 ```
 
 The `-e` flag when doing `pip install` will allow users to modify any the source code without the need of re-installing the package afterward. You may do the installation without `-e`, if you don't want any change on the code.
