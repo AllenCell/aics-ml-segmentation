@@ -160,7 +160,12 @@ def create_mask(raw_img, seg):
     z_profile = np.zeros((bw.shape[0],),dtype=int)
     for zz in range(bw.shape[0]):
         z_profile[zz] = np.count_nonzero(bw[zz,:,:])
-    mid_frame = round(histogram_otsu(z_profile)*bw.shape[0]).astype(int)
+    
+    mid_frame = histogram_otsu(z_profile)*bw.shape[0]
+    print("trying to find the best Z to display ...")
+    print(f"the raw image has z profile {z_profile}")
+    print(f"find best Z = {mid_frame}")
+    mid_frame = int(round(mid_frame))
 
     offset = 20
     seg_label = seg + offset # make it brighter
