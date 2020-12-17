@@ -99,7 +99,11 @@ def gt_sorting(raw_img, seg):
     z_profile = np.zeros((bw.shape[0],),dtype=int)
     for zz in range(bw.shape[0]):
         z_profile[zz] = np.count_nonzero(bw[zz,:,:])
-    mid_frame = round(histogram_otsu(z_profile)*bw.shape[0]).astype(int)
+    mid_frame = histogram_otsu(z_profile)*bw.shape[0]
+    print("trying to find the best Z to display ...")
+    print(f"the raw image has z profile {z_profile}")
+    print(f"find best Z = {mid_frame}")
+    mid_frame = int(round(mid_frame))
 
     #create 2x4 mosaic
     out = np.zeros((2*raw_img.shape[1], 4*raw_img.shape[2], 3),dtype=np.uint8)
@@ -314,8 +318,8 @@ class Executor(object):
 
                     crop_mask = crop_mask.astype(np.uint8)
                     crop_mask[crop_mask>0]=255
-                    writer = omeTifWriter.OmeTifWriter(mask_fn)
-                    writer.save(crop_mask)
+                    with OmeTiffWriter(mask_fn) as writer:
+                        writer.save(crop_mask)
                     df['mask'].iloc[index]=mask_fn
             else:
                 df['score'].iloc[index]=0
