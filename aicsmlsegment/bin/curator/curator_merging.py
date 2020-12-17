@@ -103,7 +103,7 @@ def create_merge_mask(raw_img, seg1, seg2, drawing_aim):
     z_profile = np.zeros((bw.shape[0],),dtype=int)
     for zz in range(bw.shape[0]):
         z_profile[zz] = np.count_nonzero(bw[zz,:,:])
-    mid_frame = round(histogram_otsu(z_profile)*bw.shape[0]).astype(int)
+    mid_frame = int(round(histogram_otsu(z_profile)*bw.shape[0]))
 
     img = np.zeros((2*raw_img.shape[1], 3*raw_img.shape[2], 3),dtype=np.uint8)
 

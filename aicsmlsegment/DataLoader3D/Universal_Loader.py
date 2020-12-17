@@ -88,7 +88,7 @@ class RR_FH_M0(Dataset):
                     if flip_flag<0.5:
                         new_labi_pil = new_labi_pil.transpose(Image.FLIP_LEFT_RIGHT)
                     new_labi = np.array(new_labi_pil.convert('L'))
-                    label[ci,zz,:,:] = new_labi.astype(int)
+                    label[ci,zz,:,:] = int(new_labi)
 
                 cmap = costmap[zz,:,:]
                 cmap_pil = Image.fromarray(np.uint8(255*(cmap/cost_scale)))
@@ -216,7 +216,7 @@ class RR_FH_M0C(Dataset):
                         if flip_flag<0.5:
                             new_labi_pil = new_labi_pil.transpose(Image.FLIP_LEFT_RIGHT)
                         new_labi = np.array(new_labi_pil.convert('L'))
-                        label[ci,zz,:,:] = new_labi.astype(int)
+                        label[ci,zz,:,:] = int(new_labi)
 
                     cmap = costmap[zz,:,:]
                     cmap_pil = Image.fromarray(np.uint8(255*(cmap/cost_scale)))
