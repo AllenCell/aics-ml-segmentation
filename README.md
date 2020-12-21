@@ -1,104 +1,61 @@
-# Test
+## Overview
 
-[![Build Status](https://github.com/benjijamorris/test/workflows/Build%20Main/badge.svg)](https://github.com/benjijamorris/test/actions)
-[![Documentation](https://github.com/benjijamorris/test/workflows/Documentation/badge.svg)](https://benjijamorris.github.io/test/)
-[![Code Coverage](https://codecov.io/gh/benjijamorris/test/branch/main/graph/badge.svg)](https://codecov.io/gh/benjijamorris/test)
+The Allen Cell Structure Segmenter is a Python-based open source toolkit developed for 3D segmentation of intracellular structures in fluorescence microscope images, developed at the Allen Institute for Cell Science. This toolkit consists of two complementary elements, a classic image segmentation workflow with a restricted set of algorithms and parameters and an iterative deep learning segmentation workflow. We created a collection of 20 classic image segmentation workflows based on 20 distinct and representative intracellular structure localization patterns as a lookup table reference and starting point for users. The iterative deep learning workflow can take over when the classic segmentation workflow is insufficient. Two straightforward human-in-the-loop curation strategies convert a set of classic image segmentation workflow results into a set of 3D ground truth images for iterative model training without the need for manual painting in 3D. The Allen Cell Structure Segmenter thus leverages state of the art computer vision algorithms in an accessible way to facilitate their application by the experimental biology researcher. More details including algorithms, validations, examples, and video tutorials can be found at [allencell.org/segmenter](allencell.org/segmenter) or in our [bioRxiv paper](https://www.biorxiv.org/content/10.1101/491035v1).
 
-test
+**Note: This repository has only the code for the "Iterative Deep Learning Workflow". The classic part can be found at [https://github.com/AllenCell/aics-segmentation](https://github.com/AllenCell/aics-segmentation)**
 
----
+## Installation:
 
-## Features
+0. prerequisite:
 
--   Store values and retain the prior value in memory
--   ... some other functionality
+To perform training/prediction of the deep learning models in this package, we assume an [NVIDIA GPU](https://www.nvidia.com/en-us/deep-learning-ai/developer/) has been set up properly on a Linux operating system, either on a local machine or on a remote computation cluster. Make sure to check if your GPU supports at least CUDA 8.0 (CUDA 9.0 and up is preferred): [NVIDIA Driver check](https://www.nvidia.com/Download/index.aspx?lang=en-us).
 
-## Quick Start
+The GPUs we used to develop and test our package are two types: (1) GeForce GTX 1080 Ti GPU (about 11GB GPU memory), (2) Titan Xp GPU (about 12GB GPU memory), (3) Tesla V100 for PCIe (with about 33GB memory). These cover common chips for personal workstations and data centers.
 
-```python
-from test import Example
+**Note 1:** As remote GPU clusters could be set up differently from institute to institute, we will assume a local machine use case through out the installation and demos.
 
-a = Example()
-a.get_value()  # 10
+**Note 2:** We are investigating alternative cloud computing service to deploy our package and will have updates in the next few months. Stay tuned :)  
+
+
+1. create a conda environment: 
+
+```bash
+conda create --name mlsegmenter python=3.7
 ```
 
-## Installation
+(For how to install conda, see [here](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html#installing-conda-on-a-system-that-has-other-python-installations-or-packages))
 
-**Stable Release:** `pip install test`<br>
-**Development Head:** `pip install git+https://github.com/benjijamorris/test.git`
+2. activate your environment and do the installation within the environment:
 
-## Documentation
+```bash 
+conda activate mlsegmenter 
+```
 
-For full package documentation please visit [benjijamorris.github.io/test](https://benjijamorris.github.io/test).
+(Note: always check out [conda documentation](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#activating-an-environment) for updates. If you are using an older version of conda, you may need to activate the environment by `source activate mlsegmenter`.)
 
-## Development
+3. Install Pytorch
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for information related to developing the code.
+Go to [PyTorch website](https://pytorch.org/get-started/locally/), and find the right installation command for you. 
 
-## The Four Commands You Need To Know
+* we use version 1.0 (which is the stable version at the time of our development)
+* we use Linux (OS), Conda (package), python 3.6 (Language), CUDA=10.0 (Question about CUDA? see [setup CUDA](./docs/check_cuda.md)). 
 
-1. `pip install -e .[dev]`
-
-    This will install your package in editable mode with all the required development
-    dependencies (i.e. `tox`).
-
-2. `make build`
-
-    This will run `tox` which will run all your tests in both Python 3.7
-    and Python 3.8 as well as linting your code.
-
-3. `make clean`
-
-    This will clean up various Python and build generated files so that you can ensure
-    that you are working in a clean environment.
-
-4. `make docs`
-
-    This will generate and launch a web browser to view the most up-to-date
-    documentation for your Python package.
-
-#### Additional Optional Setup Steps:
-
--   Turn your project into a GitHub repository:
-    -   Make an account on [github.com](https://github.com)
-    -   Go to [make a new repository](https://github.com/new)
-    -   _Recommendations:_
-        -   _It is strongly recommended to make the repository name the same as the Python
-            package name_
-        -   _A lot of the following optional steps are *free* if the repository is Public,
-            plus open source is cool_
-    -   After a GitHub repo has been created, run the commands listed under:
-        "...or push an existing repository from the command line"
--   Register your project with Codecov:
-    -   Make an account on [codecov.io](https://codecov.io)(Recommended to sign in with GitHub)
-        everything else will be handled for you.
--   Ensure that you have set GitHub pages to build the `gh-pages` branch by selecting the
-    `gh-pages` branch in the dropdown in the "GitHub Pages" section of the repository settings.
-    ([Repo Settings](https://github.com/benjijamorris/test/settings))
--   Register your project with PyPI:
-    -   Make an account on [pypi.org](https://pypi.org)
-    -   Go to your GitHub repository's settings and under the
-        [Secrets tab](https://github.com/benjijamorris/test/settings/secrets/actions),
-        add a secret called `PYPI_TOKEN` with your password for your PyPI account.
-        Don't worry, no one will see this password because it will be encrypted.
-    -   Next time you push to the branch `main` after using `bump2version`, GitHub
-        actions will build and deploy your Python package to PyPI.
-
-#### Suggested Git Branch Strategy
-
-1. `main` is for the most up-to-date development, very rarely should you directly
-   commit to this branch. GitHub Actions will run on every push and on a CRON to this
-   branch but still recommended to commit to your development branches and make pull
-   requests to main. If you push a tagged commit with bumpversion, this will also release to PyPI.
-2. Your day-to-day work should exist on branches separate from `main`. Even if it is
-   just yourself working on the repository, make a PR from your working branch to `main`
-   so that you can ensure your commits don't break the development head. GitHub Actions
-   will run on every push to any branch or any pull request from any branch to any other
-   branch.
-3. It is recommended to use "Squash and Merge" commits when committing PR's. It makes
-   each set of changes to `main` atomic and as a side effect naturally encourages small
-   well defined PR's.
+***Make sure you use either the automatically generated command on PyTorch website, or the command recommended on PyTorch website for installing [older version](https://pytorch.org/get-started/previous-versions/)***
 
 
-**Allen Institute Software License**
 
+4. Install Allen Cell Segmenter (deep learning part)
+
+```bash
+git clone https://github.com/AllenCell/aics-ml-segmentation.git
+cd ./aics-ml-segmentation
+pip install -e .[all]
+```
+
+The `-e` flag when doing `pip install` will allow users to modify any the source code without the need of re-installing the package afterward. You may do the installation without `-e`, if you don't want any change on the code.
+
+## Level of Support
+We are offering it to the community AS IS; we have used the toolkit within our organization. We are not able to provide guarantees of support. However, we welcome feedback and submission of issues. Users are encouraged to sign up on our [Allen Cell Discussion Forum](https://forum.allencell.org/) for community quesitons and comments.
+
+
+# Link to [Documentations and Tutorials](./docs/overview.md)

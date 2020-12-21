@@ -1,0 +1,69 @@
+##########################################################################################################
+# model settings
+##########################################################################################################
+model: 
+  name: unet_xy
+# number of input channels to the model
+nchannel: 1
+# number of output channels, 
+nclass: [2,2,2]
+# input patch size given to the network (adapt to fit in your GPU memory, generally bigger patches are better)
+size_in: [50, 156, 156] 
+# prediction patch size from the network (change according to input size)
+size_out: [22, 68, 68] 
+# path to save the checkpoint
+checkpoint_dir: '/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_saved_model_iter_2'
+# path to latest checkpoint; if provided the training will be resumed from that checkpoint
+resume: '/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_saved_model_iter_1/checkpoint_epoch_400.pytorch'
+
+##########################################################################################################
+# training precedure setting
+##########################################################################################################
+# initial learning rate
+learning_rate: 0.00001
+# weight decay
+weight_decay: 0.005
+# max number of epochs
+epochs: 400
+# number of epoch to save the model
+save_every_n_epoch: 50
+# loss function configuration
+loss:
+  # loss function to be used during training (Aux - Training with auxillary loss)
+  name: Aux
+  # A manual rescaling weight given to each auxilluary loss.
+  loss_weight: [1, 1, 1]
+  # a target value that is ignored and does not contribute to the input gradient
+  ignore_index: null
+
+##########################################################################################################
+# data loaders configuration
+###########################################################################
+loader:
+  name: default
+  # paths to the training datasets
+  datafolder: '/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_training_data_iter_1/'
+  # number of batch in each training iteration (related to patch size and GPU memory)
+  batch_size: 8
+  # number of patches loaded to cache 
+  PatchPerBuffer: 160
+  # number of epoches for every time the patches in cache are cleared and resampled (smaller = heavier i/o, larger = higher chance of overfitting)
+  epoch_shuffle: 5
+  # number of workers for loading data in each training iteration
+  NumWorkers: 1
+
+##########################################################################################################
+# validation setting
+##########################################################################################################
+# evaluation metric configuration
+validation:
+  # the metric for validation 
+  metric: default
+  # how to make the validation set (only used if metric is not None)
+  leaveout: [0]
+  # the channel to extract from output tensors
+  # this is a list of even number of integers [out_1, ch_1, out_2, ch_2, ...]
+  # means taking out_1'th tensor from the output list and get the ch_1'th channel from this tensor as output
+  OutputCh: [0, 1, 1, 1, 2, 1]
+  # how many iterations between validations
+  validate_every_n_epoch: 25

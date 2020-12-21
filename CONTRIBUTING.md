@@ -1,63 +1,46 @@
-# Contributing
+# Contributing to Allen Cell Segmenter
+------
 
-Contributions are welcome, and they are greatly appreciated! Every little bit
-helps, and credit will always be given.
+Thank you for taking the time to read how to contribute to Allen Cell Segmenter! This is the basic guideline for contributing to two repositories of Allen Cell Segmenter:
+Classic Image Segmentation: https://github.com/AllenCell/aics-segmentation
+Iterative Deep Learning: https://github.com/AllenCell/aics-ml-segmentation
 
-## Get Started!
 
-Ready to contribute? Here's how to set up `test` for local development.
+## Pull Request
 
-1. Fork the `test` repo on GitHub.
+Both repositories (referred as Allen-Repos below) are one-way mirrored from the internal bitbucket repositories, which are integrated with our internal building infrastructure. For this reason, we cannot support direct pull requests on our Allen-Repos. Instead, we would welcome pull requests following the steps below.
 
-2. Clone your fork locally:
+Fork Allen-Repo
+Create a new branch in the forked repo and make changes
+Create an issue on Allen-Repo to notify us about the new branch on the forked repo to be viewed as a pull request
+We will do code review and building test, and merge the new branch into Allen-Repo when ready
 
-    ```bash
-    git clone git@github.com:{your_name_here}/test.git
-    ```
+## Feature Request and Bug Report
 
-3. Install the project in editable mode. (It is also recommended to work in a virtualenv or anaconda environment):
+For feature request or bug report, we encourage people to leave a comment on allen cell discussion forum https://forum.allencell.org/c/software-code. Our internal notification system and issue tracker will keep us up to date and make updates as soon as we can.
 
-    ```bash
-    cd test/
-    pip install -e .[dev]
-    ```
 
-4. Create a branch for local development:
+## Credit to contributors
 
-    ```bash
-    git checkout -b {your_development_type}/short-description
-    ```
+For pull request, if it is merged eventually, all the commit history in the original branch on the forked repo will be preserved. For feature requests and bug reports via allen cell discussion forum, the contributors cannot show up as in Github issue tracker. But, credits will be given to the contributors of pull requests, feature requests, bug reports. 
 
-    Ex: feature/read-tiff-files or bugfix/handle-file-not-found<br>
-    Now you can make your changes locally.
 
-5. When you're done making changes, check that your changes pass linting and
-   tests, including testing other Python versions with make:
 
-    ```bash
-    make build
-    ```
+<!-- ## Agreement
 
-6. Commit your changes and push your branch to GitHub:
+This document describes the terms under which you may make “Contributions” — 
+which may include without limitation, software additions, revisions, bug fixes, configuration changes,
+documentation, or any other materials — to any of the projects owned or managed by the Allen Institute.
+If you have questions about these terms, please contact us at terms@alleninstitute.org.  
 
-    ```bash
-    git add .
-    git commit -m "Resolves gh-###. Your detailed description of your changes."
-    git push origin {your_development_type}/short-description
-    ```
+You certify that:
 
-7. Submit a pull request through the GitHub website.
-
-## Deploying
-
-A reminder for the maintainers on how to deploy.
-Make sure all your changes are committed.
-Then run:
-
-```bash
-bump2version patch # possible: major / minor / patch
-git push
-git push --tags
-```
-
-This will release a new package version on Git + GitHub and publish to PyPI.
+- Your Contributions are either:
+    1.	Created in whole or in part by you and you have the right to submit them under the designated license (described below); or
+    2.	Based upon previous work that, to the best of your knowledge, is covered under an appropriate open source license and you have the right under that license to submit that work with modifications,whether created in whole or in part by you, under the designated license; or
+    3.	Provided directly to you by some other person who certified (1) or (2) and you have not modified them.
+- You are granting your Contributions to the Allen Institute under the terms of the Allen Institute Software License (the “designated license”).
+- You understand and agree that the Allen Institute projects and your Contributions are public and that 
+a record of the Contributions (including all metadata and personal information you submit with them) is 
+maintained indefinitely and may be redistributed consistent with the Allen Institute’s mission and the 
+Allen Institute Software License (the “designated license”).   -->
