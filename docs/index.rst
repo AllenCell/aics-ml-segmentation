@@ -1,4 +1,4 @@
-Welcome to Test's documentation!
+Welcome to aics-ml-segmentation's documentation!
 ======================================
 
 .. toctree::
