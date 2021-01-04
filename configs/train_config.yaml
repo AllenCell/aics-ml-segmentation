@@ -2,19 +2,20 @@
 # model settings
 ##########################################################################################################
 model: 
-  name: unet_xy
+  name: unet_xy_zoom #BasicUNet
+  zoom_ratio: 3
 # number of input channels to the model
 nchannel: 1
 # number of output channels, 
-nclass: [2,2,2]
+nclass: 2
 # input patch size given to the network (adapt to fit in your GPU memory, generally bigger patches are better)
-size_in: [50, 156, 156] 
+size_in:   [26, 210, 210] # [52, 420, 420]
 # prediction patch size from the network (change according to input size)
-size_out: [22, 68, 68] 
+size_out:   [26, 210, 210] #[52, 420, 420] #[20, 152, 152] 
 # path to save the checkpoint
-checkpoint_dir: '/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_saved_model_iter_2'
+checkpoint_dir: '/allen/aics/assay-dev/users/Jianxu/Tasks/test_segmenter_bug/models'
 # path to latest checkpoint; if provided the training will be resumed from that checkpoint
-resume: '/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_saved_model_iter_1/checkpoint_epoch_400.pytorch'
+resume: #'//allen/aics/assay-dev/users/Jianxu/Tasks/test_segmenter_bug/models/checkpoint_epoch=64.ckpt'
 
 ##########################################################################################################
 # training precedure setting
@@ -24,9 +25,9 @@ learning_rate: 0.00001
 # weight decay
 weight_decay: 0.005
 # max number of epochs
-epochs: 400
+epochs: 100
 # number of epoch to save the model
-save_every_n_epoch: 50
+save_every_n_epoch: 1
 # loss function configuration
 loss:
   # loss function to be used during training (Aux - Training with auxillary loss)
@@ -42,15 +43,15 @@ loss:
 loader:
   name: default
   # paths to the training datasets
-  datafolder: '/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_training_data_iter_1/'
+  datafolder: '//allen/aics/assay-dev/users/Jianxu/data/training_assay_caax_cellmask/training_data/initial_caax_model_better_top'
   # number of batch in each training iteration (related to patch size and GPU memory)
-  batch_size: 8
+  batch_size: 1
   # number of patches loaded to cache 
-  PatchPerBuffer: 160
+  PatchPerBuffer: 16
   # number of epoches for every time the patches in cache are cleared and resampled (smaller = heavier i/o, larger = higher chance of overfitting)
-  epoch_shuffle: 5
+  epoch_shuffle: 27
   # number of workers for loading data in each training iteration
-  NumWorkers: 1
+  NumWorkers: 4
 
 ##########################################################################################################
 # validation setting
@@ -64,6 +65,6 @@ validation:
   # the channel to extract from output tensors
   # this is a list of even number of integers [out_1, ch_1, out_2, ch_2, ...]
   # means taking out_1'th tensor from the output list and get the ch_1'th channel from this tensor as output
-  OutputCh: [0, 1, 1, 1, 2, 1]
+  OutputCh: 0
   # how many iterations between validations
-  validate_every_n_epoch: 25
+  validate_every_n_epoch: 1

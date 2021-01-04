@@ -1,7 +1,12 @@
 import numpy as np
 import torch
 from skimage import measure
-from aicsmlsegment.custom_loss import MultiAuxillaryElementNLLLoss, compute_per_channel_dice, expand_as_one_hot
+from aicsmlsegment.custom_loss import (
+    MultiAuxillaryElementNLLLoss,
+    compute_per_channel_dice,
+    expand_as_one_hot,
+)
+
 
 class DiceCoefficient:
     """Computes Dice Coefficient.
@@ -23,7 +28,11 @@ class DiceCoefficient:
         :return: Soft Dice Coefficient averaged over all channels/classes
         """
         # Average across channels in order to get the final score
-        return torch.mean(compute_per_channel_dice(input, target, epsilon=self.epsilon, ignore_index=self.ignore_index))
+        return torch.mean(
+            compute_per_channel_dice(
+                input, target, epsilon=self.epsilon, ignore_index=self.ignore_index
+            )
+        )
 
 
 class MeanIoU:
@@ -47,7 +56,9 @@ class MeanIoU:
         """
         n_classes = input.size()[1]
         if target.dim() == 4:
-            target = expand_as_one_hot(target, C=n_classes, ignore_index=self.ignore_index)
+            target = expand_as_one_hot(
+                target, C=n_classes, ignore_index=self.ignore_index
+            )
 
         # batch dim must be 1
         input = input[0]
@@ -88,7 +99,10 @@ class MeanIoU:
         """
         Computes IoU for a given target and prediction tensors
         """
-        return torch.sum(prediction & target).float() / torch.sum(prediction | target).float()
+        return (
+            torch.sum(prediction & target).float()
+            / torch.sum(prediction | target).float()
+        )
 
 
 class AveragePrecision:
@@ -96,8 +110,14 @@ class AveragePrecision:
     Computes Average Precision given boundary prediction and ground truth instance segmentation.
     """
 
-    def __init__(self, threshold=0.4, iou_range=(0.5, 1.0), ignore_index=-1, min_instance_size=None,
-                 use_last_target=False):
+    def __init__(
+        self,
+        threshold=0.4,
+        iou_range=(0.5, 1.0),
+        ignore_index=-1,
+        min_instance_size=None,
+        use_last_target=False,
+    ):
         """
         :param threshold: probability value at which the input is going to be thresholded
         :param iou_range: compute ROC curve for the the range of IoU values: range(min,max,0.05)
@@ -158,7 +178,7 @@ class AveragePrecision:
 
         # get maximum average precision across channels
         max_ap, c_index = np.max(per_channel_ap), np.argmax(per_channel_ap)
-        #LOGGER.info(f'Max average precision: {max_ap}, channel: {c_index}')
+        # LOGGER.info(f'Max average precision: {max_ap}, channel: {c_index}')
         return max_ap
 
     def _calculate_average_precision(self, predicted, target, target_instances):
@@ -175,7 +195,7 @@ class AveragePrecision:
         # compute the area under precision recall curve by simple integration of piece-wise constant function
         ap = 0.0
         for i in range(1, len(recall)):
-            ap += ((recall[i] - recall[i - 1]) * precision[i])
+            ap += (recall[i] - recall[i - 1]) * precision[i]
         return ap
 
     def _roc_curve(self, predicted, target, target_instances):
@@ -192,7 +212,9 @@ class AveragePrecision:
             true_positives = set()
 
             for pred_label in predicted_instances:
-                target_label = self._find_overlapping_target(pred_label, predicted, target, min_iou)
+                target_label = self._find_overlapping_target(
+                    pred_label, predicted, target, min_iou
+                )
                 if target_label is not None:
                     # update TP, FP and FN
                     if target_label == self.ignore_index:

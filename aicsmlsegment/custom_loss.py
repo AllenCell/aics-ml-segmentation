@@ -1,85 +1,112 @@
-
 from torch.autograd import Variable, Function
 import torch.optim as optim
 import torch.nn as nn
 import torch
 import numpy as np
 
+
 class ElementNLLLoss(torch.nn.Module):
-	def __init__(self, num_class):
-		super(ElementNLLLoss,self).__init__()
-		self.num_class = num_class
-	
-	def forward(self, input, target, weight):
+    def __init__(self, num_class):
+        super(ElementNLLLoss, self).__init__()
+        self.num_class = num_class
 
-		target_np = target.cpu().data.numpy()
-		target_np = target_np.astype(np.uint8)
+    def forward(self, input, target, weight):
 
-		row_num = target_np.shape[0]
-		mask = np.zeros((row_num,self.num_class )) 
-		mask[np.arange(row_num), target_np]=1
-		class_x = torch.masked_select(input, Variable(torch.from_numpy(mask).cuda().bool()))
+        target_np = target.cpu().data.numpy()
+        target_np = target_np.astype(np.uint8)
 
-		out = torch.mul(class_x,weight)
-		loss = torch.mean(torch.neg(out),0)
+        row_num = target_np.shape[0]
+        mask = np.zeros((row_num, self.num_class))
+        mask[np.arange(row_num), target_np] = 1
+        class_x = torch.masked_select(
+            input, Variable(torch.from_numpy(mask).cuda().bool())
+        )
 
-		return loss
+        out = torch.mul(class_x, weight)
+        loss = torch.mean(torch.neg(out), 0)
+
+        return loss
+
 
 class MultiAuxillaryElementNLLLoss(torch.nn.Module):
-	def __init__(self,num_task, weight, num_class):
-		super(MultiAuxillaryElementNLLLoss,self).__init__()
-		self.num_task = num_task
-		self.weight = weight
+    def __init__(self, num_task, weight, num_class):
+        super(MultiAuxillaryElementNLLLoss, self).__init__()
+        self.num_task = num_task
+        self.weight = weight
 
-		self.criteria_list = [] 
-		for nn in range(self.num_task):
-			self.criteria_list.append(ElementNLLLoss(num_class[nn]))
-	
-	def forward(self, input, target, cmap):
+        self.criteria_list = []
+        for nn in range(self.num_task):
+            self.criteria_list.append(ElementNLLLoss(num_class[nn]))
 
-		total_loss = self.weight[0]*self.criteria_list[0](input[0], target.view(target.numel()), cmap.view(cmap.numel()) )
+    def forward(self, input, target, cmap):
+        print(input.shape)
+        print(target.shape)
 
-		for nn in np.arange(1,self.num_task):
-			total_loss = total_loss + self.weight[nn]*self.criteria_list[nn](input[nn], target.view(target.numel()), cmap.view(cmap.numel()) )
+        total_loss = self.weight[0] * self.criteria_list[0](
+            input[0], target.view(target.numel()), cmap.view(cmap.numel())
+        )
 
-		return total_loss
+        for nn in np.arange(1, self.num_task):
+            total_loss = total_loss + self.weight[nn] * self.criteria_list[nn](
+                input[nn], target.view(target.numel()), cmap.view(cmap.numel())
+            )
+
+        return total_loss
+
 
 class MultiTaskElementNLLLoss(torch.nn.Module):
-	def __init__(self, weight, num_class):
-		super(MultiTaskElementNLLLoss,self).__init__()
-		self.num_task = len(num_class)
-		self.weight = weight
+    def __init__(self, weight, num_class):
+        super(MultiTaskElementNLLLoss, self).__init__()
+        self.num_task = len(num_class)
+        self.weight = weight
 
-		self.criteria_list = [] 
-		for nn in range(self.num_task):
-			self.criteria_list.append(ElementNLLLoss(num_class[nn]))
-	
-	def forward(self, input, target, cmap):
+        self.criteria_list = []
+        for nn in range(self.num_task):
+            self.criteria_list.append(ElementNLLLoss(num_class[nn]))
 
-		assert len(target) == self.num_task and len(input) == self.num_task
+    def forward(self, input, target, cmap):
 
-		total_loss = self.weight[0]*self.criteria_list[0](input[0], target[0].view(target[0].numel()), cmap.view(cmap.numel()) )
+        assert len(target) == self.num_task and len(input) == self.num_task
 
-		for nn in np.arange(1,self.num_task):
-			total_loss = total_loss + self.weight[nn]*self.criteria_list[nn](input[nn], target[nn].view(target[nn].numel()), cmap.view(cmap.numel()) )
+        total_loss = self.weight[0] * self.criteria_list[0](
+            input[0], target[0].view(target[0].numel()), cmap.view(cmap.numel())
+        )
 
-		return total_loss
+        for nn in np.arange(1, self.num_task):
+            total_loss = total_loss + self.weight[nn] * self.criteria_list[nn](
+                input[nn], target[nn].view(target[nn].numel()), cmap.view(cmap.numel())
+            )
+
+        return total_loss
+
 
 class ElementAngularMSELoss(torch.nn.Module):
-	def __init__(self):
-		super(ElementAngularMSELoss,self).__init__()
-	
-	def forward(self, input, target, weight):
+    def __init__(self):
+        super(ElementAngularMSELoss, self).__init__()
 
-		#((input - target) ** 2).sum() / input.data.nelement()
-	
-		return torch.sum( torch.mul( torch.acos(torch.sum(torch.mul(input,target),dim=1))**2, weight) )/ torch.gt(weight,0).data.nelement()
-		
-def compute_per_channel_dice(input, target, epsilon=1e-5, ignore_index=None, weight=None):
+    def forward(self, input, target, weight):
+
+        # ((input - target) ** 2).sum() / input.data.nelement()
+
+        return (
+            torch.sum(
+                torch.mul(
+                    torch.acos(torch.sum(torch.mul(input, target), dim=1)) ** 2, weight
+                )
+            )
+            / torch.gt(weight, 0).data.nelement()
+        )
+
+
+def compute_per_channel_dice(
+    input, target, epsilon=1e-5, ignore_index=None, weight=None
+):
     # assumes that input is a normalized probability
 
     # input and target shapes must match
-    assert input.size() == target.size(), "'input' and 'target' must have the same shape"
+    assert (
+        input.size() == target.size()
+    ), "'input' and 'target' must have the same shape"
 
     # mask ignore_index if present
     if ignore_index is not None:
@@ -99,7 +126,7 @@ def compute_per_channel_dice(input, target, epsilon=1e-5, ignore_index=None, wei
         intersect = weight * intersect
 
     denominator = (input + target).sum(-1)
-    return 2. * intersect / denominator.clamp(min=epsilon)
+    return 2.0 * intersect / denominator.clamp(min=epsilon)
 
 
 class DiceLoss(nn.Module):
@@ -107,11 +134,17 @@ class DiceLoss(nn.Module):
     Additionally allows per-class weights to be provided.
     """
 
-    def __init__(self, epsilon=1e-5, weight=None, ignore_index=None, sigmoid_normalization=True,
-                 skip_last_target=False):
+    def __init__(
+        self,
+        epsilon=1e-5,
+        weight=None,
+        ignore_index=None,
+        sigmoid_normalization=True,
+        skip_last_target=False,
+    ):
         super(DiceLoss, self).__init__()
         self.epsilon = epsilon
-        self.register_buffer('weight', weight)
+        self.register_buffer("weight", weight)
         self.ignore_index = ignore_index
         # The output from the network during training is assumed to be un-normalized probabilities and we would
         # like to normalize the logits. Since Dice (or soft Dice in this case) is usually used for binary data,
@@ -136,20 +169,26 @@ class DiceLoss(nn.Module):
         if self.skip_last_target:
             target = target[:, :-1, ...]
 
-        per_channel_dice = compute_per_channel_dice(input, target, epsilon=self.epsilon, ignore_index=self.ignore_index,
-                                                    weight=weight)
+        per_channel_dice = compute_per_channel_dice(
+            input,
+            target,
+            epsilon=self.epsilon,
+            ignore_index=self.ignore_index,
+            weight=weight,
+        )
         # Average the Dice score across all channels/classes
-        return torch.mean(1. - per_channel_dice)
+        return torch.mean(1.0 - per_channel_dice)
 
 
 class GeneralizedDiceLoss(nn.Module):
-    """Computes Generalized Dice Loss (GDL) as described in https://arxiv.org/pdf/1707.03237.pdf
-    """
+    """Computes Generalized Dice Loss (GDL) as described in https://arxiv.org/pdf/1707.03237.pdf"""
 
-    def __init__(self, epsilon=1e-5, weight=None, ignore_index=None, sigmoid_normalization=True):
+    def __init__(
+        self, epsilon=1e-5, weight=None, ignore_index=None, sigmoid_normalization=True
+    ):
         super(GeneralizedDiceLoss, self).__init__()
         self.epsilon = epsilon
-        self.register_buffer('weight', weight)
+        self.register_buffer("weight", weight)
         self.ignore_index = ignore_index
         if sigmoid_normalization:
             self.normalization = nn.Sigmoid()
@@ -160,7 +199,9 @@ class GeneralizedDiceLoss(nn.Module):
         # get probabilities from logits
         input = self.normalization(input)
 
-        assert input.size() == target.size(), "'input' and 'target' must have the same shape"
+        assert (
+            input.size() == target.size()
+        ), "'input' and 'target' must have the same shape"
 
         # mask ignore_index if present
         if self.ignore_index is not None:
@@ -175,7 +216,9 @@ class GeneralizedDiceLoss(nn.Module):
 
         target = target.float()
         target_sum = target.sum(-1)
-        class_weights = Variable(1. / (target_sum * target_sum).clamp(min=self.epsilon), requires_grad=False)
+        class_weights = Variable(
+            1.0 / (target_sum * target_sum).clamp(min=self.epsilon), requires_grad=False
+        )
 
         intersect = (input * target).sum(-1) * class_weights
         if self.weight is not None:
@@ -184,16 +227,15 @@ class GeneralizedDiceLoss(nn.Module):
 
         denominator = (input + target).sum(-1) * class_weights
 
-        return torch.mean(1. - 2. * intersect / denominator.clamp(min=self.epsilon))
+        return torch.mean(1.0 - 2.0 * intersect / denominator.clamp(min=self.epsilon))
 
 
 class WeightedCrossEntropyLoss(nn.Module):
-    """WeightedCrossEntropyLoss (WCE) as described in https://arxiv.org/pdf/1707.03237.pdf
-    """
+    """WeightedCrossEntropyLoss (WCE) as described in https://arxiv.org/pdf/1707.03237.pdf"""
 
     def __init__(self, weight=None, ignore_index=-1):
         super(WeightedCrossEntropyLoss, self).__init__()
-        self.register_buffer('weight', weight)
+        self.register_buffer("weight", weight)
         self.ignore_index = ignore_index
 
     def forward(self, input, target):
@@ -201,14 +243,16 @@ class WeightedCrossEntropyLoss(nn.Module):
         if self.weight is not None:
             weight = Variable(self.weight, requires_grad=False)
             class_weights = class_weights * weight
-        return F.cross_entropy(input, target, weight=class_weights, ignore_index=self.ignore_index)
+        return F.cross_entropy(
+            input, target, weight=class_weights, ignore_index=self.ignore_index
+        )
 
     @staticmethod
     def _class_weights(input):
         # normalize the input first
         input = F.softmax(input, _stacklevel=5)
         flattened = flatten(input)
-        nominator = (1. - flattened).sum(-1)
+        nominator = (1.0 - flattened).sum(-1)
         denominator = flattened.sum(-1)
         class_weights = Variable(nominator / denominator, requires_grad=False)
         return class_weights
@@ -220,8 +264,10 @@ class BCELossWrapper:
     """
 
     def __init__(self, loss_criterion, ignore_index=-1, skip_last_target=False):
-        if hasattr(loss_criterion, 'ignore_index'):
-            raise RuntimeError(f"Cannot wrap {type(loss_criterion)}. Use 'ignore_index' attribute instead")
+        if hasattr(loss_criterion, "ignore_index"):
+            raise RuntimeError(
+                f"Cannot wrap {type(loss_criterion)}. Use 'ignore_index' attribute instead"
+            )
         self.loss_criterion = loss_criterion
         self.ignore_index = ignore_index
         self.skip_last_target = skip_last_target
@@ -247,7 +293,7 @@ class BCELossWrapper:
 class PixelWiseCrossEntropyLoss(nn.Module):
     def __init__(self, class_weights=None, ignore_index=None):
         super(PixelWiseCrossEntropyLoss, self).__init__()
-        self.register_buffer('class_weights', class_weights)
+        self.register_buffer("class_weights", class_weights)
         self.ignore_index = ignore_index
         self.log_softmax = nn.LogSoftmax(dim=1)
 
@@ -256,14 +302,18 @@ class PixelWiseCrossEntropyLoss(nn.Module):
         # normalize the input
         log_probabilities = self.log_softmax(input)
         # standard CrossEntropyLoss requires the target to be (NxDxHxW), so we need to expand it to (NxCxDxHxW)
-        target = expand_as_one_hot(target, C=input.size()[1], ignore_index=self.ignore_index)
+        target = expand_as_one_hot(
+            target, C=input.size()[1], ignore_index=self.ignore_index
+        )
         # expand weights
         weights = weights.unsqueeze(0)
         weights = weights.expand_as(input)
 
         # mask ignore_index if present
         if self.ignore_index is not None:
-            mask = Variable(target.data.ne(self.ignore_index).float(), requires_grad=False)
+            mask = Variable(
+                target.data.ne(self.ignore_index).float(), requires_grad=False
+            )
             log_probabilities = log_probabilities * mask
             target = target * mask
 
