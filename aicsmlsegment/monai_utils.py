@@ -15,10 +15,17 @@ from torch.utils.data import DataLoader
 from torch.optim import Adam
 import numpy as np
 
-SUPPORTED_MONAI_MODELS = [
-    "BasicUNet",
+SUPPORTED_LOSSES = [
+    "ElementNLLLoss",
+    "MultiAuxillaryElementNLLLoss",
+    "MultiTaskElementNLLLoss",
+    "ElementAngularMSELoss",
+    "DiceLoss",
+    "GeneralizedDiceLoss",
+    "WeightedCrossEntropyLoss",
+    "PixelWiseCrossEntropyLoss",
+    "BCELoss",
 ]
-SUPPORTED_LOSSES = ["Aux"]
 
 
 class Monai_BasicUNet(pytorch_lightning.LightningModule):
@@ -30,10 +37,11 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
             out_channels=config["nclass"],
             norm=Norm.BATCH,
         )
-        self.args_inference = lambda: None
 
+        self.loss_function = DiceLoss()  # config["loss"]["name"]
+
+        self.args_inference = lambda: None
         if train:
-            self.loss_function = DiceLoss()  # config["loss"]["name"]
             self.datapath = config["loader"]["datafolder"]
             self.leaveout = config["validation"]["leaveout"]
             self.nworkers = config["loader"]["NumWorkers"]
@@ -102,15 +110,20 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
 class DataModule(pytorch_lightning.LightningDataModule):
     def __init__(self, config):
         super().__init__()
-
+        assert "loader" in config, "Could not loader configuration"
         self.config = config
         self.loader_config = config["loader"]
+
+        name = config["loader"]["name"]
+        if name != "default":
+            print("other loaders are under construction")
+            quit()
 
     def prepare_data(self):
         pass
 
     def setup(self, stage):
-        ### load settings ###
+        # load settings #
         config = self.config  # TODO, fix this
 
         # dataloader
@@ -148,7 +161,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
 
         else:
             # TODO, update here
-            print("need validation")
+            print("need validation in config file")
             quit()
 
     def train_dataloader(self):

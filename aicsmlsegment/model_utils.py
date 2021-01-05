@@ -3,13 +3,6 @@ import torch
 from torch.autograd import Variable
 
 
-def weights_init(m):
-    classname = m.__class__.__name__
-    if classname.find("Conv3d") != -1:
-        torch.nn.init.kaiming_normal_(m.weight)
-        m.bias.data.zero_()
-
-
 def apply_on_image(model, input_img, softmax, args):
 
     if not args.RuntimeAug:
@@ -73,8 +66,9 @@ def model_inference(model, input_img, softmax, args):
         img_pad0 = np.pad(
             input_img,
             ((0, 0), (0, 0), (padding[1], padding[1]), (padding[2], padding[2])),
-            "symmetric",
-        )  #'constant')
+            "symmetric",  # 'constant')
+        )
+
         img_pad = np.pad(
             img_pad0, ((0, 0), (padding[0], padding[0]), (0, 0), (0, 0)), "constant"
         )

@@ -1,6 +1,6 @@
-from torch.autograd import Variable, Function
-import torch.optim as optim
+from torch.autograd import Variable
 import torch.nn as nn
+import torch.functional as F
 import torch
 import numpy as np
 
@@ -35,8 +35,8 @@ class MultiAuxillaryElementNLLLoss(torch.nn.Module):
         self.weight = weight
 
         self.criteria_list = []
-        for nn in range(self.num_task):
-            self.criteria_list.append(ElementNLLLoss(num_class[nn]))
+        for n in range(self.num_task):
+            self.criteria_list.append(ElementNLLLoss(num_class[n]))
 
     def forward(self, input, target, cmap):
         print(input.shape)
@@ -46,9 +46,9 @@ class MultiAuxillaryElementNLLLoss(torch.nn.Module):
             input[0], target.view(target.numel()), cmap.view(cmap.numel())
         )
 
-        for nn in np.arange(1, self.num_task):
-            total_loss = total_loss + self.weight[nn] * self.criteria_list[nn](
-                input[nn], target.view(target.numel()), cmap.view(cmap.numel())
+        for n in np.arange(1, self.num_task):
+            total_loss = total_loss + self.weight[n] * self.criteria_list[n](
+                input[n], target.view(target.numel()), cmap.view(cmap.numel())
             )
 
         return total_loss
@@ -61,8 +61,8 @@ class MultiTaskElementNLLLoss(torch.nn.Module):
         self.weight = weight
 
         self.criteria_list = []
-        for nn in range(self.num_task):
-            self.criteria_list.append(ElementNLLLoss(num_class[nn]))
+        for n in range(self.num_task):
+            self.criteria_list.append(ElementNLLLoss(num_class[n]))
 
     def forward(self, input, target, cmap):
 
@@ -72,9 +72,9 @@ class MultiTaskElementNLLLoss(torch.nn.Module):
             input[0], target[0].view(target[0].numel()), cmap.view(cmap.numel())
         )
 
-        for nn in np.arange(1, self.num_task):
-            total_loss = total_loss + self.weight[nn] * self.criteria_list[nn](
-                input[nn], target[nn].view(target[nn].numel()), cmap.view(cmap.numel())
+        for n in np.arange(1, self.num_task):
+            total_loss = total_loss + self.weight[n] * self.criteria_list[n](
+                input[n], target[n].view(target[n].numel()), cmap.view(cmap.numel())
             )
 
         return total_loss

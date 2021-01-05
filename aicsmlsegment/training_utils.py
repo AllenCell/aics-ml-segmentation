@@ -30,15 +30,6 @@ from aicsmlsegment.utils import (
 SUPPORTED_LOSSES = ["Aux"]
 
 
-def build_optimizer(config, model):
-    learning_rate = config["learning_rate"]
-    weight_decay = config["weight_decay"]
-    optimizer = optim.Adam(
-        model.parameters(), lr=learning_rate, weight_decay=weight_decay
-    )
-    return optimizer
-
-
 def get_loss_criterion(config):
     """
     Returns the loss function based on provided configuration
@@ -59,18 +50,6 @@ def get_loss_criterion(config):
         return MultiAuxillaryElementNLLLoss(
             3, loss_config["loss_weight"], config["nclass"]
         )
-
-
-def get_train_dataloader(config):
-    assert "loader" in config, "Could not loader configuration"
-    name = config["loader"]["name"]
-    if name == "default":
-        from DataLoader3D.Universal_Loader import RR_FH_M0 as train_loader
-
-        return train_loader
-    else:
-        print("other loaders are under construction")
-        quit()
 
 
 def shuffle_split_filenames(datafolder, leaveout):

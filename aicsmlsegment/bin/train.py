@@ -10,7 +10,6 @@ from aicsmlsegment.monai_utils import Monai_BasicUNet, DataModule
 SUPPORTED_MONAI_MODELS = [
     "BasicUNet",
 ]
-SUPPORTED_LOSSES = ["Aux"]
 
 
 def main():
@@ -54,7 +53,7 @@ def main():
         gpus=[0],
         max_epochs=config["epochs"],
         check_val_every_n_epoch=config["validation"]["validate_every_n_epoch"],
-        num_sanity_val_steps=1,
+        num_sanity_val_steps=0,
         callbacks=callbacks,
     )
     data_module = DataModule(config)
