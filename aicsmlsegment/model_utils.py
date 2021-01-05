@@ -1,13 +1,6 @@
 import numpy as np
 import torch
 from torch.autograd import Variable
-import time
-import logging
-import os
-import shutil
-import sys
-
-from aicsmlsegment.utils import get_logger
 
 
 def weights_init(m):
@@ -22,8 +15,6 @@ def apply_on_image(model, input_img, softmax, args):
     if not args.RuntimeAug:
         return model_inference(model, input_img, softmax, args)
     else:
-        from PIL import Image
-
         print("doing runtime augmentation")
 
         input_img_aug = input_img.copy()
@@ -31,7 +22,8 @@ def apply_on_image(model, input_img, softmax, args):
             str_im = input_img_aug[ch_idx, :, :, :]
             input_img_aug[ch_idx, :, :, :] = np.flip(str_im, axis=2)
 
-        out1 = model_inference(model, input_img_aug, softmax, args)
+        input_img_aug_tensor = torch.from_numpy(input_img_aug.astype(float)).float()
+        out1 = model_inference(model, input_img_aug_tensor, softmax, args)
 
         input_img_aug = []
         input_img_aug = input_img.copy()
@@ -39,7 +31,8 @@ def apply_on_image(model, input_img, softmax, args):
             str_im = input_img_aug[ch_idx, :, :, :]
             input_img_aug[ch_idx, :, :, :] = np.flip(str_im, axis=1)
 
-        out2 = model_inference(model, input_img_aug, softmax, args)
+        input_img_aug_tensor = torch.from_numpy(input_img_aug.astype(float)).float()
+        out2 = model_inference(model, input_img_aug_tensor, softmax, args)
 
         input_img_aug = []
         input_img_aug = input_img.copy()
@@ -47,9 +40,11 @@ def apply_on_image(model, input_img, softmax, args):
             str_im = input_img_aug[ch_idx, :, :, :]
             input_img_aug[ch_idx, :, :, :] = np.flip(str_im, axis=0)
 
-        out3 = model_inference(model, input_img_aug, softmax, args)
+        input_img_aug_tensor = torch.from_numpy(input_img_aug.astype(float)).float()
+        out3 = model_inference(model, input_img_aug_tensor, softmax, args)
 
-        out0 = model_inference(model, input_img, softmax, args)
+        input_img_tensor = torch.from_numpy(input_img.astype(float)).float()
+        out0 = model_inference(model, input_img_tensor, softmax, args)
 
         for ch_idx in range(len(out0)):
             out0[ch_idx] = 0.25 * (
@@ -69,7 +64,10 @@ def model_inference(model, input_img, softmax, args):
     if args.size_in == args.size_out:
         # print("expand dims")
         # img_pad = np.expand_dims(input_img, axis=0)  # add batch dimension
-        img_pad = input_img.numpy()
+        if not type(input_img) is np.ndarray:
+            img_pad = input_img.numpy()
+        else:
+            img_pad = input_img
     else:  # zero padding on input image
         padding = [(x - y) // 2 for x, y in zip(args.size_in, args.size_out)]
         img_pad0 = np.pad(
@@ -119,8 +117,8 @@ def model_inference(model, input_img, softmax, args):
                     ).float()
 
                     tmp_out = model(Variable(input_img_tensor.cuda()).unsqueeze(0))
+                    label = tmp_out[:, args.OutputCh, :, :, :]
 
-                    label = tmp_out[args.OutputCh]
                     prob = softmax(label)
 
                     out_flat_tensor = prob.cpu().data.float()
@@ -129,16 +127,16 @@ def model_inference(model, input_img, softmax, args):
                         args.size_out[0],
                         args.size_out[1],
                         args.size_out[2],
-                        args.nclass,
+                        # args.nclass,
                     )
                     out_nda = out_tensor.numpy()
-
                     output_img[
                         0,
                         za : (za + args.size_out[0]),
                         ya : (ya + args.size_out[1]),
                         xa : (xa + args.size_out[2]),
-                    ] = out_nda[:, :, :, args.OutputCh]
+                    ] = out_nda[:, :, :]
+                    # args.OutputCh]
 
     return torch.from_numpy(output_img).cuda()
 

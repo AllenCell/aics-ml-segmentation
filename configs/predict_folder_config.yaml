@@ -2,33 +2,33 @@
 # model settings
 ##########################################################################################################
 model: 
-  name: unet_xy
+  name: BasicUNet
 # path to the trained model
-model_path: '/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_saved_model_iter_2/checkpoint_epoch_400.pytorch'
+model_path: '//allen/aics/assay-dev/users/Jianxu/Tasks/test_segmenter_bug/models/checkpoint_epoch=2-v4.ckpt'
 # number of input channels to the model
 nchannel: 1
 # number of output channels
-nclass: [2,2,2]
+nclass: 2
 # the channel to extract from output tensors
-OutputCh: [0, 1]
+OutputCh: 1
 # input patch size given to the network (adapt to fit in your GPU memory, generally bigger patches are better)
-size_in: [88, 180, 180] #[62, 420, 420]
+size_in: [32, 210, 210] #[64, 420, 420]
 # prediction patch size from the network (change according to input size)
-size_out: [60, 92, 92] # [30, 152, 152]
+size_out: [32, 210, 210]  #[64, 420, 420]
 
 ##########################################################################################################
 # Data Info
 ##########################################################################################################
 # the path to output folder
-OutputDir: '/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_test/400'
+OutputDir: '/allen/aics/assay-dev/users/Jianxu/Tasks/test_segmenter_bug/'
 # the index of the input channel
-InputCh: [0]
+InputCh: [1] # 1
 # the ratio to resize the image
 ResizeRatio: [1.0, 1.0, 1.0]
 # the method to normalize your data
-Normalization: 10
+Normalization: 13
 # the threshold to be applied on your data
-Threshold: 0.5 #0.5 # 0.3
+Threshold: -1 #0.5 # 0.3
 # whether to use run time augmentation (may improve the accuracy, but takes much longer to run)
 RuntimeAug: False
 
@@ -38,9 +38,6 @@ RuntimeAug: False
 mode:
   name: folder
   # paths to the file
-  InputDir: '/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_test'
+  InputDir: '/allen/aics/assay-dev/users/Jianxu/data/training_assay_caax_cellmask/quick_test_caax'
   # the type of images to be processed in this folder
-  DataType: .tiff
-  
-  
-  
+  DataType: .tiff #1869_100X_20180327_2r-Scene-14-P47-F04.ome.tiff

@@ -2,8 +2,7 @@
 # model settings
 ##########################################################################################################
 model: 
-  name: unet_xy_zoom #BasicUNet
-  zoom_ratio: 3
+  name: BasicUNet
 # number of input channels to the model
 nchannel: 1
 # number of output channels, 
@@ -65,6 +64,6 @@ validation:
   # the channel to extract from output tensors
   # this is a list of even number of integers [out_1, ch_1, out_2, ch_2, ...]
   # means taking out_1'th tensor from the output list and get the ch_1'th channel from this tensor as output
-  OutputCh: 0
+  OutputCh: 1
   # how many iterations between validations
   validate_every_n_epoch: 1
