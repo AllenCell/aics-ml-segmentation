@@ -2,10 +2,16 @@ import pytorch_lightning
 from torch.utils.data import DataLoader
 from torch.optim import Adam
 import torch
-import torch.distributed as dist
+import pathlib
+import os
+
+# import torch.distributed as dist
+from skimage.io import imsave
+
 
 from monai.networks.layers import Norm
 from monai.networks.nets import BasicUNet
+from monai.inferers import sliding_window_inference
 
 import aicsmlsegment.custom_loss as CustomLosses
 from aicsmlsegment.model_utils import (
@@ -44,7 +50,6 @@ def get_loss_criterion(config):
 
     # ignore_index = loss_config.get('ignore_index', None)
 
-    # TODO: add more loss functions
     if name == "Aux":
         return (
             CustomLosses.MultiAuxillaryElementNLLLoss(
@@ -85,7 +90,6 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
             out_channels=config["nclass"],
             norm=Norm.BATCH,
         )
-
         self.args_inference = lambda: None
         if train:
             assert "loader" in config, "loader required"
@@ -130,14 +134,18 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         inputs = batch[0].cuda()
         targets = batch[1]
         outputs = self.forward(inputs)
+
         # select output channel
         outputs = outputs[:, self.args_inference.OutputCh, :, :, :]
+        outputs = torch.unsqueeze(outputs, dim=1)  # add channel dimension
 
+        # bring to cuda
         if len(targets) > 1:
             for zidx in range(len(targets)):
                 targets[zidx] = targets[zidx].cuda()
-        else:
+        else:  # batch size  =1
             targets = targets[0].cuda()
+
         if self.accepts_costmap:  # input + target + cmap
             cmap = batch[2].cuda()
             loss = self.loss_function(outputs, targets, cmap)
@@ -148,7 +156,7 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
 
     def training_epoch_end(self, outputs):
         avg_loss = torch.stack([x["loss"] for x in outputs]).mean()
-        self.log("loss", avg_loss, prog_bar=True)
+        self.log("train_loss", avg_loss, prog_bar=True)
 
     def validation_step(self, batch, batch_idx):
         input_img = batch[0].cuda()
@@ -156,30 +164,62 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
 
         if len(input_img.shape) == 3:
             # add channel dimension
+            print("Add channel dimension")
             input_img = np.expand_dims(input_img, axis=0)
         elif len(input_img.shape) == 4:
             # assume number of channel < number of Z, make sure channel dim comes first
+            print("switch z and c dimensions")
             if input_img.shape[0] > input_img.shape[1]:
                 input_img = np.transpose(input_img, (1, 0, 2, 3))
 
-        outputs = model_inference(
-            self.model,
-            input_img[0].cpu(),
-            torch.nn.Softmax(dim=1),
-            self.args_inference,
+        # outputs = model_inference(
+        #     self.model,
+        #     input_img[0].cpu(),
+        #     torch.nn.Softmax(dim=1),
+        #     self.args_inference,
+        # )
+
+        outputs = sliding_window_inference(
+            input_img, self.args_inference.size_out, 1, self.forward
         )
+        outputs = outputs[:, self.args_inference.OutputCh, :, :, :]
+        outputs = torch.unsqueeze(outputs, dim=1)  # add back in channel dimension
+
+        # imsave(
+        #     "/allen/aics/assay-dev/users/Benji/mlsegmenter_output"
+        #     + os.sep
+        #     + pathlib.PurePosixPath("val_input").stem
+        #     + ".tiff",
+        #     input_img.data.cpu().numpy(),
+        # )
+        # imsave(
+        #     "/allen/aics/assay-dev/users/Benji/mlsegmenter_output"
+        #     + os.sep
+        #     + pathlib.PurePosixPath("val_target").stem
+        #     + ".tiff",
+        #     label.data.cpu().numpy(),
+        # )
+        # imsave(
+        #     "/allen/aics/assay-dev/users/Benji/mlsegmenter_output"
+        #     + os.sep
+        #     + pathlib.PurePosixPath("val_outputs").stem
+        #     + ".tiff",
+        #     outputs.data.cpu().numpy(),
+        # )
 
         if self.accepts_costmap:
             costmap = batch[2].cuda()
-            val_loss = self.loss_function(outputs, torch.squeeze(label, dim=1), costmap)
+            val_loss = self.loss_function(
+                outputs, label, costmap
+            )  # remove batch size channel
         else:
-            val_loss = self.loss_function(outputs, torch.squeeze(label, dim=1))
+            val_loss = self.loss_function(outputs, label)
 
         return {"val_loss": val_loss}
 
     def validation_epoch_end(self, outputs):
         avg_loss = torch.stack([x["val_loss"] for x in outputs]).mean()
-        self.log("val_loss", avg_loss, prog_bar=True)
+        self.log("avg_val_loss", avg_loss, prog_bar=True)
 
 
 class DataModule(pytorch_lightning.LightningDataModule):
@@ -190,7 +230,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
         self.loader_config = config["loader"]
 
         name = config["loader"]["name"]
-        if name != "default":
+        if name != "default" and name != "focus":
             print("other loaders are under construction")
             quit()
 
@@ -253,6 +293,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
                     loader_config["PatchPerBuffer"],
                     config["size_in"],
                     config["size_out"],
+                    config["nchannel"],
                 ),
                 num_workers=loader_config["NumWorkers"],
                 batch_size=loader_config["batch_size"],
@@ -269,6 +310,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
                     loader_config["PatchPerBuffer"],
                     config["size_in"],
                     config["size_out"],
+                    config["nchannel"],
                 ),
                 num_workers=loader_config["NumWorkers"],
                 batch_size=loader_config["batch_size"],
@@ -288,6 +330,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
                 self.loader_config["PatchPerBuffer"],
                 self.config["size_in"],
                 self.config["size_out"],
+                self.config["nchannel"],
             ),
             num_workers=self.loader_config["NumWorkers"],
             batch_size=1,

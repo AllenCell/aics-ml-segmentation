@@ -45,6 +45,7 @@ def load_img(filename, img_type, n_channel):
 
 class RR_FH_M0(Dataset):
     def __init__(self, filenames, num_patch, size_in, size_out, n_channel):
+        print("Performing training augmentation...")
 
         self.img = []
         self.gt = []
@@ -196,6 +197,7 @@ class RR_FH_M0(Dataset):
 
 class RR_FH_M0C(Dataset):
     def __init__(self, filenames, num_patch, size_in, size_out, n_channel):
+        print("Performing training augmentation...")
 
         self.img = []
         self.gt = []
@@ -362,6 +364,7 @@ class RR_FH_M0C(Dataset):
 
 class NOAUG_M(Dataset):
     def __init__(self, filenames, num_patch, size_in, size_out, n_channel):
+        print("Loading validation data ...")
 
         self.img = []
         self.gt = []

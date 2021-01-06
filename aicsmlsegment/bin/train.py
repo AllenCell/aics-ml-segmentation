@@ -53,11 +53,17 @@ def main():
         gpus=[0],
         max_epochs=config["epochs"],
         check_val_every_n_epoch=config["validation"]["validate_every_n_epoch"],
-        num_sanity_val_steps=0,
+        num_sanity_val_steps=1,
         callbacks=callbacks,
     )
     data_module = DataModule(config)
     trainer.fit(model, data_module)
+    print(
+        "The best performing checkpoint is",
+        trainer.best_model_path,
+        "with score",
+        trainer.best_model_score,
+    )
 
 
 if __name__ == "__main__":

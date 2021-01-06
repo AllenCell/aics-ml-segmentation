@@ -20,17 +20,17 @@ resume: #'//allen/aics/assay-dev/users/Jianxu/Tasks/test_segmenter_bug/models/ch
 # training precedure setting
 ##########################################################################################################
 # initial learning rate
-learning_rate: 0.001
+learning_rate: 0.00001
 # weight decay
 weight_decay: 0.005
 # max number of epochs
 epochs: 501
 # number of epoch to save the model
-save_every_n_epoch: 100
+save_every_n_epoch: 1
 # loss function configuration
 loss:
   # loss function to be used during training 
-  name: Dice
+  name: GeneralizedDice
   # A manual rescaling weight given to each auxilluary loss.
   loss_weight: [1, 1, 1]
   # a target value that is ignored and does not contribute to the input gradient
@@ -44,7 +44,7 @@ loader:
   # paths to the training datasets
   datafolder: '//allen/aics/assay-dev/users/Jianxu/data/training_assay_caax_cellmask/training_data/initial_caax_model_better_top'
   # number of batch in each training iteration (related to patch size and GPU memory)
-  batch_size: 1
+  batch_size: 4
   # number of patches loaded to cache 
   PatchPerBuffer: 16
   # number of epoches for every time the patches in cache are cleared and resampled (smaller = heavier i/o, larger = higher chance of overfitting)
