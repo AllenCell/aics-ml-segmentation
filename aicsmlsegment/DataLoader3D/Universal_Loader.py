@@ -1,5 +1,4 @@
 import numpy as np
-from PIL import Image
 import random
 from tqdm import tqdm
 from torch import from_numpy, Tensor, unsqueeze, cat
@@ -23,8 +22,29 @@ from torchio.transforms import RandomAffine
 #       DD = Dense Deformation (TODO)
 
 
+def load_img(filename, img_type, n_channel):
+    extension_dict = {
+        "label": "_GT.ome.tif",
+        "input": ".ome.tif",
+        "costmap": "_CM.ome.tif",
+    }
+    reader = AICSImage(filename + extension_dict[img_type])
+    if img_type == "label" or img_type == "input":
+        img = reader.get_image_data("CZYX", S=0, T=0)
+
+        # Legacy aicsimageio - image stored as zcyx
+        if img.shape[0] != n_channel and img.shape[1] == n_channel:
+            print(img.shape)
+            img = np.swapaxes(0, 1)
+            print(filename, "RESHAPE TO:", img.shape)
+    elif img_type == "costmap":
+        img = reader.get_image_data("ZYX", S=0, T=0, C=0)
+
+    return img
+
+
 class RR_FH_M0(Dataset):
-    def __init__(self, filenames, num_patch, size_in, size_out):
+    def __init__(self, filenames, num_patch, size_in, size_out, n_channel):
 
         self.img = []
         self.gt = []
@@ -36,9 +56,9 @@ class RR_FH_M0(Dataset):
         shuffle(filenames)
         num_patch_per_img = np.zeros((num_data,), dtype=int)
         if num_data >= num_patch:
-            # all one
+            # take one patch from each image
             num_patch_per_img[:num_patch] = 1
-        else:
+        else:  # assign how many patches to take form each img
             basic_num = num_patch // num_data
             # assign each image the same number of patches to extract
             num_patch_per_img[:] = basic_num
@@ -48,39 +68,43 @@ class RR_FH_M0(Dataset):
                 num_patch_per_img[: (num_patch - basic_num * num_data)] + 1
             )
 
+        # extract patches from images until num_patch reached
         for img_idx, fn in enumerate(filenames):
 
             if len(self.img) == num_patch:
                 break
 
-            label_reader = AICSImage(fn + "_GT.ome.tif")
-            label = label_reader.get_image_data("CZYX", S=0, T=0)
+            label = load_img(fn, img_type="label", n_channel=n_channel)
+            input_img = load_img(fn, img_type="input", n_channel=n_channel)
+            costmap = load_img(fn, img_type="costmap", n_channel=n_channel)
 
-            input_reader = AICSImage(fn + ".ome.tif")
-            input_img = input_reader.get_image_data("CZYX", S=0, T=0)
-
-            costmap_reader = AICSImage(fn + "_CM.ome.tif")
-            costmap = costmap_reader.get_image_data("ZYX", S=0, T=0, C=0)
-
+            # adjust input image to match size_out
             img_pad0 = np.pad(
                 input_img,
-                ((0, 0), (0, 0), (padding[1], padding[1]), (padding[2], padding[2])),
+                (
+                    (0, 0),
+                    (0, 0),
+                    (padding[1], padding[1]),
+                    (padding[2], padding[2]),
+                ),
                 "constant",
             )
             raw = np.pad(
-                img_pad0, ((0, 0), (padding[0], padding[0]), (0, 0), (0, 0)), "constant"
+                img_pad0,
+                ((0, 0), (padding[0], padding[0]), (0, 0), (0, 0)),
+                "constant",
             )
 
             cost_scale = costmap.max()
-            if cost_scale < 1:  ## this should not happen, but just in case
+            if cost_scale < 1:  # this should not happen, but just in case
                 cost_scale = 1
 
             # random flip
             flip_flag = random.random()
             if flip_flag < 0.5:
-                raw = np.flip(raw, axis=-1)
-                costmap = np.flip(costmap, axis=-1)
-                label = np.flip(label, axis=-1)
+                raw = np.flip(raw, axis=-1).copy()  # avoid negative stride error
+                costmap = np.flip(costmap, axis=-1).copy()
+                label = np.flip(label, axis=-1).copy()
 
             # random rotation
             deg = random.randrange(1, 180)
@@ -111,8 +135,9 @@ class RR_FH_M0(Dataset):
                 np.transpose(np.expand_dims(costmap, axis=0), (0, 3, 2, 1))
             )
             costmap = np.transpose(out_map[0, :, :, :], (2, 1, 0))
-            new_patch_num = 0
 
+            # take specified number of patches from current image
+            new_patch_num = 0
             while new_patch_num < num_patch_per_img[img_idx]:
 
                 pz = random.randint(0, label.shape[1] - size_out[0])
@@ -159,6 +184,7 @@ class RR_FH_M0(Dataset):
         else:
             label_tensor.append(from_numpy(self.gt[index].astype(float)).float())
 
+        # convert to tensor
         label_tensor_2 = Tensor(self.gt[index].shape)
         label_tensor = unsqueeze(cat(label_tensor, out=label_tensor_2), 0)
 
@@ -169,7 +195,7 @@ class RR_FH_M0(Dataset):
 
 
 class RR_FH_M0C(Dataset):
-    def __init__(self, filenames, num_patch, size_in, size_out):
+    def __init__(self, filenames, num_patch, size_in, size_out, n_channel):
 
         self.img = []
         self.gt = []
@@ -208,22 +234,9 @@ class RR_FH_M0C(Dataset):
                 if len(self.img) == num_patch:
                     break
 
-                label_reader = AICSImage(fn + "_GT.ome.tif")
-                label = label_reader.get_image_data("CZYX", S=0, T=0)
-                # HACK
-                label = np.squeeze(label)
-                label = np.expand_dims(label, axis=0)
-
-                input_reader = AICSImage(fn + ".ome.tif")
-                input_img = input_reader.get_image_data("CZYX", S=0, T=0)
-                # HACK
-                input_img = np.squeeze(input_img)
-                input_img = np.expand_dims(input_img, axis=0)
-
-                costmap_reader = AICSImage(fn + "_CM.ome.tif")
-                costmap = costmap_reader.get_image_data("CZYX", S=0, T=0)
-                # HACK
-                costmap = np.squeeze(costmap)
+                label = load_img(fn, img_type="label", n_channel=n_channel)
+                input_img = load_img(fn, img_type="input", n_channel=n_channel)
+                costmap = load_img(fn, img_type="costmap", n_channel=n_channel)
 
                 img_pad0 = np.pad(
                     input_img,
@@ -248,9 +261,9 @@ class RR_FH_M0C(Dataset):
                 # random flip
                 flip_flag = random.random()
                 if flip_flag < 0.5:
-                    raw = np.flip(raw, axis=-1)
-                    costmap = np.flip(costmap, axis=-1)
-                    label = np.flip(label, axis=-1)
+                    raw = np.flip(raw, axis=-1).copy()
+                    costmap = np.flip(costmap, axis=-1).copy()
+                    label = np.flip(label, axis=-1).copy()
 
                 # random rotation
                 deg = random.randrange(1, 180)
@@ -348,7 +361,7 @@ class RR_FH_M0C(Dataset):
 
 
 class NOAUG_M(Dataset):
-    def __init__(self, filenames, num_patch, size_in, size_out):
+    def __init__(self, filenames, num_patch, size_in, size_out, n_channel):
 
         self.img = []
         self.gt = []
@@ -374,14 +387,9 @@ class NOAUG_M(Dataset):
 
         for img_idx, fn in enumerate(filenames):
 
-            label_reader = AICSImage(fn + "_GT.ome.tif")
-            label = label_reader.get_image_data("CZYX", S=0, T=0)
-
-            input_reader = AICSImage(fn + ".ome.tif")
-            input_img = input_reader.get_image_data("CZYX", S=0, T=0)
-
-            costmap_reader = AICSImage(fn + "_CM.ome.tif")
-            costmap = costmap_reader.get_image_data("ZYX", S=0, T=0, C=0)
+            label = load_img(fn, img_type="label", n_channel=n_channel)
+            input_img = load_img(fn, img_type="input", n_channel=n_channel)
+            costmap = load_img(fn, img_type="costmap", n_channel=n_channel)
 
             img_pad0 = np.pad(
                 input_img,
