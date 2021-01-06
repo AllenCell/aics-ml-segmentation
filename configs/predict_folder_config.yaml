@@ -4,7 +4,7 @@
 model: 
   name: BasicUNet
 # path to the trained model
-model_path: '//allen/aics/assay-dev/users/Jianxu/Tasks/test_segmenter_bug/models/checkpoint_epoch=2-v4.ckpt'
+model_path: '/allen/aics/assay-dev/users/Benji/model_checkpoints/checkpoint_epoch=30.ckpt'
 # number of input channels to the model
 nchannel: 1
 # number of output channels
@@ -20,7 +20,7 @@ size_out: [32, 210, 210]  #[64, 420, 420]
 # Data Info
 ##########################################################################################################
 # the path to output folder
-OutputDir: '/allen/aics/assay-dev/users/Jianxu/Tasks/test_segmenter_bug/'
+OutputDir: '/allen/aics/assay-dev/users/Benji/mlsegmenter_output'
 # the index of the input channel
 InputCh: [1] # 1
 # the ratio to resize the image

@@ -2,15 +2,11 @@
 # from torch import nn as nn
 # from torch.autograd import Variable
 import logging
-import os
 
 import numpy as np
-import torch
-from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
 import torch.optim as optim
-import importlib
 import random
 from glob import glob
 from tqdm import tqdm
@@ -18,38 +14,11 @@ from tqdm import tqdm
 from aicsimageio import imread
 
 from aicsmlsegment.custom_loss import MultiAuxillaryElementNLLLoss
-from aicsmlsegment.custom_metrics import DiceCoefficient, MeanIoU, AveragePrecision
-from aicsmlsegment.model_utils import load_checkpoint, save_checkpoint, model_inference
+from aicsmlsegment.model_utils import save_checkpoint, model_inference
 from aicsmlsegment.utils import (
     compute_iou,
     get_logger,
-    load_single_image,
-    input_normalization,
 )
-
-SUPPORTED_LOSSES = ["Aux"]
-
-
-def get_loss_criterion(config):
-    """
-    Returns the loss function based on provided configuration
-    :param config: (dict) a top level configuration object containing the 'loss' key
-    :return: an instance of the loss function
-    """
-    assert "loss" in config, "Could not find loss function configuration"
-    loss_config = config["loss"]
-    name = loss_config["name"]
-    assert (
-        name in SUPPORTED_LOSSES
-    ), f"Invalid loss: {name}. Supported losses: {SUPPORTED_LOSSES}"
-
-    # ignore_index = loss_config.get('ignore_index', None)
-
-    # TODO: add more loss functions
-    if name == "Aux":
-        return MultiAuxillaryElementNLLLoss(
-            3, loss_config["loss_weight"], config["nclass"]
-        )
 
 
 def shuffle_split_filenames(datafolder, leaveout):

@@ -12,7 +12,7 @@ size_in:   [26, 210, 210] # [52, 420, 420]
 # prediction patch size from the network (change according to input size)
 size_out:   [26, 210, 210] #[52, 420, 420] #[20, 152, 152] 
 # path to save the checkpoint
-checkpoint_dir: '/allen/aics/assay-dev/users/Jianxu/Tasks/test_segmenter_bug/models'
+checkpoint_dir: '/allen/aics/assay-dev/users/Benji/model_checkpoints/'
 # path to latest checkpoint; if provided the training will be resumed from that checkpoint
 resume: #'//allen/aics/assay-dev/users/Jianxu/Tasks/test_segmenter_bug/models/checkpoint_epoch=64.ckpt'
 
@@ -20,17 +20,17 @@ resume: #'//allen/aics/assay-dev/users/Jianxu/Tasks/test_segmenter_bug/models/ch
 # training precedure setting
 ##########################################################################################################
 # initial learning rate
-learning_rate: 0.00001
+learning_rate: 0.001
 # weight decay
 weight_decay: 0.005
 # max number of epochs
-epochs: 100
+epochs: 501
 # number of epoch to save the model
-save_every_n_epoch: 1
+save_every_n_epoch: 100
 # loss function configuration
 loss:
-  # loss function to be used during training (Aux - Training with auxillary loss)
-  name: Aux
+  # loss function to be used during training 
+  name: Dice
   # A manual rescaling weight given to each auxilluary loss.
   loss_weight: [1, 1, 1]
   # a target value that is ignored and does not contribute to the input gradient
@@ -62,8 +62,6 @@ validation:
   # how to make the validation set (only used if metric is not None)
   leaveout: [0]
   # the channel to extract from output tensors
-  # this is a list of even number of integers [out_1, ch_1, out_2, ch_2, ...]
-  # means taking out_1'th tensor from the output list and get the ch_1'th channel from this tensor as output
   OutputCh: 1
   # how many iterations between validations
   validate_every_n_epoch: 1

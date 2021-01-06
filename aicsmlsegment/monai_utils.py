@@ -1,55 +1,110 @@
-from glob import glob
 import pytorch_lightning
+from torch.utils.data import DataLoader
+from torch.optim import Adam
+import torch
+import torch.distributed as dist
+
 from monai.networks.layers import Norm
 from monai.networks.nets import BasicUNet
 
-from torch import nn, squeeze
-
+import aicsmlsegment.custom_loss as CustomLosses
 from aicsmlsegment.model_utils import (
     model_inference,
 )
-import random
 
-from aicsmlsegment.custom_loss import DiceLoss
-from torch.utils.data import DataLoader
-from torch.optim import Adam
+import random
 import numpy as np
+from glob import glob
+
 
 SUPPORTED_LOSSES = [
-    "ElementNLLLoss",
-    "MultiAuxillaryElementNLLLoss",
-    "MultiTaskElementNLLLoss",
-    "ElementAngularMSELoss",
-    "DiceLoss",
-    "GeneralizedDiceLoss",
-    "WeightedCrossEntropyLoss",
-    "PixelWiseCrossEntropyLoss",
-    "BCELoss",
+    "ElementNLL",
+    "MultiAuxillaryElementNLL",
+    "MultiTaskElementNLL",
+    "ElementAngularMSE",
+    "Dice",
+    "GeneralizedDice",
+    "WeightedCrossEntropy",
+    "PixelWiseCrossEntropy",
 ]
+
+
+def get_loss_criterion(config):
+    """
+    Returns the loss function based on provided configuration
+    :param config: (dict) a top level configuration object containing the 'loss' key
+    :return: an instance of the loss function
+    """
+    assert "loss" in config, "Could not find loss function configuration"
+    loss_config = config["loss"]
+    name = loss_config["name"]
+    assert (
+        name in SUPPORTED_LOSSES
+    ), f"Invalid loss: {name}. Supported losses: {SUPPORTED_LOSSES}"
+
+    # ignore_index = loss_config.get('ignore_index', None)
+
+    # TODO: add more loss functions
+    if name == "Aux":
+        return (
+            CustomLosses.MultiAuxillaryElementNLLLoss(
+                3, loss_config["loss_weight"], config["nclass"]
+            ),
+            True,
+        )
+    elif name == "ElementNLL":
+        return CustomLosses.ElementNLLLoss(config["nclass"]), True
+    elif name == "MultiAuxiliaryElementNLL":
+        print("MultiAuxiliaryElementNLL Nnt implemented")
+        quit()
+    elif name == "MultiTaskElementNLL":
+        return (
+            CustomLosses.MultiTaskElementNLLLoss(
+                loss_config["loss_weight"], loss_config["nclass"]
+            ),
+            True,
+        )
+    elif name == "ElementAngularMSE":
+        return CustomLosses.ElementAngularMSE(), True
+    elif name == "Dice":
+        return CustomLosses.DiceLoss(), False
+    elif name == "GeneralizedDice":
+        return CustomLosses.GeneralizedDiceLoss(), False
+    elif name == "WeightedCrossEntropy":
+        return CustomLosses.WeightedCrossEntropyLoss(), False
+    elif name == "PixelwiseCrossEntropy":
+        return CustomLosses.PixelWiseCrossEntropyLoss(), True
 
 
 class Monai_BasicUNet(pytorch_lightning.LightningModule):
     def __init__(self, config, train):
         super().__init__()
-        self._model = BasicUNet(
+        self.model = BasicUNet(
             dimensions=len(config["size_in"]),
             in_channels=config["nchannel"],
             out_channels=config["nclass"],
             norm=Norm.BATCH,
         )
 
-        self.loss_function = DiceLoss()  # config["loss"]["name"]
-
         self.args_inference = lambda: None
         if train:
-            self.datapath = config["loader"]["datafolder"]
-            self.leaveout = config["validation"]["leaveout"]
-            self.nworkers = config["loader"]["NumWorkers"]
-            self.batchsize = config["loader"]["batch_size"]
+            assert "loader" in config, "loader required"
+            loader_config = config["loader"]
+            self.datapath = loader_config["datafolder"]
+            self.nworkers = loader_config["NumWorkers"]
+            self.batchsize = loader_config["batch_size"]
+
+            assert "validation" in config, "validation required"
+            validation_config = config["validation"]
+            self.leaveout = validation_config["leaveout"]
+
             self.lr = config["learning_rate"]
             self.weight_decay = config["weight_decay"]
 
-            self.args_inference.OutputCh = config["validation"]["OutputCh"]
+            self.args_inference.OutputCh = validation_config["OutputCh"]
+
+            self.loss_function, self.accepts_costmap = get_loss_criterion(config)
+
         else:
             self.args_inference.OutputCh = config["OutputCh"]
 
@@ -57,12 +112,16 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         self.args_inference.size_out = config["size_out"]
         self.args_inference.nclass = config["nclass"]
 
+        device = config["device"]
+        print(f"Sending the model to '{device}'")
+        self.model = self.model.to(device)
+
     def forward(self, x):
-        return self._model(x)
+        return self.model(x)
 
     def configure_optimizers(self):
         return Adam(
-            self._model.parameters(),
+            self.model.parameters(),
             lr=self.lr,
             weight_decay=self.weight_decay,
         )
@@ -79,18 +138,21 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
                 targets[zidx] = targets[zidx].cuda()
         else:
             targets = targets[0].cuda()
-        if len(batch) == 3:  # input + target + cmap
+        if self.accepts_costmap:  # input + target + cmap
             cmap = batch[2].cuda()
-            loss = self.loss_function(outputs, targets)  # , cmap)
+            loss = self.loss_function(outputs, targets, cmap)
         else:  # input + target
             loss = self.loss_function(outputs, targets)
 
         return {"loss": loss}
 
+    def training_epoch_end(self, outputs):
+        avg_loss = torch.stack([x["loss"] for x in outputs]).mean()
+        self.log("loss", avg_loss, prog_bar=True)
+
     def validation_step(self, batch, batch_idx):
         input_img = batch[0].cuda()
         label = batch[1].cuda()
-        costmap = batch[2].cuda()
 
         if len(input_img.shape) == 3:
             # add channel dimension
@@ -101,16 +163,29 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
                 input_img = np.transpose(input_img, (1, 0, 2, 3))
 
         outputs = model_inference(
-            self._model, input_img[0].cpu(), nn.Softmax(dim=1), self.args_inference
+            self.model,
+            input_img[0].cpu(),
+            torch.nn.Softmax(dim=1),
+            self.args_inference,
         )
-        val_loss = self.loss_function(outputs, squeeze(label, dim=1))
+
+        if self.accepts_costmap:
+            costmap = batch[2].cuda()
+            val_loss = self.loss_function(outputs, torch.squeeze(label, dim=1), costmap)
+        else:
+            val_loss = self.loss_function(outputs, torch.squeeze(label, dim=1))
+
         return {"val_loss": val_loss}
+
+    def validation_epoch_end(self, outputs):
+        avg_loss = torch.stack([x["val_loss"] for x in outputs]).mean()
+        self.log("val_loss", avg_loss, prog_bar=True)
 
 
 class DataModule(pytorch_lightning.LightningDataModule):
     def __init__(self, config):
         super().__init__()
-        assert "loader" in config, "Could not loader configuration"
+        assert "loader" in config, "Could not find loader configuration"
         self.config = config
         self.loader_config = config["loader"]
 
