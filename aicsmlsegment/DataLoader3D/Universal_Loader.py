@@ -75,37 +75,42 @@ class RR_FH_M0(Dataset):
             if cost_scale < 1:  ## this should not happen, but just in case
                 cost_scale = 1
 
-            deg = random.randrange(1, 180)
+            # random flip
             flip_flag = random.random()
+            if flip_flag < 0.5:
+                raw = np.flip(raw, axis=-1)
+                costmap = np.flip(costmap, axis=-1)
+                label = np.flip(label, axis=-1)
 
-            for zz in range(label.shape[1]):
+            # random rotation
+            deg = random.randrange(1, 180)
+            trans = RandomAffine(
+                scales=(1.0, 1.0, 1.0, 1.0, 1.0, 1.0),
+                degrees=(0, 0, 0, 0, deg, deg),
+                default_pad_value=0,
+                image_interpolation="bspline",
+                center="image",
+            )
 
-                for ci in range(label.shape[0]):
-                    labi = label[ci, zz, :, :]
-                    labi_pil = Image.fromarray(np.uint8(labi))
-                    new_labi_pil = labi_pil.rotate(deg, resample=Image.NEAREST)
-                    if flip_flag < 0.5:
-                        new_labi_pil = new_labi_pil.transpose(Image.FLIP_LEFT_RIGHT)
-                    new_labi = np.array(new_labi_pil.convert("L"))
-                    label[ci, zz, :, :] = new_labi.astype(int)
+            # rotate the raw image
+            out_img = trans(np.transpose(raw, (0, 3, 2, 1)))
+            raw = np.transpose(out_img, (0, 3, 2, 1))
 
-                cmap = costmap[zz, :, :]
-                cmap_pil = Image.fromarray(np.uint8(255 * (cmap / cost_scale)))
-                new_cmap_pil = cmap_pil.rotate(deg, resample=Image.NEAREST)
-                if flip_flag < 0.5:
-                    new_cmap_pil = new_cmap_pil.transpose(Image.FLIP_LEFT_RIGHT)
-                new_cmap = np.array(new_cmap_pil.convert("L"))
-                costmap[zz, :, :] = cost_scale * (new_cmap / 255.0)
+            trans_label = RandomAffine(
+                scales=(1.0, 1.0, 1.0, 1.0, 1.0, 1.0),
+                degrees=(0, 0, 0, 0, deg, deg),
+                default_pad_value=0,
+                image_interpolation="nearest",
+                center="image",
+            )
+            # rotate label and costmap
+            out_label = trans_label(np.transpose(label, (0, 3, 2, 1)))
+            label = np.transpose(out_label, (0, 3, 2, 1))
 
-            for zz in range(raw.shape[1]):
-                for ci in range(raw.shape[0]):
-                    str_im = raw[ci, zz, :, :]
-                    str_im_pil = Image.fromarray(np.uint8(str_im * 255))
-                    new_str_im_pil = str_im_pil.rotate(deg, resample=Image.BICUBIC)
-                    if flip_flag < 0.5:
-                        new_str_im_pil = new_str_im_pil.transpose(Image.FLIP_LEFT_RIGHT)
-                    new_str_image = np.array(new_str_im_pil.convert("L"))
-                    raw[ci, zz, :, :] = (new_str_image.astype(float)) / 255.0
+            out_map = trans_label(
+                np.transpose(np.expand_dims(costmap, axis=0), (0, 3, 2, 1))
+            )
+            costmap = np.transpose(out_map[0, :, :, :], (2, 1, 0))
             new_patch_num = 0
 
             while new_patch_num < num_patch_per_img[img_idx]:
