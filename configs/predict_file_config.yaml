@@ -30,7 +30,7 @@ Normalization: 10
 # the threshold to be applied on your data
 Threshold: 0.5
 # whether to use run time augmentation (may improve the accuracy, but takes much longer to run)
-RuntimeAug: False
+RuntimeAug: True
 
 ##########################################################################################################
 # Execution mode: single file
@@ -38,9 +38,6 @@ RuntimeAug: False
 mode:
   name: file
   # paths to the file
-  InputFile: '//allen/aics/assay-dev/users/Jianxu/data/training_assay_caax_cellmask/quick_test_caax/3500001803_100X_20180312_3-Scene-14-P24-E06.ome.tiff'
+  InputFile: '//allen/aics/assay-dev/users/Jianxu/data/training_assay_caax_cellmask/quick_test_caax/3500001859_100X_20180326_2e-Scene-13-P58-F05.ome.tiff'
   # is this file a timelapse image
   timelapse: False
-  
-  
-  

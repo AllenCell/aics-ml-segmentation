@@ -8,9 +8,9 @@ nchannel: 1
 # number of output channels, 
 nclass: 2
 # input patch size given to the network (adapt to fit in your GPU memory, generally bigger patches are better)
-size_in:   [26, 210, 210] # [52, 420, 420]
+size_in:    [52, 210, 210]
 # prediction patch size from the network (change according to input size)
-size_out:   [26, 210, 210] #[52, 420, 420] #[20, 152, 152] 
+size_out:   [52, 210, 210] 
 # path to save the checkpoint
 checkpoint_dir: '/allen/aics/assay-dev/users/Benji/model_checkpoints/'
 # path to latest checkpoint; if provided the training will be resumed from that checkpoint
@@ -26,7 +26,7 @@ weight_decay: 0.005
 # max number of epochs
 epochs: 501
 # number of epoch to save the model
-save_every_n_epoch: 1
+save_every_n_epoch: 10
 # loss function configuration
 loss:
   # loss function to be used during training 
@@ -44,13 +44,15 @@ loader:
   # paths to the training datasets
   datafolder: '//allen/aics/assay-dev/users/Jianxu/data/training_assay_caax_cellmask/training_data/initial_caax_model_better_top'
   # number of batch in each training iteration (related to patch size and GPU memory)
-  batch_size: 4
+  batch_size: 8
   # number of patches loaded to cache 
-  PatchPerBuffer: 16
+  PatchPerBuffer: 64
   # number of epoches for every time the patches in cache are cleared and resampled (smaller = heavier i/o, larger = higher chance of overfitting)
   epoch_shuffle: 27
   # number of workers for loading data in each training iteration
-  NumWorkers: 4
+  NumWorkers: 32
+  # Random rotation and random flip
+  Transforms: ['RF', 'RR']
 
 ##########################################################################################################
 # validation setting

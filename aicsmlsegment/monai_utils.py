@@ -2,21 +2,15 @@ import pytorch_lightning
 from torch.utils.data import DataLoader
 from torch.optim import Adam
 import torch
-import pathlib
-import os
-
-# import torch.distributed as dist
-from skimage.io import imsave
-
 
 from monai.networks.layers import Norm
 from monai.networks.nets import BasicUNet
-from monai.inferers import sliding_window_inference
 
 import aicsmlsegment.custom_loss as CustomLosses
 from aicsmlsegment.model_utils import (
     model_inference,
 )
+from aicsmlsegment.DataLoader3D.Universal_Loader import UniversalDataset
 
 import random
 import numpy as np
@@ -60,7 +54,7 @@ def get_loss_criterion(config):
     elif name == "ElementNLL":
         return CustomLosses.ElementNLLLoss(config["nclass"]), True
     elif name == "MultiAuxiliaryElementNLL":
-        print("MultiAuxiliaryElementNLL Nnt implemented")
+        print("MultiAuxiliaryElementNLL Not implemented")
         quit()
     elif name == "MultiTaskElementNLL":
         return (
@@ -132,19 +126,14 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
 
     def training_step(self, batch, batch_idx):
         inputs = batch[0].cuda()
-        targets = batch[1]
+        targets = batch[1].cuda()
         outputs = self.forward(inputs)
 
         # select output channel
         outputs = outputs[:, self.args_inference.OutputCh, :, :, :]
-        outputs = torch.unsqueeze(outputs, dim=1)  # add channel dimension
-
-        # bring to cuda
-        if len(targets) > 1:
-            for zidx in range(len(targets)):
-                targets[zidx] = targets[zidx].cuda()
-        else:  # batch size  =1
-            targets = targets[0].cuda()
+        outputs = torch.unsqueeze(
+            outputs, dim=1
+        )  # add back in channel dimension to match targets
 
         if self.accepts_costmap:  # input + target + cmap
             cmap = batch[2].cuda()
@@ -162,56 +151,16 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         input_img = batch[0].cuda()
         label = batch[1].cuda()
 
-        if len(input_img.shape) == 3:
-            # add channel dimension
-            print("Add channel dimension")
-            input_img = np.expand_dims(input_img, axis=0)
-        elif len(input_img.shape) == 4:
-            # assume number of channel < number of Z, make sure channel dim comes first
-            print("switch z and c dimensions")
-            if input_img.shape[0] > input_img.shape[1]:
-                input_img = np.transpose(input_img, (1, 0, 2, 3))
-
-        # outputs = model_inference(
-        #     self.model,
-        #     input_img[0].cpu(),
-        #     torch.nn.Softmax(dim=1),
-        #     self.args_inference,
-        # )
-        print(self.args_inference.size_out)
-        outputs = sliding_window_inference(
-            input_img, self.args_inference.size_out, 1, self.forward
-        )
+        outputs = model_inference(self.model, input_img, self.args_inference)
         outputs = outputs[:, self.args_inference.OutputCh, :, :, :]
-        outputs = torch.unsqueeze(outputs, dim=1)  # add back in channel dimension
 
-        # imsave(
-        #     "/allen/aics/assay-dev/users/Benji/mlsegmenter_output"
-        #     + os.sep
-        #     + pathlib.PurePosixPath("val_input").stem
-        #     + ".tiff",
-        #     input_img.data.cpu().numpy(),
-        # )
-        # imsave(
-        #     "/allen/aics/assay-dev/users/Benji/mlsegmenter_output"
-        #     + os.sep
-        #     + pathlib.PurePosixPath("val_target").stem
-        #     + ".tiff",
-        #     label.data.cpu().numpy(),
-        # )
-        # imsave(
-        #     "/allen/aics/assay-dev/users/Benji/mlsegmenter_output"
-        #     + os.sep
-        #     + pathlib.PurePosixPath("val_outputs").stem
-        #     + ".tiff",
-        #     outputs.data.cpu().numpy(),
-        # )
+        outputs = torch.unsqueeze(
+            outputs, dim=1
+        )  # add back in channel dimension to match label
 
         if self.accepts_costmap:
             costmap = batch[2].cuda()
-            val_loss = self.loss_function(
-                outputs, label, costmap
-            )  # remove batch size channel
+            val_loss = self.loss_function(outputs, label, costmap)
         else:
             val_loss = self.loss_function(outputs, label)
 
@@ -233,6 +182,10 @@ class DataModule(pytorch_lightning.LightningDataModule):
         if name != "default" and name != "focus":
             print("other loaders are under construction")
             quit()
+
+        self.transforms = []
+        if "Transforms" in self.loader_config:
+            self.transforms = self.loader_config["Transforms"]
 
     def prepare_data(self):
         pass
@@ -266,6 +219,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
 
             valid_filenames = []
             train_filenames = []
+            # remove file extensions from filenames
             for fi, fn in enumerate(valid_idx):
                 valid_filenames.append(filenames[fn][:-11])
             for fi, fn in enumerate(train_idx):
@@ -280,60 +234,31 @@ class DataModule(pytorch_lightning.LightningDataModule):
             quit()
 
     def train_dataloader(self):
-        loader_config = self.config["loader"]
+        loader_config = self.loader_config
         config = self.config
-        if loader_config["name"] == "default":
-            from aicsmlsegment.DataLoader3D.Universal_Loader import (
-                RR_FH_M0 as train_loader,
+        train_set_loader = DataLoader(
+            UniversalDataset(
+                self.train_filenames,
+                loader_config["PatchPerBuffer"],
+                config["size_in"],
+                config["size_out"],
+                config["nchannel"],
+                self.transforms,
             )
-
-            train_set_loader = DataLoader(
-                train_loader(
-                    self.train_filenames,
-                    loader_config["PatchPerBuffer"],
-                    config["size_in"],
-                    config["size_out"],
-                    config["nchannel"],
-                ),
-                num_workers=loader_config["NumWorkers"],
-                batch_size=loader_config["batch_size"],
-                shuffle=True,
-            )
-        elif loader_config["name"] == "focus":
-            from aicsmlsegment.DataLoader3D.Universal_Loader import (
-                RR_FH_M0C as train_loader,
-            )
-
-            train_set_loader = DataLoader(
-                train_loader(
-                    self.train_filenames,
-                    loader_config["PatchPerBuffer"],
-                    config["size_in"],
-                    config["size_out"],
-                    config["nchannel"],
-                ),
-                num_workers=loader_config["NumWorkers"],
-                batch_size=loader_config["batch_size"],
-                shuffle=True,
-            )
-        else:
-            print("other loader not support yet")
-            quit()
+        )
         return train_set_loader
 
     def val_dataloader(self):
-        from aicsmlsegment.DataLoader3D.Universal_Loader import NOAUG_M as val_loader
-
+        loader_config = self.loader_config
+        config = self.config
         val_set_loader = DataLoader(
-            val_loader(
+            UniversalDataset(
                 self.valid_filenames,
-                self.loader_config["PatchPerBuffer"],
-                self.config["size_in"],
-                self.config["size_out"],
-                self.config["nchannel"],
-            ),
-            num_workers=self.loader_config["NumWorkers"],
-            batch_size=1,
-            shuffle=False,
+                loader_config["PatchPerBuffer"],
+                config["size_in"],
+                config["size_out"],
+                config["nchannel"],
+                [],  # no transforms for validation data
+            )
         )
         return val_set_loader

@@ -53,8 +53,10 @@ def main():
         gpus=[0],
         max_epochs=config["epochs"],
         check_val_every_n_epoch=config["validation"]["validate_every_n_epoch"],
-        num_sanity_val_steps=1,
+        num_sanity_val_steps=0,
         callbacks=callbacks,
+        reload_dataloaders_every_epoch=False,  # check https://github.com/PyTorchLightning/pytorch-lightning/pull/5043 for updates on pull request
+        # reload_dataloaders_every_n_epoch = config['loader']['epoch_shuffle']
     )
     data_module = DataModule(config)
     trainer.fit(model, data_module)

@@ -33,10 +33,10 @@ def load_img(filename, img_type, n_channel):
     if img_type == "label" or img_type == "input":
         img = reader.get_image_data("CZYX", S=0, T=0)
 
-        # Legacy aicsimageio - image stored as zcyx
+        # Legacy aicsimageio fix - image stored as zcyx
         if img.shape[0] != n_channel and img.shape[1] == n_channel:
             print(img.shape)
-            img = np.swapaxes(0, 1)
+            img = np.swapaxes(img, 0, 1)
             print(filename, "RESHAPE TO:", img.shape)
     elif img_type == "costmap":
         img = reader.get_image_data("ZYX", S=0, T=0, C=0)
@@ -46,9 +46,8 @@ def load_img(filename, img_type, n_channel):
 
 class UniversalDataset(Dataset):
     def __init__(
-        self, filenames, num_patch, size_in, size_out, n_channel, transforms=None
+        self, filenames, num_patch, size_in, size_out, n_channel, transforms=[]
     ):
-        print("Performing training augmentation...")
 
         self.img = []
         self.gt = []
