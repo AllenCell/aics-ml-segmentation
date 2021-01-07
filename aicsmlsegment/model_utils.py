@@ -4,7 +4,10 @@ from monai.inferers import sliding_window_inference
 
 
 def apply_on_image(model, input_img, args):
-    # print("apply on image")
+    """
+    Perform inference on an input img through a model with or without runtime augmentation.
+    If runtime augmentation is selected, perform inference on flipped images and average results.
+    """
     if len(input_img.shape) == 4:
         input_img = np.expand_dims(
             input_img, axis=0

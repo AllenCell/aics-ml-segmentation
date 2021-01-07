@@ -7,6 +7,7 @@ from monai.networks.layers import Norm
 from monai.networks.nets import BasicUNet
 
 import aicsmlsegment.custom_loss as CustomLosses
+import aicsmlsegment.custom_metrics as CustomMetrics
 from aicsmlsegment.model_utils import (
     model_inference,
 )
@@ -18,15 +19,18 @@ from glob import glob
 
 
 SUPPORTED_LOSSES = [
-    "ElementNLL",
-    "MultiAuxillaryElementNLL",
-    "MultiTaskElementNLL",
-    "ElementAngularMSE",
     "Dice",
     "GeneralizedDice",
-    "WeightedCrossEntropy",
-    "PixelWiseCrossEntropy",
 ]
+#     "MultiAuxillaryElementNLL",
+#     "MultiTaskElementNLL",
+#     "ElementAngularMSE",
+#    "ElementNLL",
+#     "WeightedCrossEntropy",
+#     "PixelwiseCrossEntropy",
+# ]
+
+SUPPORTED_METRICS = ["default"]
 
 
 def get_loss_criterion(config):
@@ -102,6 +106,7 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
             self.args_inference.OutputCh = validation_config["OutputCh"]
 
             self.loss_function, self.accepts_costmap = get_loss_criterion(config)
+            self.metric = CustomMetrics.MeanIoU()
 
         else:
             self.args_inference.OutputCh = config["OutputCh"]
@@ -134,18 +139,21 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         outputs = torch.unsqueeze(
             outputs, dim=1
         )  # add back in channel dimension to match targets
-
-        if self.accepts_costmap:  # input + target + cmap
+        if self.accepts_costmap:
             cmap = batch[2].cuda()
             loss = self.loss_function(outputs, targets, cmap)
-        else:  # input + target
+        else:
             loss = self.loss_function(outputs, targets)
 
-        return {"loss": loss}
+        mean_iou = self.metric(outputs, targets)
+
+        return {"loss": loss, "iou": mean_iou}
 
     def training_epoch_end(self, outputs):
         avg_loss = torch.stack([x["loss"] for x in outputs]).mean()
+        avg_iou = torch.stack([x["iou"] for x in outputs]).mean()
         self.log("train_loss", avg_loss, prog_bar=True)
+        self.log("IOU", avg_iou, prog_bar=True)
 
     def validation_step(self, batch, batch_idx):
         input_img = batch[0].cuda()
@@ -164,11 +172,16 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         else:
             val_loss = self.loss_function(outputs, label)
 
-        return {"val_loss": val_loss}
+        mean_iou = self.metric(outputs, label)
+
+        return {"val_loss": val_loss, "val_iou": mean_iou}
 
     def validation_epoch_end(self, outputs):
         avg_loss = torch.stack([x["val_loss"] for x in outputs]).mean()
+        avg_iou = torch.stack([x["val_iou"] for x in outputs]).mean()
+
         self.log("avg_val_loss", avg_loss, prog_bar=True)
+        self.log("VAL_IOU", avg_iou, prog_bar=True)
 
 
 class DataModule(pytorch_lightning.LightningDataModule):
@@ -244,7 +257,10 @@ class DataModule(pytorch_lightning.LightningDataModule):
                 config["size_out"],
                 config["nchannel"],
                 self.transforms,
-            )
+            ),
+            batch_size=loader_config["batch_size"],
+            shuffle=True,
+            num_workers=loader_config["NumWorkers"],
         )
         return train_set_loader
 
@@ -259,6 +275,9 @@ class DataModule(pytorch_lightning.LightningDataModule):
                 config["size_out"],
                 config["nchannel"],
                 [],  # no transforms for validation data
-            )
+            ),
+            batch_size=1,
+            shuffle=False,
+            num_workers=loader_config["NumWorkers"],
         )
         return val_set_loader

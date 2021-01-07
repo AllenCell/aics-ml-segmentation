@@ -22,9 +22,9 @@ def main():
     config = load_config(args.config)
     logger.info(config)
 
+    # load a specified saved model
     if config["resume"] is not None:
         print(f"Loading checkpoint '{config['resume']}'...")
-        # load_checkpoint(config["resume"], model)
         model = Monai_BasicUNet.load_from_checkpoint(
             config["resume"], config=config, train=True
         )
@@ -50,7 +50,7 @@ def main():
 
     callbacks = [MC]
     trainer = pytorch_lightning.Trainer(
-        gpus=[0],
+        gpus=-1,
         max_epochs=config["epochs"],
         check_val_every_n_epoch=config["validation"]["validate_every_n_epoch"],
         num_sanity_val_steps=0,
