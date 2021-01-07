@@ -178,7 +178,7 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         #     torch.nn.Softmax(dim=1),
         #     self.args_inference,
         # )
-
+        print(self.args_inference.size_out)
         outputs = sliding_window_inference(
             input_img, self.args_inference.size_out, 1, self.forward
         )
@@ -241,7 +241,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
         # load settings #
         config = self.config  # TODO, fix this
 
-        # dataloader
+        # get validation and training filenames from input dir from config
         validation_config = config["validation"]
         loader_config = config["loader"]
         if validation_config["metric"] is not None:

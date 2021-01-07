@@ -1,11 +1,16 @@
 import numpy as np
 import torch
 from torch.autograd import Variable
+from monai.inferers import sliding_window_inference
 
 
 def apply_on_image(model, input_img, softmax, args):
+    # print("apply on image")
+    if len(input_img.shape) == 4:
+        input_img = np.expand_dims(input_img, axis=0)  # add batch_dimension
 
     if not args.RuntimeAug:
+        input_img = torch.from_numpy(input_img).float().cuda()
         return model_inference(model, input_img, softmax, args)
     else:
         print("doing runtime augmentation")
@@ -16,7 +21,10 @@ def apply_on_image(model, input_img, softmax, args):
             input_img_aug[ch_idx, :, :, :] = np.flip(str_im, axis=2)
 
         input_img_aug_tensor = torch.from_numpy(input_img_aug.astype(float)).float()
-        out1 = model_inference(model, input_img_aug_tensor, softmax, args)
+        # out1 = model_inference(model, input_img_aug_tensor, softmax, args)
+        out1 = sliding_window_inference(
+            input_img_aug_tensor, args.size_out, 1, model.forward
+        )
 
         input_img_aug = []
         input_img_aug = input_img.copy()
@@ -25,7 +33,10 @@ def apply_on_image(model, input_img, softmax, args):
             input_img_aug[ch_idx, :, :, :] = np.flip(str_im, axis=1)
 
         input_img_aug_tensor = torch.from_numpy(input_img_aug.astype(float)).float()
-        out2 = model_inference(model, input_img_aug_tensor, softmax, args)
+        # out2 = model_inference(model, input_img_aug_tensor, softmax, args)
+        out2 = sliding_window_inference(
+            input_img_aug_tensor, args.size_out, 1, model.forward
+        )
 
         input_img_aug = []
         input_img_aug = input_img.copy()
@@ -34,10 +45,16 @@ def apply_on_image(model, input_img, softmax, args):
             input_img_aug[ch_idx, :, :, :] = np.flip(str_im, axis=0)
 
         input_img_aug_tensor = torch.from_numpy(input_img_aug.astype(float)).float()
-        out3 = model_inference(model, input_img_aug_tensor, softmax, args)
+        # out3 = model_inference(model, input_img_aug_tensor, softmax, args)
+        out3 = sliding_window_inference(
+            input_img_aug_tensor, args.size_out, 1, model.forward
+        )
 
         input_img_tensor = torch.from_numpy(input_img.astype(float)).float()
-        out0 = model_inference(model, input_img_tensor, softmax, args)
+        # out0 = model_inference(model, input_img_tensor, softmax, args)
+        out0 = sliding_window_inference(
+            input_img_tensor, args.size_out, 1, model.forward
+        )
 
         for ch_idx in range(len(out0)):
             out0[ch_idx] = 0.25 * (
@@ -51,6 +68,15 @@ def apply_on_image(model, input_img, softmax, args):
 
 
 def model_inference(model, input_img, softmax, args):
+    with torch.no_grad():
+        result = sliding_window_inference(
+            inputs=input_img,
+            roi_size=args.size_out,
+            sw_batch_size=1,
+            predictor=model.forward,
+            overlap=0.25,
+        )
+    return result
 
     model.eval()
 

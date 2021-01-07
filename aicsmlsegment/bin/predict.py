@@ -34,7 +34,6 @@ def main():
     model_path = config["model_path"]
     print(f"Loading model from {model_path}...")
     model = Monai_BasicUNet.load_from_checkpoint(model_path, config=config, train=False)
-    model.to(config["device"])
 
     # extract the parameters for running the model inference
     args_inference = model.args_inference
@@ -142,9 +141,8 @@ def main():
 
             # apply the model
             output_img = apply_on_image(model, img, nn.Softmax(dim=1), args_inference)
-
             # extract the result and write the output
-            out = output_img[0].cpu()
+            out = output_img[0, args_inference.OutputCh, :, :, :].cpu()
             out = (out - out.min()) / (out.max() - out.min())
             if len(config["ResizeRatio"]) > 0:
                 out = zoom(
@@ -205,10 +203,9 @@ def main():
             # apply the model
             output_img = apply_on_image(model, img, nn.Softmax(dim=1), args_inference)
             output_img = output_img.cpu()
-
             # extract the result and write the output
             if config["Threshold"] < 0:
-                out = output_img[0]
+                out = output_img[0, args_inference.OutputCh, :, :, :]
                 out = (out - out.min()) / (out.max() - out.min())
                 if len(config["ResizeRatio"]) > 0:
                     out = zoom(
@@ -226,7 +223,10 @@ def main():
                 out = (out - out.min()) / (out.max() - out.min())
             else:
                 out = remove_small_objects(
-                    output_img[0] > config["Threshold"], min_size=2, connectivity=1
+                    output_img[0, args_inference.OutputCh, :, :, :]
+                    > config["Threshold"],
+                    min_size=2,
+                    connectivity=1,
                 )
                 out = out.astype(np.uint8)
                 out[out > 0] = 255

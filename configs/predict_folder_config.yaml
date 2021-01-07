@@ -4,7 +4,7 @@
 model: 
   name: BasicUNet
 # path to the trained model
-model_path: '/allen/aics/assay-dev/users/Benji/model_checkpoints/checkpoint_epoch=30.ckpt'
+model_path: '/allen/aics/assay-dev/users/Benji/model_checkpoints/checkpoint_epoch=206.ckpt'
 # number of input channels to the model
 nchannel: 1
 # number of output channels
