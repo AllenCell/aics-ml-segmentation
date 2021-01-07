@@ -9,7 +9,6 @@ from skimage.morphology import remove_small_objects
 from skimage.io import imsave
 from aicsimageio import AICSImage
 from scipy.ndimage import zoom
-from torch import nn
 
 from aicsmlsegment.utils import (
     load_config,
@@ -78,12 +77,10 @@ def main():
                         img[ch_idx, :, :, :] = struct_img
 
                 # apply the model
-                output_img = apply_on_image(
-                    model, img, nn.Softmax(dim=1), args_inference
-                )
+                output_img = apply_on_image(model, img, args_inference)
 
                 # extract the result and write the output
-                out = output_img[0].cpu()
+                out = output_img[args_inference.OutputCh].cpu()
                 out = (out - out.min()) / (out.max() - out.min())
                 if len(config["ResizeRatio"]) > 0:
                     out = zoom(
@@ -140,9 +137,9 @@ def main():
                     img[ch_idx, :, :, :] = struct_img
 
             # apply the model
-            output_img = apply_on_image(model, img, nn.Softmax(dim=1), args_inference)
+            output_img = apply_on_image(model, img, args_inference)
             # extract the result and write the output
-            out = output_img[0, args_inference.OutputCh, :, :, :].cpu()
+            out = output_img[args_inference.OutputCh]
             out = (out - out.min()) / (out.max() - out.min())
             if len(config["ResizeRatio"]) > 0:
                 out = zoom(
@@ -201,11 +198,10 @@ def main():
             img = image_normalization(img, config["Normalization"])
 
             # apply the model
-            output_img = apply_on_image(model, img, nn.Softmax(dim=1), args_inference)
-            output_img = output_img.cpu()
+            output_img = apply_on_image(model, img, args_inference)
             # extract the result and write the output
             if config["Threshold"] < 0:
-                out = output_img[0, args_inference.OutputCh, :, :, :]
+                out = output_img[args_inference.OutputCh]
                 out = (out - out.min()) / (out.max() - out.min())
                 if len(config["ResizeRatio"]) > 0:
                     out = zoom(
@@ -223,8 +219,7 @@ def main():
                 out = (out - out.min()) / (out.max() - out.min())
             else:
                 out = remove_small_objects(
-                    output_img[0, args_inference.OutputCh, :, :, :]
-                    > config["Threshold"],
+                    output_img[args_inference.OutputCh] > config["Threshold"],
                     min_size=2,
                     connectivity=1,
                 )
