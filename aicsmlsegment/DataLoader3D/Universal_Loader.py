@@ -72,7 +72,7 @@ class UniversalDataset(Dataset):
             n_channel: number of iput channels expected by model
             transforms: list of strings specifying transforms
         """
-
+        print("Generating samples...", end=" ")
         self.img = []
         self.gt = []
         self.cmap = []
@@ -201,6 +201,7 @@ class UniversalDataset(Dataset):
                 (self.cmap).append(ref_patch_cmap)
 
                 new_patch_num += 1
+        print("Done.")
 
     def __getitem__(self, index):
 
@@ -228,7 +229,6 @@ class UniversalDataset(Dataset):
 
 class RR_FH_M0C(Dataset):
     def __init__(self, filenames, num_patch, size_in, size_out, n_channel):
-        print("Performing training augmentation...")
 
         self.img = []
         self.gt = []

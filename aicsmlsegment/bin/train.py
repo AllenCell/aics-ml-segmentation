@@ -44,11 +44,12 @@ def main():
         dirpath=checkpoint_dr,
         filename="checkpoint_{epoch}",
         period=config["save_every_n_epoch"],
-        verbose=True,
+        verbose=1,
         save_top_k=-1,
     )
 
     callbacks = [MC]
+    print("Initializing trainer...", end=" ")
     trainer = pytorch_lightning.Trainer(
         gpus=-1,
         max_epochs=config["epochs"],
@@ -58,7 +59,10 @@ def main():
         reload_dataloaders_every_epoch=False,  # check https://github.com/PyTorchLightning/pytorch-lightning/pull/5043 for updates on pull request
         # reload_dataloaders_every_n_epoch = config['loader']['epoch_shuffle']
     )
+    print("Done")
+    print("Initializing data module...", end=" ")
     data_module = DataModule(config)
+    print("Done")
     trainer.fit(model, data_module)
     print(
         "The best performing checkpoint is",

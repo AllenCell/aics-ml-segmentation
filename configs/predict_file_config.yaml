@@ -4,7 +4,7 @@
 model: 
   name: BasicUNet
 # path to the trained model
-model_path: '/allen/aics/assay-dev/users/Benji/model_checkpoints/checkpoint_epoch=206.ckpt'
+model_path: '/allen/aics/assay-dev/users/Benji/model_checkpoints/checkpoint_epoch=499.ckpt'
 # number of input channels to the model
 nchannel: 1
 # number of output channels
@@ -30,7 +30,7 @@ Normalization: 10
 # the threshold to be applied on your data
 Threshold: 0.5
 # whether to use run time augmentation (may improve the accuracy, but takes much longer to run)
-RuntimeAug: True
+RuntimeAug: False
 
 ##########################################################################################################
 # Execution mode: single file

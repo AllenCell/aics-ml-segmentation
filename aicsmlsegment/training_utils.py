@@ -1,24 +1,6 @@
-# import torch.nn.functional as F
-# from torch import nn as nn
-# from torch.autograd import Variable
-import logging
-
 import numpy as np
-from torch.utils.data import DataLoader
-from torch.autograd import Variable
-import torch.optim as optim
 import random
 from glob import glob
-from tqdm import tqdm
-
-from aicsimageio import imread
-
-from aicsmlsegment.custom_loss import MultiAuxillaryElementNLLLoss
-from aicsmlsegment.model_utils import save_checkpoint, model_inference
-from aicsmlsegment.utils import (
-    compute_iou,
-    get_logger,
-)
 
 
 def shuffle_split_filenames(datafolder, leaveout):

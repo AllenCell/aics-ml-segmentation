@@ -22,7 +22,6 @@ SUPPORTED_LOSSES = [
     "Dice",
     "GeneralizedDice",
 ]
-#     "MultiAuxillaryElementNLL",
 #     "MultiTaskElementNLL",
 #     "ElementAngularMSE",
 #    "ElementNLL",
@@ -48,18 +47,8 @@ def get_loss_criterion(config):
 
     # ignore_index = loss_config.get('ignore_index', None)
 
-    if name == "Aux":
-        return (
-            CustomLosses.MultiAuxillaryElementNLLLoss(
-                3, loss_config["loss_weight"], config["nclass"]
-            ),
-            True,
-        )
-    elif name == "ElementNLL":
+    if name == "ElementNLL":
         return CustomLosses.ElementNLLLoss(config["nclass"]), True
-    elif name == "MultiAuxiliaryElementNLL":
-        print("MultiAuxiliaryElementNLL Not implemented")
-        quit()
     elif name == "MultiTaskElementNLL":
         return (
             CustomLosses.MultiTaskElementNLLLoss(
@@ -211,7 +200,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
         validation_config = config["validation"]
         loader_config = config["loader"]
         if validation_config["metric"] is not None:
-            print("prepare the data ... ...")
+            print("Preparing train/validation split...", end=" ")
             filenames = glob(loader_config["datafolder"] + "/*_GT.ome.tif")
             filenames.sort()
             total_num = len(filenames)
@@ -240,6 +229,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
 
             self.valid_filenames = valid_filenames
             self.train_filenames = train_filenames
+            print("Done.")
 
         else:
             # TODO, update here
@@ -247,6 +237,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
             quit()
 
     def train_dataloader(self):
+        print("Initializing train dataloader: ", end=" ")
         loader_config = self.loader_config
         config = self.config
         train_set_loader = DataLoader(
@@ -265,6 +256,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
         return train_set_loader
 
     def val_dataloader(self):
+        print("Initializing validation dataloader: ", end=" ")
         loader_config = self.loader_config
         config = self.config
         val_set_loader = DataLoader(

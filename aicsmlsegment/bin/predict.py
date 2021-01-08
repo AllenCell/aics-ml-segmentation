@@ -80,13 +80,13 @@ def main():
                 output_img = apply_on_image(model, img, args_inference)
 
                 # extract the result and write the output
-                out = output_img[args_inference.OutputCh].cpu()
+                out = output_img[:, args_inference.OutputCh, :, :, :].cpu()
                 out = (out - out.min()) / (out.max() - out.min())
                 if len(config["ResizeRatio"]) > 0:
                     out = zoom(
                         out,
                         (
-                            # 1.0,
+                            1.0,
                             1 / config["ResizeRatio"][0],
                             1 / config["ResizeRatio"][1],
                             1 / config["ResizeRatio"][2],
@@ -139,13 +139,13 @@ def main():
             # apply the model
             output_img = apply_on_image(model, img, args_inference)
             # extract the result and write the output
-            out = output_img[args_inference.OutputCh]
+            out = output_img[:, args_inference.OutputCh, :, :, :].cpu()
             out = (out - out.min()) / (out.max() - out.min())
             if len(config["ResizeRatio"]) > 0:
                 out = zoom(
                     out,
                     (
-                        # 1.0,
+                        1.0,
                         1 / config["ResizeRatio"][0],
                         1 / config["ResizeRatio"][1],
                         1 / config["ResizeRatio"][2],
@@ -198,16 +198,16 @@ def main():
             img = image_normalization(img, config["Normalization"])
 
             # apply the model
-            output_img = apply_on_image(model, img, args_inference)
+            output_img = apply_on_image(model, img, args_inference).cpu()
             # extract the result and write the output
             if config["Threshold"] < 0:
-                out = output_img[args_inference.OutputCh]
+                out = output_img[:, args_inference.OutputCh, :, :, :]
                 out = (out - out.min()) / (out.max() - out.min())
                 if len(config["ResizeRatio"]) > 0:
                     out = zoom(
                         out,
                         (
-                            # 1.0,
+                            1.0,
                             1 / config["ResizeRatio"][0],
                             1 / config["ResizeRatio"][1],
                             1 / config["ResizeRatio"][2],
@@ -219,7 +219,8 @@ def main():
                 out = (out - out.min()) / (out.max() - out.min())
             else:
                 out = remove_small_objects(
-                    output_img[args_inference.OutputCh] > config["Threshold"],
+                    output_img[:, args_inference.OutputCh, :, :, :]
+                    > config["Threshold"],
                     min_size=2,
                     connectivity=1,
                 )
