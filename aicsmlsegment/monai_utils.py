@@ -5,6 +5,7 @@ import torch
 
 from monai.networks.layers import Norm
 from monai.networks.nets import BasicUNet
+from monai.losses import GeneralizedDiceLoss
 
 import aicsmlsegment.custom_loss as CustomLosses
 import aicsmlsegment.custom_metrics as CustomMetrics
@@ -12,7 +13,7 @@ from aicsmlsegment.model_utils import (
     model_inference,
 )
 from aicsmlsegment.DataLoader3D.Universal_Loader import UniversalDataset
-
+from monai.metrics import compute_meandice
 import random
 import numpy as np
 from glob import glob
@@ -61,7 +62,8 @@ def get_loss_criterion(config):
     elif name == "Dice":
         return CustomLosses.DiceLoss(), False
     elif name == "GeneralizedDice":
-        return CustomLosses.GeneralizedDiceLoss(), False
+        # return CustomLosses.GeneralizedDiceLoss(), False
+        return GeneralizedDiceLoss(sigmoid=True), False
     elif name == "WeightedCrossEntropy":
         return CustomLosses.WeightedCrossEntropyLoss(), False
     elif name == "PixelwiseCrossEntropy":
@@ -95,7 +97,7 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
             self.args_inference.OutputCh = validation_config["OutputCh"]
 
             self.loss_function, self.accepts_costmap = get_loss_criterion(config)
-            self.metric = CustomMetrics.MeanIoU()
+            self.metric = compute_meandice
 
         else:
             self.args_inference.OutputCh = config["OutputCh"]

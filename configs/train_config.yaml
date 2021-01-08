@@ -8,13 +8,13 @@ nchannel: 1
 # number of output channels, 
 nclass: 2
 # input patch size given to the network (adapt to fit in your GPU memory, generally bigger patches are better)
-size_in:    [26, 105,105] #[52, 210, 210]
+size_in:    [26, 210,210] #[52, 210, 210]
 # prediction patch size from the network (change according to input size)
-size_out:   [26, 105, 105] #[52, 210, 210] 
+size_out:   [26, 210, 210] #[52, 210, 210] 
 # path to save the checkpoint
 checkpoint_dir: '/allen/aics/assay-dev/users/Benji/model_checkpoints/'
 # path to latest checkpoint; if provided the training will be resumed from that checkpoint
-resume: #'//allen/aics/assay-dev/users/Jianxu/Tasks/test_segmenter_bug/models/checkpoint_epoch=64.ckpt'
+resume: '//allen/aics/assay-dev/users/Jianxu/Tasks/test_segmenter_bug/models/checkpoint_epoch=499.ckpt'
 
 ##########################################################################################################
 # training precedure setting
@@ -44,9 +44,9 @@ loader:
   # paths to the training datasets
   datafolder: '//allen/aics/assay-dev/users/Jianxu/data/training_assay_caax_cellmask/training_data/initial_caax_model_better_top'
   # number of batch in each training iteration (related to patch size and GPU memory)
-  batch_size: 4
+  batch_size: 8
   # number of patches loaded to cache 
-  PatchPerBuffer: 32
+  PatchPerBuffer: 128
   # number of epoches for every time the patches in cache are cleared and resampled (smaller = heavier i/o, larger = higher chance of overfitting)
   epoch_shuffle: 27
   # number of workers for loading data in each training iteration

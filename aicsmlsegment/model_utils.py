@@ -73,6 +73,7 @@ def model_inference(model, input_img, args, squeeze=False):
             sw_batch_size=1,
             predictor=model.forward,
             overlap=0.25,
+            mode="gaussian",
         )
     if squeeze:
         result = torch.squeeze(result, dim=0)  # remove batch dimension
