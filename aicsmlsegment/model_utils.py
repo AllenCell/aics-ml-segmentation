@@ -81,7 +81,7 @@ def model_inference(model, input_img, args, squeeze=False, to_numpy=False):
             sw_batch_size=1,
             predictor=model.forward,
             overlap=0.25,
-            # mode="gaussian",
+            mode="gaussian",
             # sigma_scale=0.01,
         )
     if squeeze:

@@ -73,17 +73,17 @@ def get_loss_criterion(config):
 def get_metric(config):
     assert "validation" in config, "Could not find validation information"
     validation_config = config["validation"]
-    assert "metric" in config, "Could not find validation metric"
+    assert "metric" in validation_config, "Could not find validation metric"
     metric = validation_config["metric"]
 
     assert (
         metric in SUPPORTED_METRICS
     ), f"Invalid metric: {metric}. Supported metrics are: {SUPPORTED_METRICS}"
 
-    if metric == "default" or metric == "Dice":
+    if metric == "Dice":
         return CustomMetrics.DiceCoefficient()
-    elif metric == "IOU":
-        return CustomMetrics.MeanIOU()
+    elif metric == "default" or metric == "IOU":
+        return CustomMetrics.MeanIoU()
     elif metric == "AveragePrecision":
         return CustomMetrics.AveragePrecision()
 
@@ -115,7 +115,7 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
             self.args_inference.OutputCh = validation_config["OutputCh"]
 
             self.loss_function, self.accepts_costmap = get_loss_criterion(config)
-            self.metric = get_metric()
+            self.metric = get_metric(config)
 
         else:
             self.args_inference.OutputCh = config["OutputCh"]
