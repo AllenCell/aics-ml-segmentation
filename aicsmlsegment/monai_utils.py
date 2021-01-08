@@ -30,7 +30,7 @@ SUPPORTED_LOSSES = [
 #     "PixelwiseCrossEntropy",
 # ]
 
-SUPPORTED_METRICS = ["default"]
+SUPPORTED_METRICS = ["default", "Dice", "IOU", "AveragePrecision"]
 
 
 def get_loss_criterion(config):
@@ -62,12 +62,30 @@ def get_loss_criterion(config):
     elif name == "Dice":
         return CustomLosses.DiceLoss(), False
     elif name == "GeneralizedDice":
-        # return CustomLosses.GeneralizedDiceLoss(), False
-        return GeneralizedDiceLoss(sigmoid=True), False
+        return CustomLosses.GeneralizedDiceLoss(), False
+        # return GeneralizedDiceLoss(sigmoid=True), False
     elif name == "WeightedCrossEntropy":
         return CustomLosses.WeightedCrossEntropyLoss(), False
     elif name == "PixelwiseCrossEntropy":
         return CustomLosses.PixelWiseCrossEntropyLoss(), True
+
+
+def get_metric(config):
+    assert "validation" in config, "Could not find validation information"
+    validation_config = config["validation"]
+    assert "metric" in config, "Could not find validation metric"
+    metric = validation_config["metric"]
+
+    assert (
+        metric in SUPPORTED_METRICS
+    ), f"Invalid metric: {metric}. Supported metrics are: {SUPPORTED_METRICS}"
+
+    if metric == "default" or metric == "Dice":
+        return CustomMetrics.DiceCoefficient()
+    elif metric == "IOU":
+        return CustomMetrics.MeanIOU()
+    elif metric == "AveragePrecision":
+        return CustomMetrics.AveragePrecision()
 
 
 class Monai_BasicUNet(pytorch_lightning.LightningModule):
@@ -97,7 +115,7 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
             self.args_inference.OutputCh = validation_config["OutputCh"]
 
             self.loss_function, self.accepts_costmap = get_loss_criterion(config)
-            self.metric = compute_meandice
+            self.metric = get_metric()
 
         else:
             self.args_inference.OutputCh = config["OutputCh"]

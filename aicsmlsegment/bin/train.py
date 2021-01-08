@@ -66,9 +66,9 @@ def main():
     trainer.fit(model, data_module)
     print(
         "The best performing checkpoint is",
-        trainer.best_model_path,
+        MC.best_model_path,
         "with score",
-        trainer.best_model_score,
+        MC.best_model_score,
     )
 
 

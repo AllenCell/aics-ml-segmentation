@@ -4,7 +4,7 @@
 model: 
   name: BasicUNet
 # path to the trained model
-model_path: '/allen/aics/assay-dev/users/Benji/model_checkpoints/checkpoint_epoch=499.ckpt'
+model_path: '/allen/aics/assay-dev/users/Benji/model_checkpoints/checkpoint_epoch=9.ckpt'
 # number of input channels to the model
 nchannel: 1
 # number of output channels
@@ -22,13 +22,13 @@ size_out: [26, 210, 210] #[20, 152, 152]
 # the path to output folder
 OutputDir: '/allen/aics/assay-dev/users/Benji/mlsegmenter_output'
 # the index of the input channel
-InputCh: [-1]
+InputCh: [1]
 # the ratio to resize the image
 ResizeRatio: [1.0,1.0,1.0]
 # the method to normalize your data
-Normalization: 10
+Normalization: 13
 # the threshold to be applied on your data
-Threshold: 0.5
+Threshold: -1
 # whether to use run time augmentation (may improve the accuracy, but takes much longer to run)
 RuntimeAug: False
 
@@ -38,6 +38,6 @@ RuntimeAug: False
 mode:
   name: file
   # paths to the file
-  InputFile: '//allen/aics/assay-dev/users/Jianxu/data/training_assay_caax_cellmask/quick_test_caax/3500001859_100X_20180326_2e-Scene-13-P58-F05.ome.tiff'
+  InputFile: '//allen/aics/assay-dev/users/Jianxu/data/training_assay_caax_cellmask/quick_test_caax/3500001860_100X_20180326_1r-Scene-02-P5-E04.ome.tiff'
   # is this file a timelapse image
   timelapse: False
