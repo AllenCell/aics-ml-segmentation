@@ -5,9 +5,19 @@ from monai.inferers import sliding_window_inference
 
 def apply_on_image(model, input_img, args, squeeze, to_numpy):
     """
+    Inputs:
+        model: pytorch model with a forward method
+        input_img: numpy array that model should be run on
+        args: Object containing inference arguments
+            RuntimeAug: boolean, if True inference is run on each of 4 flips
+                and final output is averaged across each of these augmentations
+            SizeOut: size of sliding window for inference
+        squeeze: boolean, if true removes the batch dimension in the output image
+        to_numpy: boolean, if true converts output to a numpy array and send to cpu
+
     Perform inference on an input img through a model with or without runtime augmentation.
     If runtime augmentation is selected, perform inference on flipped images and average results.
-    returns: 5d np.array NCZYX order
+    returns: 4 or 5 dimensional numpy array or tensor with result of model.forward on input_img
     """
     if len(input_img.shape) == 4:
         input_img = np.expand_dims(
