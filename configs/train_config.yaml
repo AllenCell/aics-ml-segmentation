@@ -14,7 +14,7 @@ model:
   # number of dimensions in data
   dimensions: 3
   
-  # OPTIONAL PARAMETERS
+  # OPTIONAL PARAMETERS - these can be left blank to use defaults
   norm: #'instance' # instance | batch |  defaults to batch
   act: #'ReLU6' # ReLU | LeakyReLU | PReLU | ReLU6, defaults to LeakyReLU
   features: #[32, 32, 64, 128, 512, 32] # list of 6 numbers,the first five specify the encoder feature sizes. The last value corresponds to the feature size after the last upsampling. defaults to [32, 32, 64, 128, 256, 32]

@@ -161,7 +161,6 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         model_configuration = get_model_configurations(config)
         self.model = BasicUNet(**model_configuration)
 
-        print(self.model)
         self.args_inference = lambda: None
         if train:
             assert "loader" in config, "loader required"

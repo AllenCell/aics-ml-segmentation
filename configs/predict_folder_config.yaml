@@ -3,18 +3,19 @@
 ##########################################################################################################
 model: 
   name: BasicUNet
+  # number of input channels to the model
+  in_channels: 1
+  # number of output channels/ classes
+  out_channels: 2
+  # input patch size given to the network (adapt to fit in your GPU memory, generally bigger patches are better)
+  patch_size: [26, 210, 210] #[52, 420, 420]
+  #number of dimensions of patch size
+  dimensions: 3
+
 # path to the trained model
-model_path: '/allen/aics/assay-dev/users/Benji/model_checkpoints/checkpoint_epoch=206.ckpt'
-# number of input channels to the model
-nchannel: 1
-# number of output channels
-nclass: 2
+model_path: '//allen/aics/assay-dev/users/Benji/model_checkpoints/checkpoint_epoch=4-v1.ckpt'
 # the channel to extract from output tensors
 OutputCh: 1
-# input patch size given to the network (adapt to fit in your GPU memory, generally bigger patches are better)
-size_in: [32, 210, 210] #[64, 420, 420]
-# prediction patch size from the network (change according to input size)
-size_out: [32, 210, 210]  #[64, 420, 420]
 
 ##########################################################################################################
 # Data Info
