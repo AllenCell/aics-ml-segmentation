@@ -44,7 +44,6 @@ def main():
         dirpath=checkpoint_dr,
         filename="checkpoint_{epoch}",
         period=config["save_every_n_epoch"],
-        verbose=1,
         save_top_k=-1,
     )
 
@@ -67,8 +66,6 @@ def main():
     print(
         "The best performing checkpoint is",
         MC.best_model_path,
-        "with score",
-        MC.best_model_score,
     )
 
 

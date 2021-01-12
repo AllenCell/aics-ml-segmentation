@@ -61,7 +61,14 @@ class UniversalDataset(Dataset):
     """
 
     def __init__(
-        self, filenames, num_patch, size_in, size_out, n_channel, transforms=[]
+        self,
+        filenames,
+        num_patch,
+        size_in,
+        size_out,
+        n_channel,
+        transforms=[],
+        patchize=True,
     ):
         """
         input:
@@ -77,7 +84,6 @@ class UniversalDataset(Dataset):
         self.gt = []
         self.cmap = []
         self.transforms = transforms
-
         padding = [(x - y) // 2 for x, y in zip(size_in, size_out)]
 
         num_data = len(filenames)
@@ -99,7 +105,7 @@ class UniversalDataset(Dataset):
         # extract patches from images until num_patch reached
         for img_idx, fn in enumerate(filenames):
 
-            if len(self.img) == num_patch:
+            if patchize and len(self.img) == num_patch:
                 break
 
             label = load_img(fn, img_type="label", n_channel=n_channel)
@@ -168,39 +174,46 @@ class UniversalDataset(Dataset):
                 )
                 costmap = np.transpose(out_map[0, :, :, :], (2, 1, 0))
 
-            # take specified number of patches from current image
-            new_patch_num = 0
-            while new_patch_num < num_patch_per_img[img_idx]:
+            if patchize:
+                # take specified number of patches from current image
+                new_patch_num = 0
+                while new_patch_num < num_patch_per_img[img_idx]:
 
-                pz = random.randint(0, label.shape[1] - size_out[0])
-                py = random.randint(0, label.shape[2] - size_out[1])
-                px = random.randint(0, label.shape[3] - size_out[2])
+                    pz = random.randint(0, label.shape[1] - size_out[0])
+                    py = random.randint(0, label.shape[2] - size_out[1])
+                    px = random.randint(0, label.shape[3] - size_out[2])
 
-                # check if this is a good crop
-                ref_patch_cmap = costmap[
-                    pz : pz + size_out[0], py : py + size_out[1], px : px + size_out[2]
-                ]
-
-                # confirmed good crop
-                (self.img).append(
-                    raw[
-                        :,
-                        pz : pz + size_in[0],
-                        py : py + size_in[1],
-                        px : px + size_in[2],
-                    ]
-                )
-                (self.gt).append(
-                    label[
-                        :,
+                    # check if this is a good crop
+                    ref_patch_cmap = costmap[
                         pz : pz + size_out[0],
                         py : py + size_out[1],
                         px : px + size_out[2],
                     ]
-                )
-                (self.cmap).append(ref_patch_cmap)
 
-                new_patch_num += 1
+                    # confirmed good crop
+                    (self.img).append(
+                        raw[
+                            :,
+                            pz : pz + size_in[0],
+                            py : py + size_in[1],
+                            px : px + size_in[2],
+                        ]
+                    )
+                    (self.gt).append(
+                        label[
+                            :,
+                            pz : pz + size_out[0],
+                            py : py + size_out[1],
+                            px : px + size_out[2],
+                        ]
+                    )
+                    (self.cmap).append(ref_patch_cmap)
+
+                    new_patch_num += 1
+            else:
+                (self.img).append(raw)
+                (self.gt).append(label)
+                (self.cmap).append(costmap)
         print("Done.")
 
     def __getitem__(self, index):
