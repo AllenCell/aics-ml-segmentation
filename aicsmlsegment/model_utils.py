@@ -24,7 +24,7 @@ def apply_on_image(model, input_img, args, squeeze, to_numpy):
             input_img, axis=0
         )  # add batch_dimension for sliding window inference
 
-    if not args.RuntimeAug:
+    if not args["RuntimeAug"]:
         input_img = torch.from_numpy(input_img).float()  # .cuda
         return model_inference(model, input_img, args, squeeze, to_numpy)
     else:
