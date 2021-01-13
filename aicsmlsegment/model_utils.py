@@ -25,7 +25,7 @@ def apply_on_image(model, input_img, args, squeeze, to_numpy):
         )  # add batch_dimension for sliding window inference
 
     if not args.RuntimeAug:
-        input_img = torch.from_numpy(input_img).float().cuda()
+        input_img = torch.from_numpy(input_img).float()  # .cuda
         return model_inference(model, input_img, args, squeeze, to_numpy)
     else:
         print("doing runtime augmentation")
@@ -35,9 +35,9 @@ def apply_on_image(model, input_img, args, squeeze, to_numpy):
             str_im = input_img_aug[ch_idx, :, :, :]
             input_img_aug[ch_idx, :, :, :] = np.flip(str_im, axis=2)
 
-        input_img_aug_tensor = (
-            torch.from_numpy(input_img_aug.astype(float)).float().cuda()
-        )
+        input_img_aug_tensor = torch.from_numpy(
+            input_img_aug.astype(float)
+        ).float()  # .cuda()
         out1 = model_inference(
             model, input_img_aug_tensor, args, squeeze=True, to_numpy=True
         )
@@ -48,9 +48,9 @@ def apply_on_image(model, input_img, args, squeeze, to_numpy):
             str_im = input_img_aug[ch_idx, :, :, :]
             input_img_aug[ch_idx, :, :, :] = np.flip(str_im, axis=1)
 
-        input_img_aug_tensor = (
-            torch.from_numpy(input_img_aug.astype(float)).float().cuda()
-        )
+        input_img_aug_tensor = torch.from_numpy(
+            input_img_aug.astype(float)
+        ).float()  # .cuda()
         out2 = model_inference(
             model, input_img_aug_tensor, args, squeeze=True, to_numpy=True
         )
@@ -61,14 +61,14 @@ def apply_on_image(model, input_img, args, squeeze, to_numpy):
             str_im = input_img_aug[ch_idx, :, :, :]
             input_img_aug[ch_idx, :, :, :] = np.flip(str_im, axis=0)
 
-        input_img_aug_tensor = (
-            torch.from_numpy(input_img_aug.astype(float)).float().cuda()
-        )
+        input_img_aug_tensor = torch.from_numpy(
+            input_img_aug.astype(float)
+        ).float()  # .cuda()
         out3 = model_inference(
             model, input_img_aug_tensor, args, squeeze=True, to_numpy=True
         )
 
-        input_img_tensor = torch.from_numpy(input_img.astype(float)).float().cuda()
+        input_img_tensor = torch.from_numpy(input_img.astype(float)).float()  # .cuda()
         out0 = model_inference(
             model, input_img_tensor, args, squeeze=True, to_numpy=True
         )
@@ -87,7 +87,7 @@ def model_inference(model, input_img, args, squeeze=False, to_numpy=False):
     with torch.no_grad():
         result = sliding_window_inference(
             inputs=input_img,
-            roi_size=args.size_out,
+            roi_size=args["size_out"],
             sw_batch_size=1,
             predictor=model.forward,
             overlap=0.25,

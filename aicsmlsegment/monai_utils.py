@@ -91,8 +91,8 @@ def get_loss_criterion(config):
         return MonaiLosses.DiceLoss(sigmoid=True), False, None
         # return CustomLosses.DiceLoss(), False
     elif name == "GeneralizedDice":
-        # return CustomLosses.GeneralizedDiceLoss(), False
-        return MonaiLosses.GeneralizedDiceLoss(sigmoid=True), False, None
+        return CustomLosses.GeneralizedDiceLoss(sigmoid_normalization=True), False, None
+        # return MonaiLosses.GeneralizedDiceLoss(sigmoid=True), False, None
     elif name == "WeightedCrossEntropy":
         return CustomLosses.WeightedCrossEntropyLoss(), False, weight
     elif name == "PixelwiseCrossEntropy":
@@ -161,7 +161,7 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         model_configuration = get_model_configurations(config)
         self.model = BasicUNet(**model_configuration)
 
-        self.args_inference = lambda: None
+        self.args_inference = {}
         if train:
             assert "loader" in config, "loader required"
             loader_config = config["loader"]
@@ -176,7 +176,7 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
             self.lr = config["learning_rate"]
             self.weight_decay = config["weight_decay"]
 
-            self.args_inference.OutputCh = validation_config["OutputCh"]
+            self.args_inference["OutputCh"] = validation_config["OutputCh"]
 
             (
                 self.loss_function,
@@ -186,15 +186,15 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
             self.metric = get_metric(config)
 
         else:
-            self.args_inference.OutputCh = config["OutputCh"]
+            self.args_inference["OutputCh"] = config["OutputCh"]
 
-        self.args_inference.size_in = config["model"]["patch_size"]
-        self.args_inference.size_out = config["model"]["patch_size"]
-        self.args_inference.nclass = config["model"]["out_channels"]
+        self.args_inference["size_in"] = config["model"]["patch_size"]
+        self.args_inference["size_out"] = config["model"]["patch_size"]
+        self.args_inference["nclass"] = config["model"]["out_channels"]
 
-        device = config["device"]
-        print(f"Sending the model to '{device}'")
-        self.model = self.model.to(device)
+        # device = config["device"]
+        # print(f"Sending the model to '{device}'")
+        # self.model = self.model.to(device)
 
     def forward(self, x):
         """
@@ -210,17 +210,17 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         )
 
     def training_step(self, batch, batch_idx):
-        inputs = batch[0].cuda()
-        targets = batch[1].cuda()
+        inputs = batch[0]  # .cuda()
+        targets = batch[1]  # .cuda()
         outputs = self.forward(inputs)
 
         # select output channel
-        outputs = outputs[:, self.args_inference.OutputCh, :, :, :]
+        outputs = outputs[:, self.args_inference["OutputCh"], :, :, :]
         outputs = torch.unsqueeze(
             outputs, dim=1
         )  # add back in channel dimension to match targets
         if self.accepts_costmap:
-            cmap = batch[2].cuda()
+            cmap = batch[2]  # .cuda()
             loss = self.loss_function(outputs, targets, cmap)
         else:
             if self.loss_weight is not None:
@@ -239,17 +239,17 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         # self.log("Epoch_train_metric", avg_metric, prog_bar=True)
 
     def validation_step(self, batch, batch_idx):
-        input_img = batch[0].cuda()
-        label = batch[1].cuda()
+        input_img = batch[0]  # .cuda()
+        label = batch[1]  # .cuda()
         outputs = model_inference(self.model, input_img, self.args_inference)
-        outputs = outputs[:, self.args_inference.OutputCh, :, :, :]
+        outputs = outputs[:, self.args_inference["OutputCh"], :, :, :]
 
         outputs = torch.unsqueeze(
             outputs, dim=1
         )  # add back in channel dimension to match label
 
         if self.accepts_costmap:
-            costmap = batch[2].cuda()
+            costmap = batch[2]  # .cuda()
             val_loss = self.loss_function(outputs, label, costmap)
         else:
             val_loss = self.loss_function(outputs, label)

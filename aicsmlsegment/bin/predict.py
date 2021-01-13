@@ -37,9 +37,9 @@ def main():
     # extract the parameters for running the model inference
     args_inference = model.args_inference
     if config["RuntimeAug"] <= 0:
-        args_inference.RuntimeAug = False
+        args_inference["RuntimeAug"] = False
     else:
-        args_inference.RuntimeAug = True
+        args_inference["RuntimeAug"] = True
 
     # run
     inf_config = config["mode"]
@@ -82,7 +82,7 @@ def main():
                 )
 
                 # extract the result and write the output
-                out = output_img[:, args_inference.OutputCh, :, :, :]
+                out = output_img[:, args_inference["OutputCh"], :, :, :]
                 out = (out - out.min()) / (out.max() - out.min())
                 if len(config["ResizeRatio"]) > 0:
                     out = zoom(
@@ -143,7 +143,7 @@ def main():
                 model, img, args_inference, squeeze=False, to_numpy=True
             )
             # extract the result and write the output
-            out = output_img[:, args_inference.OutputCh, :, :, :]
+            out = output_img[:, args_inference["OutputCh"], :, :, :]
             out = (out - out.min()) / (out.max() - out.min())
             if len(config["ResizeRatio"]) > 0:
                 out = zoom(
@@ -207,7 +207,7 @@ def main():
             )
             # extract the result and write the output
             if config["Threshold"] < 0:
-                out = output_img[:, args_inference.OutputCh, :, :, :]
+                out = output_img[:, args_inference["OutputCh"], :, :, :]
                 out = (out - out.min()) / (out.max() - out.min())
                 if len(config["ResizeRatio"]) > 0:
                     out = zoom(
@@ -225,7 +225,7 @@ def main():
                 out = (out - out.min()) / (out.max() - out.min())
             else:
                 out = remove_small_objects(
-                    output_img[:, args_inference.OutputCh, :, :, :]
+                    output_img[:, args_inference["OutputCh"], :, :, :]
                     > config["Threshold"],
                     min_size=2,
                     connectivity=1,
