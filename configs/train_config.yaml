@@ -10,7 +10,7 @@ model:
   out_channels: 2
   # input patch size given to the network (adapt to fit in your GPU memory, generally bigger patches are better)
   # network output will be of the same size
-  patch_size:    [26, 105,105] #[52, 210, 210]
+  patch_size:    [52, 210,210] #[52, 210, 210]
   # number of dimensions in data
   dimensions: 3
   
@@ -29,9 +29,22 @@ resume: #'/allen/aics/assay-dev/users/Benji/model_checkpoints/checkpoint_epoch=1
 # training precedure setting
 ##########################################################################################################
 # initial learning rate
-learning_rate: 0.01
+learning_rate: 0.0001
 # weight decay
 weight_decay: 0.005
+
+# learning rate scheduler configuration
+scheduler:
+  name: 
+  # whether to print updates when learning rate is adjusted
+  verbose: True
+  # scheduler parameters - these vary by the chosen scheduler
+  mode: min
+  factor: 0.2
+  patience: 2
+  verbose: True
+  monitor: val_loss
+
 # max number of epochs
 epochs: 200
 # number of epoch to save the model 
@@ -40,6 +53,19 @@ save_every_n_epoch: 5
 gpus: -1 # -1 or positive integer
 # distributed backend, default is ddp if gpus > 1, else none OPTIONAL
 dist_backend:  ddp 
+
+# OPTIONAL leave name blank to avoid using additional callbacks
+callbacks:
+  name: 
+  # metric to monitor
+  monitor: val_loss
+  #how much monitored value has to change 
+  min_delta: 0.05
+  # how many epochs to wait before stopping
+  patience: 10 
+  verbose: True
+  #whether to minimize or maximize monitored metric
+  mode: min
 
 # loss function configuration
 loss:
@@ -50,17 +76,7 @@ loss:
   # a target value that is ignored and does not contribute to the input gradient
   ignore_index: null
 
-# learning rate scheduler configuration
-scheduler:
-  name: "ReduceLROnPlateau"
-  # whether to print updates when learning rate is adjusted
-  verbose: True
-  # scheduler parameters - these vary by the chosen scheduler
-  mode: min
-  factor: 0.2
-  patience: 6
-  verbose: True
-  monitor: val_loss
+
 
 ##########################################################################################################
 # data loaders configuration
@@ -72,7 +88,7 @@ loader:
   # number of batch in each training iteration (related to patch size and GPU memory)
   batch_size: 4
   # number of patches loaded to cache 
-  PatchPerBuffer: 32
+  PatchPerBuffer: 100
   # number of epoches for every time the patches in cache are cleared and resampled (smaller = heavier i/o, larger = higher chance of overfitting)
   epoch_shuffle: 27
   # number of workers for loading data in each training iteration

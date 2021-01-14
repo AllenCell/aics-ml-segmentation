@@ -46,7 +46,21 @@ def main():
         period=config["save_every_n_epoch"],
         save_top_k=-1,
     )
+    callbacks = [MC]
 
+    assert "callbacks" in config, "callbacks are required in config"
+    callbacks_config = config["callbacks"]
+
+    if callbacks_config["name"] == "EarlyStopping":
+        es = pytorch_lightning.callbacks.EarlyStopping(
+            monitor=callbacks_config["monitor"],
+            min_delta=callbacks_config["min_delta"],
+            patience=callbacks_config["patience"],
+            verbose=callbacks_config["verbose"],
+            mode=callbacks_config["verbose"],
+        )
+        callbacks.append(es)
+        print("Using early stopping monitoring", callbacks_config["monitor"])
     gpu_config = config["gpus"]
     if gpu_config is None:
         gpu_config = -1
@@ -59,7 +73,6 @@ def main():
         accelerator = "ddp"
 
     print("Training on ", gpu_config, "GPUs with backend", accelerator)
-    callbacks = [MC]
     print("Initializing trainer...", end=" ")
     trainer = pytorch_lightning.Trainer(
         gpus=gpu_config,
