@@ -151,7 +151,6 @@ def get_model_configurations(config):
         ), f"{param} is required for model {model_config['name']}"
         model_parameters[param] = model_config[param]
 
-    print(model_parameters)
     return model_parameters
 
 
@@ -192,10 +191,6 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         self.args_inference["size_out"] = config["model"]["patch_size"]
         self.args_inference["nclass"] = config["model"]["out_channels"]
 
-        # device = config["device"]
-        # print(f"Sending the model to '{device}'")
-        # self.model = self.model.to(device)
-
     def forward(self, x):
         """
         returns raw predictions
@@ -210,37 +205,37 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         )
 
     def training_step(self, batch, batch_idx):
-        inputs = batch[0]  # .cuda()
-        targets = batch[1]  # .cuda()
+        inputs = batch[0]
+        targets = batch[1]
         outputs = self.forward(inputs)
-
         # select output channel
         outputs = outputs[:, self.args_inference["OutputCh"], :, :, :]
         outputs = torch.unsqueeze(
             outputs, dim=1
         )  # add back in channel dimension to match targets
         if self.accepts_costmap:
-            cmap = batch[2]  # .cuda()
+            cmap = batch[2]
             loss = self.loss_function(outputs, targets, cmap)
         else:
             if self.loss_weight is not None:
                 loss = self.loss_function(outputs, targets, self.loss_weight)
             else:
                 loss = self.loss_function(outputs, targets)
-
         # metric = self.metric(outputs, targets)
+        self.log(
+            "epoch_train_loss",
+            loss,
+            sync_dist=True,
+            prog_bar=True,
+            on_epoch=True,
+            on_step=False,
+        )
 
-        return {"loss": loss}  # , "metric": metric}
-
-    def training_epoch_end(self, outputs):
-        avg_loss = torch.stack([x["loss"] for x in outputs]).mean()
-        # avg_metric = torch.stack([x["metric"] for x in outputs]).mean()
-        self.log("Epoch_train_loss", avg_loss, prog_bar=True)
-        # self.log("Epoch_train_metric", avg_metric, prog_bar=True)
+        return {"loss": loss}
 
     def validation_step(self, batch, batch_idx):
-        input_img = batch[0]  # .cuda()
-        label = batch[1]  # .cuda()
+        input_img = batch[0]
+        label = batch[1]
         outputs = model_inference(self.model, input_img, self.args_inference)
         outputs = outputs[:, self.args_inference["OutputCh"], :, :, :]
 
@@ -249,21 +244,15 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         )  # add back in channel dimension to match label
 
         if self.accepts_costmap:
-            costmap = batch[2]  # .cuda()
+            costmap = batch[2]
             val_loss = self.loss_function(outputs, label, costmap)
         else:
             val_loss = self.loss_function(outputs, label)
 
         # val_metric = self.metric(outputs, label)
 
-        return {"val_loss": val_loss}  # , "val_metric": val_metric}
-
-    def validation_epoch_end(self, outputs):
-        avg_loss = torch.stack([x["val_loss"] for x in outputs]).mean()
-        # avg_metric = torch.stack([x["val_metric"] for x in outputs]).mean()
-
-        self.log("Epoch_val_loss", avg_loss, prog_bar=True)
-        # self.log("Epoch_val_metric", avg_metric, prog_bar=True)
+        # sync_dist on_epoch=True ensures that results will be averaged across gpus
+        self.log("val_loss", val_loss, sync_dist=True, on_epoch=True, prog_bar=True)
 
 
 class DataModule(pytorch_lightning.LightningDataModule):

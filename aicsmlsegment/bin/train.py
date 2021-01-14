@@ -5,6 +5,7 @@ from aicsmlsegment.model_utils import (
     get_number_of_learnable_parameters,
 )
 from aicsmlsegment.monai_utils import Monai_BasicUNet, DataModule
+import torch
 
 
 SUPPORTED_MONAI_MODELS = [
@@ -34,9 +35,9 @@ def main():
 
     # Log the number of learnable parameters
 
-    logger.info(
-        f"Number of learnable params {get_number_of_learnable_parameters(model)}"
-    )
+    # logger.info(
+    #     f"Number of learnable params {get_number_of_learnable_parameters(model)}"
+    # )
 
     checkpoint_dr = config["checkpoint_dir"]
     # model checkpoint every n epochs as specified in config
@@ -47,16 +48,29 @@ def main():
         save_top_k=-1,
     )
 
+    gpu_config = config["gpus"]
+    if gpu_config is None:
+        gpu_config = -1
+    if gpu_config < -1:
+        print("Number of GPUs must be -1 or > 1")
+        quit()
+
+    accelerator = config["dist_backend"]
+    if accelerator is None and gpu_config != 1:
+        accelerator = "ddp"
+
+    print("Training on ", gpu_config, "GPUs with backend", accelerator)
     callbacks = [MC]
     print("Initializing trainer...", end=" ")
     trainer = pytorch_lightning.Trainer(
-        gpus=-1,
+        gpus=gpu_config,
         max_epochs=config["epochs"],
         check_val_every_n_epoch=config["validation"]["validate_every_n_epoch"],
         num_sanity_val_steps=0,
         callbacks=callbacks,
         reload_dataloaders_every_epoch=False,  # check https://github.com/PyTorchLightning/pytorch-lightning/pull/5043 for updates on pull request
         # reload_dataloaders_every_n_epoch = config['loader']['epoch_shuffle']
+        distributed_backend=accelerator,
     )
     print("Done")
     print("Initializing data module...", end=" ")

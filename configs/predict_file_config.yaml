@@ -5,6 +5,7 @@ model:
   name: BasicUNet
   # number of input channels to the model
   in_channels: 1
+
   # number of output channels/ classes
   out_channels: 2
   # input patch size given to the network (adapt to fit in your GPU memory, generally bigger patches are better)
@@ -13,7 +14,7 @@ model:
   dimensions: 3
 
 # path to the trained model
-model_path: '//allen/aics/assay-dev/users/Benji/model_checkpoints/checkpoint_epoch=4-v1.ckpt'
+model_path: '//allen/aics/assay-dev/users/Benji/model_checkpoints/checkpoint_epoch=4-v7.ckpt'
 # the channel to extract from output tensors
 OutputCh: 1
 
