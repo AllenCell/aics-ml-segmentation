@@ -171,6 +171,7 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
             assert "validation" in config, "validation required"
             validation_config = config["validation"]
             self.leaveout = validation_config["leaveout"]
+            self.validation_period = validation_config["validate_every_n_epoch"]
 
             self.lr = config["learning_rate"]
             self.weight_decay = config["weight_decay"]
@@ -183,6 +184,9 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
                 self.loss_weight,
             ) = get_loss_criterion(config)
             self.metric = get_metric(config)
+
+            assert "scheduler" in config, "scheduler required, but can be blank"
+            self.scheduler_params = config["scheduler"]
 
         else:
             self.args_inference["OutputCh"] = config["OutputCh"]
@@ -198,11 +202,80 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         return self.model(x)
 
     def configure_optimizers(self):
-        return Adam(
+        optims = []
+        scheds = []
+
+        scheduler_params = self.scheduler_params
+
+        # basic optimizer
+        optimizer = Adam(
             self.model.parameters(),
             lr=self.lr,
             weight_decay=self.weight_decay,
         )
+        optims.append(optimizer)
+
+        if scheduler_params["name"] is not None:
+            if scheduler_params["name"] == "ExponentialLR":
+                from torch.optim.lr_scheduler import ExponentialLR
+
+                assert scheduler_params["gamma"] > 0
+                scheduler = ExponentialLR(
+                    optims[0],
+                    gamma=scheduler_params["gamma"],
+                    verbose=scheduler_params["verbose"],
+                )
+
+            elif scheduler_params["name"] == "CosineAnnealingLR":
+                from torch.optim.lr_scheduler import CosineAnnealingLR as CALR
+
+                assert scheduler_params["T_max"] > 0
+                scheduler = CALR(
+                    optims[0],
+                    T_max=scheduler_params["T_max"],
+                    verbose=scheduler_params["verbose"],
+                )
+
+            elif scheduler_params["name"] == "StepLR":
+                from torch.optim.lr_scheduler import StepLR
+
+                assert scheduler_params["step_size"] > 0
+                assert scheduler_params["gamma"] > 0
+                scheduler = StepLR(
+                    optims[0],
+                    step_size=scheduler_params["step_size"],
+                    gamma=scheduler_params["gamma"],
+                    verbose=scheduler_params["verbose"],
+                )
+            elif scheduler_params["name"] == "ReduceLROnPlateau":
+                from torch.optim.lr_scheduler import ReduceLROnPlateau
+
+                assert 0 < scheduler_params["factor"] < 1
+                assert scheduler_params["patience"] > 0
+                # if patience is too short, validation metrics won't be available for the optimizer
+                if "val" in scheduler_params["monitor"]:
+                    assert (
+                        scheduler_params["patience"] > self.validation_period
+                    ), "Patience must be larger than validation frequency"
+                scheduler = ReduceLROnPlateau(
+                    optims[0],
+                    mode=scheduler_params["mode"],
+                    factor=scheduler_params["factor"],
+                    patience=scheduler_params["patience"],
+                    verbose=scheduler_params["verbose"],
+                )
+                # monitoring metric must be specified
+                return {
+                    "optimizer": optims[0],
+                    "lr_scheduler": scheduler,
+                    "monitor": scheduler_params["monitor"],
+                }
+
+            scheds.append(scheduler)
+            return optims, scheds
+        else:
+            print("no scheduler is used")
+            return optims
 
     def training_step(self, batch, batch_idx):
         inputs = batch[0]

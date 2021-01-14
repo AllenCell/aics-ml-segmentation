@@ -5,7 +5,6 @@ from aicsmlsegment.model_utils import (
     get_number_of_learnable_parameters,
 )
 from aicsmlsegment.monai_utils import Monai_BasicUNet, DataModule
-import torch
 
 
 SUPPORTED_MONAI_MODELS = [

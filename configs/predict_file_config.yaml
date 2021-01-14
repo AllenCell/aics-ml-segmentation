@@ -1,17 +1,21 @@
 ##########################################################################################################
 # model settings
 ##########################################################################################################
-model: 
+model: # model parameters (except patch_size) should be the same as specified in train_config.yaml
   name: BasicUNet
   # number of input channels to the model
   in_channels: 1
-
   # number of output channels/ classes
   out_channels: 2
   # input patch size given to the network (adapt to fit in your GPU memory, generally bigger patches are better)
-  patch_size: [26, 210, 210] #[52, 420, 420]
+  patch_size: [52, 420, 420] #[52, 420, 420]
   #number of dimensions of patch size
   dimensions: 3
+
+  norm: #'instance' # instance | batch |  defaults to batch
+  act: #'ReLU6' # ReLU | LeakyReLU | PReLU | ReLU6, defaults to LeakyReLU
+  features: #[32, 32, 64, 128, 512, 32] # list of 6 numbers,the first five specify the encoder feature sizes. The last value corresponds to the feature size after the last upsampling. defaults to [32, 32, 64, 128, 256, 32]
+  dropout: #True # True | False, defaults to False
 
 # path to the trained model
 model_path: '//allen/aics/assay-dev/users/Benji/model_checkpoints/checkpoint_epoch=4-v7.ckpt'
