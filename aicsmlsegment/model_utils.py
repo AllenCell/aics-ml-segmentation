@@ -1,6 +1,24 @@
 import numpy as np
 import torch
 from monai.inferers import sliding_window_inference
+from skimage.io import imsave
+
+
+def flip(img: np.ndarray, axis: int, to_tensor=True, inplace=False) -> torch.Tensor:
+    """
+    flip input img along axis and confert to tensor
+    """
+    if inplace:
+        out_img = img
+    else:
+        out_img = img.copy()
+    for ch_idx in range(out_img.shape[0]):
+        str_im = out_img[ch_idx, :, :, :]
+        out_img[ch_idx, :, :, :] = np.flip(str_im, axis=axis)
+    if to_tensor:
+        return torch.as_tensor(out_img.astype(np.float32), dtype=torch.float)
+    else:
+        return out_img
 
 
 def apply_on_image(model, input_img, args, squeeze, to_numpy):
@@ -26,63 +44,34 @@ def apply_on_image(model, input_img, args, squeeze, to_numpy):
 
     if not args["RuntimeAug"]:
         input_img = torch.from_numpy(input_img).float()
-        #####HACK UNDO THE CUDA##############
-        return model_inference(model, input_img.cuda(), args, squeeze, to_numpy)
+        return model_inference(model, input_img, args, squeeze, to_numpy)
     else:
         print("doing runtime augmentation")
-
-        input_img_aug = input_img.copy()
-        for ch_idx in range(input_img_aug.shape[0]):
-            str_im = input_img_aug[ch_idx, :, :, :]
-            input_img_aug[ch_idx, :, :, :] = np.flip(str_im, axis=2)
-
-        input_img_aug_tensor = torch.from_numpy(input_img_aug.astype(float)).float()
-        out1 = model_inference(
-            model, input_img_aug_tensor, args, squeeze=True, to_numpy=True
+        input_img_tensor = torch.as_tensor(
+            input_img.astype(np.float32), dtype=torch.float
         )
-
-        input_img_aug = []
-        input_img_aug = input_img.copy()
-        for ch_idx in range(input_img_aug.shape[0]):
-            str_im = input_img_aug[ch_idx, :, :, :]
-            input_img_aug[ch_idx, :, :, :] = np.flip(str_im, axis=1)
-
-        input_img_aug_tensor = torch.from_numpy(input_img_aug.astype(float)).float()
-        out2 = model_inference(
-            model, input_img_aug_tensor, args, squeeze=True, to_numpy=True
-        )
-
-        input_img_aug = []
-        input_img_aug = input_img.copy()
-        for ch_idx in range(input_img_aug.shape[0]):
-            str_im = input_img_aug[ch_idx, :, :, :]
-            input_img_aug[ch_idx, :, :, :] = np.flip(str_im, axis=0)
-
-        input_img_aug_tensor = torch.from_numpy(input_img_aug.astype(float)).float()
-        out3 = model_inference(
-            model, input_img_aug_tensor, args, squeeze=True, to_numpy=True
-        )
-
-        input_img_tensor = torch.from_numpy(input_img.astype(float)).float()
         out0 = model_inference(
-            model, input_img_tensor, args, squeeze=True, to_numpy=True
+            model, input_img_tensor, args, squeeze=False, to_numpy=True
         )
 
-        for ch_idx in range(len(out0)):
-            out0[ch_idx] = 0.25 * (
-                out0[ch_idx]
-                + np.flip(out1[ch_idx], axis=2)
-                + np.flip(out2[ch_idx], axis=1)
-                + np.flip(out3[ch_idx], axis=0)
-            )
-        return np.expand_dims(out0, axis=0)  # add batch dimension
+        for i in range(3):
+            aug = flip(input_img, axis=i)
+            out = model_inference(model, aug, args, squeeze=False, to_numpy=True)
+            aug_flip = flip(out, axis=i, to_tensor=False)
+            imsave(str(i) + ".tiff", aug_flip)
+            out0 += aug_flip
+
+        out0 /= 4
+
+        return out0  # add batch dimension
 
 
 def model_inference(model, input_img, args, squeeze=False, to_numpy=False):
     print("PERFORMING INFERENCE")
     with torch.no_grad():
+        #####HACK UNDO THE .CUDA##############
         result = sliding_window_inference(
-            inputs=input_img,
+            inputs=input_img.cuda(),
             roi_size=args["size_out"],
             sw_batch_size=args["batch_size"],
             predictor=model.forward,
