@@ -29,30 +29,27 @@ resume: #'/allen/aics/assay-dev/users/Benji/model_checkpoints/checkpoint_epoch=1
 # training precedure setting
 ##########################################################################################################
 # initial learning rate
-learning_rate: 0.0001
+learning_rate: 0.001
 # weight decay
 weight_decay: 0.005
 
-# learning rate scheduler configuration
+# learning rate scheduler configuration, leave name blank to omit
 scheduler:
-  name: 
+  name: CosineAnnealingLR
   # whether to print updates when learning rate is adjusted
   verbose: True
   # scheduler parameters - these vary by the chosen scheduler
   mode: min
-  factor: 0.2
-  patience: 2
-  verbose: True
-  monitor: val_loss
+  T_max: 10
 
 # max number of epochs
 epochs: 200
 # number of epoch to save the model 
 save_every_n_epoch: 5
 # number of gpus to use default is all available OPTIONAL
-gpus: -1 # -1 or positive integer
+gpus: 1 # -1 or positive integer
 # distributed backend, default is ddp if gpus > 1, else none OPTIONAL
-dist_backend:  ddp 
+dist_backend:  #ddp 
 
 # OPTIONAL leave name blank to avoid using additional callbacks
 callbacks:

@@ -164,12 +164,12 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
             loader_config = config["loader"]
             self.datapath = loader_config["datafolder"]
             self.nworkers = loader_config["NumWorkers"]
-            self.batchsize = loader_config["batch_size"]
 
             assert "validation" in config, "validation required"
             validation_config = config["validation"]
             self.leaveout = validation_config["leaveout"]
             self.validation_period = validation_config["validate_every_n_epoch"]
+            self.batchsize = loader_config["batch_size"]
 
             self.lr = config["learning_rate"]
             self.weight_decay = config["weight_decay"]
@@ -188,6 +188,7 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
 
         else:
             self.args_inference["OutputCh"] = config["OutputCh"]
+            self.args_inference["batch_size"] = config["batch_size"]
 
         self.args_inference["size_in"] = config["model"]["patch_size"]
         self.args_inference["size_out"] = config["model"]["patch_size"]

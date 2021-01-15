@@ -60,14 +60,15 @@ def main():
             mode=callbacks_config["verbose"],
         )
         callbacks.append(es)
-        print("Using early stopping monitoring", callbacks_config["monitor"])
+
     gpu_config = config["gpus"]
     if gpu_config is None:
         gpu_config = -1
     if gpu_config < -1:
-        print("Number of GPUs must be -1 or > 1")
+        print("Number of GPUs must be -1 or > 0")
         quit()
 
+    # ddp is the default unless only one gpu is requested
     accelerator = config["dist_backend"]
     if accelerator is None and gpu_config != 1:
         accelerator = "ddp"

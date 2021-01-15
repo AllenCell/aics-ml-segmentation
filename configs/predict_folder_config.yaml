@@ -32,6 +32,8 @@ Normalization: 13
 Threshold: -1 #0.5 # 0.3
 # whether to use run time augmentation (may improve the accuracy, but takes much longer to run)
 RuntimeAug: False
+#adjust this to fit your GPU
+batch_size: 8
 
 ##########################################################################################################
 # Execution mode: all files of specific type within a directory

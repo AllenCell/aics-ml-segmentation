@@ -8,7 +8,7 @@ model: # model parameters (except patch_size) should be the same as specified in
   # number of output channels/ classes
   out_channels: 2
   # input patch size given to the network (adapt to fit in your GPU memory, generally bigger patches are better)
-  patch_size: [52, 420, 420] #[52, 420, 420]
+  patch_size: [26, 105, 105] #[52, 420, 420]
   #number of dimensions of patch size
   dimensions: 3
 
@@ -18,7 +18,7 @@ model: # model parameters (except patch_size) should be the same as specified in
   dropout: #True # True | False, defaults to False
 
 # path to the trained model
-model_path: '//allen/aics/assay-dev/users/Benji/model_checkpoints/checkpoint_epoch=4-v7.ckpt'
+model_path: '//allen/aics/assay-dev/users/Benji/model_checkpoints/checkpoint_epoch=169-v0.ckpt'
 # the channel to extract from output tensors
 OutputCh: 1
 
@@ -37,6 +37,8 @@ Normalization: 13
 Threshold: -1
 # whether to use run time augmentation (may improve the accuracy, but takes much longer to run)
 RuntimeAug: False
+#adjust this to fit your GPU
+batch_size: 4
 
 ##########################################################################################################
 # Execution mode: single file
