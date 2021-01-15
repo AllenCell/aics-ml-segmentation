@@ -89,10 +89,8 @@ def get_loss_criterion(config):
         return CustomLosses.ElementAngularMSELoss(), True, weight
     elif name == "Dice":
         return MonaiLosses.DiceLoss(sigmoid=True), False, None
-        # return CustomLosses.DiceLoss(), False
     elif name == "GeneralizedDice":
-        return CustomLosses.GeneralizedDiceLoss(sigmoid_normalization=True), False, None
-        # return MonaiLosses.GeneralizedDiceLoss(sigmoid=True), False, None
+        return MonaiLosses.GeneralizedDiceLoss(sigmoid=True), False, None
     elif name == "WeightedCrossEntropy":
         return CustomLosses.WeightedCrossEntropyLoss(), False, weight
     elif name == "PixelwiseCrossEntropy":
