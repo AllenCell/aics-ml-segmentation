@@ -182,7 +182,7 @@ def main():
                 "CZYX", S=0, T=0, C=config["InputCh"]
             ).astype(float)
 
-            img = resize(img, config, minmax=False)
+            img = resize(img, config, min_max=False)
 
             img = image_normalization(img, config["Normalization"])
 

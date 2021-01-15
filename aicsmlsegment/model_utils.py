@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 from monai.inferers import sliding_window_inference
-from skimage.io import imsave
 
 
 def flip(img: np.ndarray, axis: int, to_tensor=True, inplace=False) -> torch.Tensor:
