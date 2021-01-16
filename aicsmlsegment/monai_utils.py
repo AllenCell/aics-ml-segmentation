@@ -280,11 +280,7 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         inputs = batch[0]
         targets = batch[1]
         outputs = self.forward(inputs)
-        # select output channel
-        outputs = outputs[:, self.args_inference["OutputCh"], :, :, :]
-        outputs = torch.unsqueeze(
-            outputs, dim=1
-        )  # add back in channel dimension to match targets
+
         if self.accepts_costmap:
             cmap = batch[2]
             loss = self.loss_function(outputs, targets, cmap)
@@ -309,11 +305,6 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         input_img = batch[0]
         label = batch[1]
         outputs = model_inference(self.model, input_img, self.args_inference)
-        outputs = outputs[:, self.args_inference["OutputCh"], :, :, :]
-
-        outputs = torch.unsqueeze(
-            outputs, dim=1
-        )  # add back in channel dimension to match label
 
         if self.accepts_costmap:
             costmap = batch[2]

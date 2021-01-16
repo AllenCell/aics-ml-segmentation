@@ -3,24 +3,34 @@ import torch
 from monai.inferers import sliding_window_inference
 
 
-def flip(img: np.ndarray, axis: int, to_tensor=True, inplace=False) -> torch.Tensor:
+def flip(img: np.ndarray, axis: int, to_tensor=True) -> torch.Tensor:
     """
-    flip input img along axis and confert to tensor
+    Inputs:
+        img: image to be flipped
+        axis: axis along which to flip image. Should be indexed from the channel dimension
+        to_tensor: whether to unsqueeze to (1,C,Z,X,Y) and convert to tensor before returning
+    Outputs:
+        if to_tensor is True: (1,C,Z,X,Y)-shaped tensor
+        if to_tensor is false: numpy array of shape (C,Z,X,Y)
+    flip input img along axis
     """
-    if inplace:
-        out_img = img
-    else:
-        out_img = img.copy()
+
+    out_img = img.copy()
     for ch_idx in range(out_img.shape[0]):
         str_im = out_img[ch_idx, :, :, :]
         out_img[ch_idx, :, :, :] = np.flip(str_im, axis=axis)
-    if to_tensor:
-        return torch.as_tensor(out_img.astype(np.float32), dtype=torch.float)
+
+    if to_tensor:  # used for inference, also have to unsqueeze for sliding window
+        return torch.unsqueeze(
+            torch.as_tensor(out_img.astype(np.float32), dtype=torch.float), dim=0
+        )
     else:
         return out_img
 
 
-def apply_on_image(model, input_img, args, squeeze, to_numpy):
+def apply_on_image(
+    model, input_img: np.ndarray, args: dict, squeeze: bool, to_numpy: bool
+) -> np.ndarray:
     """
     Inputs:
         model: pytorch model with a forward method
@@ -36,18 +46,19 @@ def apply_on_image(model, input_img, args, squeeze, to_numpy):
     If runtime augmentation is selected, perform inference on flipped images and average results.
     returns: 4 or 5 dimensional numpy array or tensor with result of model.forward on input_img
     """
-    if len(input_img.shape) == 4:
-        input_img = np.expand_dims(
-            input_img, axis=0
-        )  # add batch_dimension for sliding window inference
 
     if not args["RuntimeAug"]:
+        if len(input_img.shape) == 4:
+            input_img = np.expand_dims(
+                input_img, axis=0
+            )  # add batch_dimension for sliding window inference
         input_img = torch.from_numpy(input_img).float()
         return model_inference(model, input_img, args, squeeze, to_numpy)
     else:
         print("doing runtime augmentation")
-        input_img_tensor = torch.as_tensor(
-            input_img.astype(np.float32), dtype=torch.float
+        # convert numpy input to (1,C,Z,Y,X) shaped tensor
+        input_img_tensor = torch.unsqueeze(
+            torch.as_tensor(input_img.astype(np.float32), dtype=torch.float), dim=0
         )
         out0 = model_inference(
             model, input_img_tensor, args, squeeze=False, to_numpy=True
@@ -55,31 +66,30 @@ def apply_on_image(model, input_img, args, squeeze, to_numpy):
 
         for i in range(3):
             aug = flip(input_img, axis=i)
-            out = model_inference(model, aug, args, squeeze=False, to_numpy=True)
+            out = model_inference(model, aug, args, squeeze=True, to_numpy=True)
             aug_flip = flip(out, axis=i, to_tensor=False)
-            imsave(str(i) + ".tiff", aug_flip)
             out0 += aug_flip
 
         out0 /= 4
-
-        return out0  # add batch dimension
+        return out0
 
 
 def model_inference(model, input_img, args, squeeze=False, to_numpy=False):
-    print("PERFORMING INFERENCE")
+    """
+    perform model inference and extract output channel
+    """
     with torch.no_grad():
-        #####HACK UNDO THE .CUDA##############
         result = sliding_window_inference(
-            inputs=input_img.cuda(),
+            inputs=input_img,
             roi_size=args["size_out"],
-            sw_batch_size=args["batch_size"],
+            sw_batch_size=args["inference_batch_size"],
             predictor=model.forward,
             overlap=0.25,
             mode="gaussian",
-            # sigma_scale=0.01,
         )
-    if squeeze:
-        result = torch.squeeze(result, dim=0)  # remove batch dimension
+        result = result[:, args["OutputCh"], :, :, :]
+    if not squeeze:
+        result = torch.unsqueeze(result, dim=0)  # remove batch dimension
     if to_numpy:
         result = result.cpu().numpy()
     return result

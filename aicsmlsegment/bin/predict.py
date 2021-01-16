@@ -68,7 +68,6 @@ def undo_resize(img, config):
 
 
 def main():
-
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
     args = parser.parse_args()
@@ -80,7 +79,7 @@ def main():
     print(f"Loading model from {model_path}...")
     model = Monai_BasicUNet.load_from_checkpoint(model_path, config=config, train=False)
     model.to("cuda")
-    print("model loaded")
+
     # extract the parameters for running the model inference
     args_inference = model.args_inference
     if config["RuntimeAug"] <= 0:
@@ -111,14 +110,14 @@ def main():
                 )
 
                 # extract the result and write the output
-                out = output_img[:, args_inference["OutputCh"], :, :, :]
-                out = minmax(out)
+                out = minmax(output_img)
                 out = undo_resize(out, config)
 
                 if config["Threshold"] > 0:
                     out = out > config["Threshold"]
                     out = out.astype(np.uint8)
                     out[out > 0] = 255
+
                 imsave(
                     config["OutputDir"]
                     + os.sep
@@ -133,29 +132,20 @@ def main():
             img = data_reader.get_image_data(
                 "CZYX", S=0, T=0, C=config["InputCh"]
             ).astype(float)
-            print("Image read")
+
             img = image_normalization(img, config["Normalization"])
-            print("Image normalized")
-
             img = resize(img, config)
-
-            print("Image resized")
-            print("applying model", end=" ")
             # apply the model
             output_img = apply_on_image(
                 model, img, args_inference, squeeze=False, to_numpy=True
             )
-            print("done")
-            # extract the result and write the output
-            out = output_img[:, args_inference["OutputCh"], :, :, :]
-            out = minmax(out)
+            #  write the output
+            out = minmax(output_img)
             out = undo_resize(out, config)
-            print("output resized")
             if config["Threshold"] > 0:
                 out = out > config["Threshold"]
                 out = out.astype(np.uint8)
                 out[out > 0] = 255
-            print("thresholded")
             imsave(
                 config["OutputDir"]
                 + os.sep
@@ -183,7 +173,6 @@ def main():
             ).astype(float)
 
             img = resize(img, config, min_max=False)
-
             img = image_normalization(img, config["Normalization"])
 
             # apply the model
@@ -192,15 +181,12 @@ def main():
             )
             # extract the result and write the output
             if config["Threshold"] < 0:
-                out = output_img[:, args_inference["OutputCh"], :, :, :]
-                out = minmax(out)
-
+                out = minmax(output_img)
                 out = undo_resize(out, config)
                 out = minmax(out)
             else:
                 out = remove_small_objects(
-                    output_img[:, args_inference["OutputCh"], :, :, :]
-                    > config["Threshold"],
+                    output_img > config["Threshold"],
                     min_size=2,
                     connectivity=1,
                 )

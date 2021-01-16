@@ -1,9 +1,6 @@
 import pytorch_lightning
 import argparse
 from aicsmlsegment.utils import load_config, get_logger
-from aicsmlsegment.model_utils import (
-    get_number_of_learnable_parameters,
-)
 from aicsmlsegment.monai_utils import Monai_BasicUNet, DataModule
 
 
@@ -31,12 +28,6 @@ def main():
     else:
         print("Training new model from scratch")
         model = Monai_BasicUNet(config, train=True)
-
-    # Log the number of learnable parameters
-
-    # logger.info(
-    #     f"Number of learnable params {get_number_of_learnable_parameters(model)}"
-    # )
 
     checkpoint_dr = config["checkpoint_dir"]
     # model checkpoint every n epochs as specified in config
