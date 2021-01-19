@@ -1,37 +1,3 @@
-import numpy as np
-import random
-from glob import glob
-
-
-def shuffle_split_filenames(datafolder, leaveout):
-    print("prepare the data ... ...")
-    filenames = glob(datafolder + "/*_GT.ome.tif")
-    filenames.sort()
-    total_num = len(filenames)
-    if len(leaveout) == 1:
-        if leaveout[0] > 0 and leaveout[0] < 1:
-            num_train = int(np.floor((1 - leaveout[0]) * total_num))
-            shuffled_idx = np.arange(total_num)
-            random.shuffle(shuffled_idx)
-            train_idx = shuffled_idx[:num_train]
-            valid_idx = shuffled_idx[num_train:]
-        else:
-            valid_idx = [int(leaveout[0])]
-            train_idx = list(set(range(total_num)) - set(map(int, leaveout)))
-    elif leaveout:
-        valid_idx = list(map(int, leaveout))
-        train_idx = list(set(range(total_num)) - set(valid_idx))
-
-    valid_filenames = []
-    train_filenames = []
-    for _, fn in enumerate(valid_idx):
-        valid_filenames.append(filenames[fn][:-11])
-    for _, fn in enumerate(train_idx):
-        train_filenames.append(filenames[fn][:-11])
-
-    return train_filenames, valid_filenames
-
-
 def _log_lr(self):
     lr = self.optimizer.param_groups[0]["lr"]
     self.writer.add_scalar("learning_rate", lr, self.num_iterations)

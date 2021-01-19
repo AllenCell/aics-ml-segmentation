@@ -44,7 +44,6 @@ def main():
         dirpath=checkpoint_dr,
         filename="checkpoint_{epoch}",
         period=config["save_every_n_epoch"],
-        verbose=1,
         save_top_k=-1,
     )
 
@@ -66,9 +65,7 @@ def main():
     trainer.fit(model, data_module)
     print(
         "The best performing checkpoint is",
-        trainer.best_model_path,
-        "with score",
-        trainer.best_model_score,
+        MC.best_model_path,
     )
 
 

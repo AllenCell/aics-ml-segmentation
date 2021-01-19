@@ -77,10 +77,12 @@ def main():
                         img[ch_idx, :, :, :] = struct_img
 
                 # apply the model
-                output_img = apply_on_image(model, img, args_inference)
+                output_img = apply_on_image(
+                    model, img, args_inference, squeeze=False, to_numpy=True
+                )
 
                 # extract the result and write the output
-                out = output_img[:, args_inference.OutputCh, :, :, :].cpu()
+                out = output_img[:, args_inference.OutputCh, :, :, :]
                 out = (out - out.min()) / (out.max() - out.min())
                 if len(config["ResizeRatio"]) > 0:
                     out = zoom(
@@ -137,9 +139,11 @@ def main():
                     img[ch_idx, :, :, :] = struct_img
 
             # apply the model
-            output_img = apply_on_image(model, img, args_inference)
+            output_img = apply_on_image(
+                model, img, args_inference, squeeze=False, to_numpy=True
+            )
             # extract the result and write the output
-            out = output_img[:, args_inference.OutputCh, :, :, :].cpu()
+            out = output_img[:, args_inference.OutputCh, :, :, :]
             out = (out - out.min()) / (out.max() - out.min())
             if len(config["ResizeRatio"]) > 0:
                 out = zoom(
@@ -198,7 +202,9 @@ def main():
             img = image_normalization(img, config["Normalization"])
 
             # apply the model
-            output_img = apply_on_image(model, img, args_inference).cpu()
+            output_img = apply_on_image(
+                model, img, args_inference, squeeze=False, to_numpy=True
+            )
             # extract the result and write the output
             if config["Threshold"] < 0:
                 out = output_img[:, args_inference.OutputCh, :, :, :]

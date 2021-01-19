@@ -3,8 +3,9 @@ from torch.utils.data import DataLoader
 from torch.optim import Adam
 import torch
 
-from monai.networks.layers import Norm
+from monai.networks.layers import Norm, Act
 from monai.networks.nets import BasicUNet
+import monai.losses as MonaiLosses
 
 import aicsmlsegment.custom_loss as CustomLosses
 import aicsmlsegment.custom_metrics as CustomMetrics
@@ -12,7 +13,7 @@ from aicsmlsegment.model_utils import (
     model_inference,
 )
 from aicsmlsegment.DataLoader3D.Universal_Loader import UniversalDataset
-
+from monai.metrics import DiceMetric
 import random
 import numpy as np
 from glob import glob
@@ -23,60 +24,144 @@ SUPPORTED_LOSSES = [
     "GeneralizedDice",
 ]
 #     "MultiTaskElementNLL",
-#     "ElementAngularMSE",
-#    "ElementNLL",
+# "ElementNLL",
+#       "ElementAngularMSE",
 #     "WeightedCrossEntropy",
 #     "PixelwiseCrossEntropy",
 # ]
 
-SUPPORTED_METRICS = ["default"]
+SUPPORTED_METRICS = [
+    "default",
+    "Dice",
+]
+# "IOU", "AveragePrecision"]
+
+MODEL_PARAMETERS = {
+    "BasicUNet": {
+        "Optional": [
+            "features",
+            "act",
+            "norm",
+            "dropout",
+        ],
+        "Required": ["dimensions", "in_channels", "out_channels"],
+    }
+}
+
+ACTIVATIONS = {
+    "LeakyReLU": Act.LEAKYRELU,
+    "PReLU": Act.PRELU,
+    "ReLU": Act.RELU,
+    "ReLU6": Act.RELU6,
+}
+
+NORMALIZATIONS = {
+    "batch": Norm.BATCH,
+    "instance": Norm.INSTANCE,
+}
 
 
 def get_loss_criterion(config):
     """
     Returns the loss function based on provided configuration
     :param config: (dict) a top level configuration object containing the 'loss' key
-    :return: an instance of the loss function
+    :return: an instance of the loss function and whether it accepts a costmap
     """
     assert "loss" in config, "Could not find loss function configuration"
     loss_config = config["loss"]
     name = loss_config["name"]
+    weight = loss_config["loss_weight"]
     assert (
         name in SUPPORTED_LOSSES
     ), f"Invalid loss: {name}. Supported losses: {SUPPORTED_LOSSES}"
 
-    # ignore_index = loss_config.get('ignore_index', None)
-
     if name == "ElementNLL":
-        return CustomLosses.ElementNLLLoss(config["nclass"]), True
+        return CustomLosses.ElementNLLLoss(config["nclass"]), False, weight
     elif name == "MultiTaskElementNLL":
         return (
             CustomLosses.MultiTaskElementNLLLoss(
                 loss_config["loss_weight"], loss_config["nclass"]
             ),
             True,
+            weight,
         )
     elif name == "ElementAngularMSE":
-        return CustomLosses.ElementAngularMSE(), True
+        return CustomLosses.ElementAngularMSELoss(), True, weight
     elif name == "Dice":
-        return CustomLosses.DiceLoss(), False
+        return MonaiLosses.DiceLoss(sigmoid=True), False, None
+        # return CustomLosses.DiceLoss(), False
     elif name == "GeneralizedDice":
-        return CustomLosses.GeneralizedDiceLoss(), False
+        # return CustomLosses.GeneralizedDiceLoss(), False
+        return MonaiLosses.GeneralizedDiceLoss(sigmoid=True), False, None
     elif name == "WeightedCrossEntropy":
-        return CustomLosses.WeightedCrossEntropyLoss(), False
+        return CustomLosses.WeightedCrossEntropyLoss(), False, weight
     elif name == "PixelwiseCrossEntropy":
-        return CustomLosses.PixelWiseCrossEntropyLoss(), True
+        return CustomLosses.PixelWiseCrossEntropyLoss(), True, weight
+
+
+def get_metric(config):
+    assert "validation" in config, "Could not find validation information"
+    validation_config = config["validation"]
+    assert "metric" in validation_config, "Could not find validation metric"
+    metric = validation_config["metric"]
+
+    assert (
+        metric in SUPPORTED_METRICS
+    ), f"Invalid metric: {metric}. Supported metrics are: {SUPPORTED_METRICS}"
+
+    if metric == "Dice":
+        return DiceMetric
+        # return CustomMetrics.DiceCoefficient()
+    elif metric == "default" or metric == "IOU":
+        return CustomMetrics.MeanIoU()
+    elif metric == "AveragePrecision":
+        return CustomMetrics.AveragePrecision()
+
+
+def get_model_configurations(config):
+    assert "model" in config, "Model specifications must be included"
+    model_config = config["model"]
+
+    model_parameters = {}
+
+    all_parameters = MODEL_PARAMETERS[model_config["name"]]
+
+    # allow users to overwrite specific parameters
+    for param in all_parameters["Optional"]:
+        # if optional parameters are not specified, skip them to use monai defaults
+        if param in model_config and not model_config[param] is None:
+            if param == "norm":
+                try:
+                    model_parameters[param] = NORMALIZATIONS[model_config[param]]
+                except KeyError:
+                    print(f"{model_config[param]} is not an acceptable normalization.")
+                    quit()
+            elif param == "act":
+                try:
+                    model_parameters[param] = ACTIVATIONS[model_config[param]]
+                except KeyError:
+                    print(f"{model_config[param]} is not an acceptable activation.")
+                    quit()
+            else:
+                model_parameters[param] = model_config[param]
+    # find parameters that must be included
+    for param in all_parameters["Required"]:
+        assert (
+            param in model_config
+        ), f"{param} is required for model {model_config['name']}"
+        model_parameters[param] = model_config[param]
+
+    print(model_parameters)
+    return model_parameters
 
 
 class Monai_BasicUNet(pytorch_lightning.LightningModule):
     def __init__(self, config, train):
         super().__init__()
-        self.model = BasicUNet(
-            dimensions=len(config["size_in"]),
-            in_channels=config["nchannel"],
-            out_channels=config["nclass"],
-            norm=Norm.BATCH,
-        )
+        model_configuration = get_model_configurations(config)
+        self.model = BasicUNet(**model_configuration)
+
+        print(self.model)
         self.args_inference = lambda: None
         if train:
             assert "loader" in config, "loader required"
@@ -94,21 +179,28 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
 
             self.args_inference.OutputCh = validation_config["OutputCh"]
 
-            self.loss_function, self.accepts_costmap = get_loss_criterion(config)
-            self.metric = CustomMetrics.MeanIoU()
+            (
+                self.loss_function,
+                self.accepts_costmap,
+                self.loss_weight,
+            ) = get_loss_criterion(config)
+            self.metric = get_metric(config)
 
         else:
             self.args_inference.OutputCh = config["OutputCh"]
 
-        self.args_inference.size_in = config["size_in"]
-        self.args_inference.size_out = config["size_out"]
-        self.args_inference.nclass = config["nclass"]
+        self.args_inference.size_in = config["model"]["patch_size"]
+        self.args_inference.size_out = config["model"]["patch_size"]
+        self.args_inference.nclass = config["model"]["out_channels"]
 
         device = config["device"]
         print(f"Sending the model to '{device}'")
         self.model = self.model.to(device)
 
     def forward(self, x):
+        """
+        returns raw predictions
+        """
         return self.model(x)
 
     def configure_optimizers(self):
@@ -132,22 +224,24 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
             cmap = batch[2].cuda()
             loss = self.loss_function(outputs, targets, cmap)
         else:
-            loss = self.loss_function(outputs, targets)
+            if self.loss_weight is not None:
+                loss = self.loss_function(outputs, targets, self.loss_weight)
+            else:
+                loss = self.loss_function(outputs, targets)
 
-        mean_iou = self.metric(outputs, targets)
+        # metric = self.metric(outputs, targets)
 
-        return {"loss": loss, "iou": mean_iou}
+        return {"loss": loss}  # , "metric": metric}
 
     def training_epoch_end(self, outputs):
         avg_loss = torch.stack([x["loss"] for x in outputs]).mean()
-        avg_iou = torch.stack([x["iou"] for x in outputs]).mean()
-        self.log("train_loss", avg_loss, prog_bar=True)
-        self.log("IOU", avg_iou, prog_bar=True)
+        # avg_metric = torch.stack([x["metric"] for x in outputs]).mean()
+        self.log("Epoch_train_loss", avg_loss, prog_bar=True)
+        # self.log("Epoch_train_metric", avg_metric, prog_bar=True)
 
     def validation_step(self, batch, batch_idx):
         input_img = batch[0].cuda()
         label = batch[1].cuda()
-
         outputs = model_inference(self.model, input_img, self.args_inference)
         outputs = outputs[:, self.args_inference.OutputCh, :, :, :]
 
@@ -161,16 +255,16 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         else:
             val_loss = self.loss_function(outputs, label)
 
-        mean_iou = self.metric(outputs, label)
+        # val_metric = self.metric(outputs, label)
 
-        return {"val_loss": val_loss, "val_iou": mean_iou}
+        return {"val_loss": val_loss}  # , "val_metric": val_metric}
 
     def validation_epoch_end(self, outputs):
         avg_loss = torch.stack([x["val_loss"] for x in outputs]).mean()
-        avg_iou = torch.stack([x["val_iou"] for x in outputs]).mean()
+        # avg_metric = torch.stack([x["val_metric"] for x in outputs]).mean()
 
-        self.log("avg_val_loss", avg_loss, prog_bar=True)
-        self.log("VAL_IOU", avg_iou, prog_bar=True)
+        self.log("Epoch_val_loss", avg_loss, prog_bar=True)
+        # self.log("Epoch_val_metric", avg_metric, prog_bar=True)
 
 
 class DataModule(pytorch_lightning.LightningDataModule):
@@ -180,8 +274,10 @@ class DataModule(pytorch_lightning.LightningDataModule):
         self.config = config
         self.loader_config = config["loader"]
 
+        self.model_config = config["model"]
+
         name = config["loader"]["name"]
-        if name != "default" and name != "focus":
+        if name != "default":
             print("other loaders are under construction")
             quit()
 
@@ -239,15 +335,16 @@ class DataModule(pytorch_lightning.LightningDataModule):
     def train_dataloader(self):
         print("Initializing train dataloader: ", end=" ")
         loader_config = self.loader_config
-        config = self.config
+        model_config = self.model_config
         train_set_loader = DataLoader(
             UniversalDataset(
                 self.train_filenames,
                 loader_config["PatchPerBuffer"],
-                config["size_in"],
-                config["size_out"],
-                config["nchannel"],
+                model_config["patch_size"],
+                model_config["patch_size"],
+                model_config["in_channels"],
                 self.transforms,
+                patchize=True,
             ),
             batch_size=loader_config["batch_size"],
             shuffle=True,
@@ -258,15 +355,16 @@ class DataModule(pytorch_lightning.LightningDataModule):
     def val_dataloader(self):
         print("Initializing validation dataloader: ", end=" ")
         loader_config = self.loader_config
-        config = self.config
+        model_config = self.model_config
         val_set_loader = DataLoader(
             UniversalDataset(
                 self.valid_filenames,
                 loader_config["PatchPerBuffer"],
-                config["size_in"],
-                config["size_out"],
-                config["nchannel"],
+                model_config["patch_size"],
+                model_config["patch_size"],
+                model_config["in_channels"],
                 [],  # no transforms for validation data
+                patchize=False,  # validate on entire image
             ),
             batch_size=1,
             shuffle=False,
