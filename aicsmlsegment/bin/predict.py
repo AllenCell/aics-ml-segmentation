@@ -1,71 +1,11 @@
 #!/usr/bin/env python
 
 import argparse
-import os
-import pathlib
-import numpy as np
-
-from skimage.morphology import remove_small_objects
-from skimage.io import imsave
-from aicsimageio import AICSImage
-from scipy.ndimage import zoom
-
 from aicsmlsegment.utils import (
     load_config,
-    image_normalization,
 )
-from aicsmlsegment.model_utils import (
-    apply_on_image,
-)
-
 from aicsmlsegment.monai_utils import Monai_BasicUNet, DataModule
 import pytorch_lightning
-
-
-def minmax(img):
-    return (img - img.min()) / (img.max() - img.min())
-
-
-def resize(img, config, min_max=False):
-    if len(config["ResizeRatio"]) > 0 and config["ResizeRatio"] != [
-        1.0,
-        1.0,
-        1.0,
-    ]:
-        # don't resize if resize ratio is all 1s
-        # note that struct_img is only a view of img, so changes made on struct_img also affects img
-        img = zoom(
-            img,
-            (
-                1,
-                config["ResizeRatio"][0],
-                config["ResizeRatio"][1],
-                config["ResizeRatio"][2],
-            ),
-            order=2,
-            mode="reflect",
-        )
-        if min_max:
-            for ch_idx in range(img.shape[0]):
-                struct_img = img[ch_idx, :, :, :]
-                img[ch_idx, :, :, :] = minmax(struct_img)
-    return img
-
-
-def undo_resize(img, config):
-    if len(config["ResizeRatio"]) > 0 and config["ResizeRatio"] != [1.0, 1.0, 1.0]:
-        img = zoom(
-            img,
-            (
-                1.0,
-                1 / config["ResizeRatio"][0],
-                1 / config["ResizeRatio"][1],
-                1 / config["ResizeRatio"][2],
-            ),
-            order=2,
-            mode="reflect",
-        )
-    return img.astype(np.float32)
 
 
 def main():

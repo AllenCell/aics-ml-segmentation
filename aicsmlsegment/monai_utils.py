@@ -385,7 +385,6 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
                 + "_struct_segmentation.tiff",
                 out,
             )
-        print(f"Image {fn} has been segmented")
         self.log("test_loss", 0, on_step=False, on_epoch=False)
 
 
