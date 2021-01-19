@@ -8,7 +8,7 @@ model:
   # number of output channels/ classes
   out_channels: 2
   # input patch size given to the network (adapt to fit in your GPU memory, generally bigger patches are better)
-  patch_size: [26, 210, 210] #[52, 420, 420]
+  patch_size: [26, 105, 105] #[52, 420, 420]
   #number of dimensions of patch size
   dimensions: 3
 
@@ -33,7 +33,10 @@ Threshold: -1 #0.5 # 0.3
 # whether to use run time augmentation (may improve the accuracy, but takes much longer to run)
 RuntimeAug: False
 #adjust this to fit your GPU
-batch_size: 8
+batch_size: 4
+
+gpus: 1 
+dist_backend: ddp
 
 ##########################################################################################################
 # Execution mode: all files of specific type within a directory

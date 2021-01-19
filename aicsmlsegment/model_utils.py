@@ -29,7 +29,7 @@ def flip(img: np.ndarray, axis: int, to_tensor=True) -> torch.Tensor:
 
 
 def apply_on_image(
-    model, input_img: np.ndarray, args: dict, squeeze: bool, to_numpy: bool
+    model, input_img, args: dict, squeeze: bool, to_numpy: bool
 ) -> np.ndarray:
     """
     Inputs:
@@ -46,24 +46,18 @@ def apply_on_image(
     If runtime augmentation is selected, perform inference on flipped images and average results.
     returns: 4 or 5 dimensional numpy array or tensor with result of model.forward on input_img
     """
+    if type(input_img) == np.ndarray:
+        input_img = np.expand_dims(
+            input_img, axis=0
+        )  # add batch_dimension for sliding window inference
+        input_img = torch.from_numpy(input_img).float()
 
     if not args["RuntimeAug"]:
-        if len(input_img.shape) == 4:
-            input_img = np.expand_dims(
-                input_img, axis=0
-            )  # add batch_dimension for sliding window inference
-        input_img = torch.from_numpy(input_img).float()
         return model_inference(model, input_img, args, squeeze, to_numpy)
     else:
-        print("doing runtime augmentation")
-        # convert numpy input to (1,C,Z,Y,X) shaped tensor
-        input_img_tensor = torch.unsqueeze(
-            torch.as_tensor(input_img.astype(np.float32), dtype=torch.float), dim=0
-        )
-        out0 = model_inference(
-            model, input_img_tensor, args, squeeze=False, to_numpy=True
-        )
+        out0 = model_inference(model, input_img, args, squeeze=False, to_numpy=True)
 
+        input_img = input_img.cpu().numpy()[0]  # remove batch_dimension
         for i in range(3):
             aug = flip(input_img, axis=i)
             out = model_inference(model, aug, args, squeeze=True, to_numpy=True)
@@ -80,7 +74,7 @@ def model_inference(model, input_img, args, squeeze=False, to_numpy=False):
     """
     with torch.no_grad():
         result = sliding_window_inference(
-            inputs=input_img,
+            inputs=input_img.cuda(),
             roi_size=args["size_out"],
             sw_batch_size=args["inference_batch_size"],
             predictor=model.forward,

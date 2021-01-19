@@ -36,10 +36,12 @@ Normalization: 13
 # the threshold to be applied on your data
 Threshold: -1
 # whether to use run time augmentation (may improve the accuracy, but takes much longer to run)
-RuntimeAug: False
+RuntimeAug: True
 #adjust this to fit your GPU
 batch_size: 4
 
+gpus: 1
+dist_backend: ddp
 ##########################################################################################################
 # Execution mode: single file
 ##########################################################################################################

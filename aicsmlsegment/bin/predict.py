@@ -18,7 +18,8 @@ from aicsmlsegment.model_utils import (
     apply_on_image,
 )
 
-from aicsmlsegment.monai_utils import Monai_BasicUNet
+from aicsmlsegment.monai_utils import Monai_BasicUNet, DataModule
+import pytorch_lightning
 
 
 def minmax(img):
@@ -78,129 +79,27 @@ def main():
     model_path = config["model_path"]
     print(f"Loading model from {model_path}...")
     model = Monai_BasicUNet.load_from_checkpoint(model_path, config=config, train=False)
-    model.to("cuda")
 
-    # extract the parameters for running the model inference
-    args_inference = model.args_inference
-    if config["RuntimeAug"] <= 0:
-        args_inference["RuntimeAug"] = False
-    else:
-        args_inference["RuntimeAug"] = True
+    gpu_config = config["gpus"]
+    if gpu_config is None:
+        gpu_config = -1
+    if gpu_config < -1:
+        print("Number of GPUs must be -1 or > 0")
+        quit()
 
-    # run
-    inf_config = config["mode"]
-    if inf_config["name"] == "file":
-        fn = inf_config["InputFile"]
-        data_reader = AICSImage(fn)
+    # ddp is the default unless only one gpu is requested
+    accelerator = config["dist_backend"]
+    if accelerator is None and gpu_config != 1:
+        accelerator = "ddp"
 
-        if inf_config["timelapse"]:
-            assert data_reader.shape[1] > 1, "not a timelapse, check your data"
+    trainer = pytorch_lightning.Trainer(
+        gpus=gpu_config,
+        num_sanity_val_steps=0,
+        distributed_backend=accelerator,
+    )
+    data_module = DataModule(config, train=False)
 
-            for tt in range(data_reader.shape[1]):
-                # Assume:  dimensions = TCZYX
-                img = data_reader.get_image_data(
-                    "CZYX", S=0, T=tt, C=config["InputCh"]
-                ).astype(float)
-                img = image_normalization(img, config["Normalization"])
-                img = resize(img, config)
-
-                # apply the model
-                output_img = apply_on_image(
-                    model, img.cuda(), args_inference, squeeze=False, to_numpy=True
-                )
-
-                # extract the result and write the output
-                out = minmax(output_img)
-                out = undo_resize(out, config)
-
-                if config["Threshold"] > 0:
-                    out = out > config["Threshold"]
-                    out = out.astype(np.uint8)
-                    out[out > 0] = 255
-
-                imsave(
-                    config["OutputDir"]
-                    + os.sep
-                    + pathlib.PurePosixPath(fn).stem
-                    + "_T_"
-                    + f"{tt:03}"
-                    + "_struct_segmentation.tiff",
-                    out,
-                )
-
-        else:
-            img = data_reader.get_image_data(
-                "CZYX", S=0, T=0, C=config["InputCh"]
-            ).astype(float)
-
-            img = image_normalization(img, config["Normalization"])
-            img = resize(img, config)
-            # apply the model
-            output_img = apply_on_image(
-                model, img, args_inference, squeeze=False, to_numpy=True
-            )
-            #  write the output
-            out = minmax(output_img)
-            out = undo_resize(out, config)
-            if config["Threshold"] > 0:
-                out = out > config["Threshold"]
-                out = out.astype(np.uint8)
-                out[out > 0] = 255
-            imsave(
-                config["OutputDir"]
-                + os.sep
-                + pathlib.PurePosixPath(fn).stem
-                + "_struct_segmentation.tiff",
-                out,
-            )
-
-            print(f"Image {fn} has been segmented")
-
-    elif inf_config["name"] == "folder":
-        from glob import glob
-
-        filenames = glob(inf_config["InputDir"] + "/*" + inf_config["DataType"])
-        filenames.sort()  # (reverse=True)
-        print("files to be processed:")
-        print(filenames)
-
-        for _, fn in enumerate(filenames):
-
-            # load data
-            data_reader = AICSImage(fn)
-            img = data_reader.get_image_data(
-                "CZYX", S=0, T=0, C=config["InputCh"]
-            ).astype(float)
-
-            img = resize(img, config, min_max=False)
-            img = image_normalization(img, config["Normalization"])
-
-            # apply the model
-            output_img = apply_on_image(
-                model, img, args_inference, squeeze=False, to_numpy=True
-            )
-            # extract the result and write the output
-            if config["Threshold"] < 0:
-                out = minmax(output_img)
-                out = undo_resize(out, config)
-                out = minmax(out)
-            else:
-                out = remove_small_objects(
-                    output_img > config["Threshold"],
-                    min_size=2,
-                    connectivity=1,
-                )
-                out = out.astype(np.uint8)
-                out[out > 0] = 255
-            imsave(
-                config["OutputDir"]
-                + os.sep
-                + pathlib.PurePosixPath(fn).stem
-                + "_struct_segmentation.tiff",
-                out,
-            )
-
-            print(f"Image {fn} has been segmented")
+    trainer.test(model, datamodule=data_module)
 
 
 if __name__ == "__main__":

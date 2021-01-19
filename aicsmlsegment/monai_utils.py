@@ -9,15 +9,21 @@ import monai.losses as MonaiLosses
 
 import aicsmlsegment.custom_loss as CustomLosses
 import aicsmlsegment.custom_metrics as CustomMetrics
-from aicsmlsegment.model_utils import (
-    model_inference,
+from aicsmlsegment.model_utils import model_inference, apply_on_image
+from aicsmlsegment.DataLoader3D.Universal_Loader import (
+    UniversalDataset,
+    TestDataset,
+    minmax,
+    undo_resize,
 )
-from aicsmlsegment.DataLoader3D.Universal_Loader import UniversalDataset
 from monai.metrics import DiceMetric
 import random
 import numpy as np
 from glob import glob
-
+from skimage.io import imsave
+from skimage.morphology import remove_small_objects
+import os
+import pathlib
 
 SUPPORTED_LOSSES = [
     "Dice",
@@ -109,7 +115,6 @@ def get_metric(config):
 
     if metric == "Dice":
         return DiceMetric
-        # return CustomMetrics.DiceCoefficient()
     elif metric == "default" or metric == "IOU":
         return CustomMetrics.MeanIoU()
     elif metric == "AveragePrecision":
@@ -157,23 +162,24 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         super().__init__()
         model_configuration = get_model_configurations(config)
         self.model = BasicUNet(**model_configuration)
-
+        self.config = config
         self.args_inference = {}
         if train:
             assert "loader" in config, "loader required"
             loader_config = config["loader"]
             self.datapath = loader_config["datafolder"]
             self.nworkers = loader_config["NumWorkers"]
+            self.batchsize = loader_config["batch_size"]
 
             assert "validation" in config, "validation required"
             validation_config = config["validation"]
             self.leaveout = validation_config["leaveout"]
             self.validation_period = validation_config["validate_every_n_epoch"]
-            self.batchsize = loader_config["batch_size"]
 
             self.lr = config["learning_rate"]
             self.weight_decay = config["weight_decay"]
 
+            self.args_inference["inference_batch_size"] = loader_config["batch_size"]
             self.args_inference["OutputCh"] = validation_config["OutputCh"]
 
             (
@@ -188,7 +194,13 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
 
         else:
             self.args_inference["OutputCh"] = config["OutputCh"]
-            self.args_inference["batch_size"] = config["batch_size"]
+            self.args_inference["inference_batch_size"] = config["batch_size"]
+            if config["RuntimeAug"] <= 0:
+                self.args_inference["RuntimeAug"] = False
+            else:
+                self.args_inference["RuntimeAug"] = True
+            self.args_inference["mode"] = config["mode"]["name"]
+            self.args_inference["Threshold"] = config["Threshold"]
 
         self.args_inference["size_in"] = config["model"]["patch_size"]
         self.args_inference["size_out"] = config["model"]["patch_size"]
@@ -281,6 +293,12 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         targets = batch[1]
         outputs = self.forward(inputs)
 
+        # select output channel
+        outputs = outputs[:, self.args_inference["OutputCh"], :, :, :]
+        outputs = torch.unsqueeze(
+            outputs, dim=1
+        )  # add back in channel dimension to match targets
+
         if self.accepts_costmap:
             cmap = batch[2]
             loss = self.loss_function(outputs, targets, cmap)
@@ -317,71 +335,129 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         # sync_dist on_epoch=True ensures that results will be averaged across gpus
         self.log("val_loss", val_loss, sync_dist=True, on_epoch=True, prog_bar=True)
 
+    def test_step(self, batch, batch_idx):
+        img = batch["img"]
+        fn = batch["fn"][0]
+        tt = batch["tt"]
+        img = img.float()
+
+        args_inference = self.args_inference
+        output_img = apply_on_image(
+            self.model, img, args_inference, squeeze=False, to_numpy=True
+        )
+
+        if args_inference["mode"] != "folder":
+            out = minmax(output_img)
+            out = undo_resize(out, self.config)
+            if args_inference["Threshold"] > 0:
+                out = out > self.config["Threshold"]
+                out = out.astype(np.uint8)
+                out[out > 0] = 255
+        else:
+            if args_inference["Threshold"] < 0:
+                out = minmax(output_img)
+                out = undo_resize(out, self.config)
+                out = minmax(out)
+            else:
+                out = remove_small_objects(
+                    output_img > args_inference["Threshold"],
+                    min_size=2,
+                    connectivity=1,
+                )
+                out = out.astype(np.uint8)
+                out[out > 0] = 255
+
+        if len(tt) == 0:
+            imsave(
+                self.config["OutputDir"]
+                + os.sep
+                + pathlib.PurePosixPath(fn).stem
+                + "_struct_segmentation.tiff",
+                out,
+            )
+        else:
+            imsave(
+                self.config["OutputDir"]
+                + os.sep
+                + pathlib.PurePosixPath(fn).stem
+                + "_T_"
+                + f"{tt:03}"
+                + "_struct_segmentation.tiff",
+                out,
+            )
+        print(f"Image {fn} has been segmented")
+        self.log("test_loss", 0, on_step=False, on_epoch=False)
+
 
 class DataModule(pytorch_lightning.LightningDataModule):
-    def __init__(self, config):
+    def __init__(self, config, train=True):
         super().__init__()
-        assert "loader" in config, "Could not find loader configuration"
         self.config = config
-        self.loader_config = config["loader"]
 
-        self.model_config = config["model"]
+        if train:
+            assert "loader" in config, "Could not find loader configuration"
+            self.loader_config = config["loader"]
 
-        name = config["loader"]["name"]
-        if name != "default":
-            print("other loaders are under construction")
-            quit()
+            self.model_config = config["model"]
 
-        self.transforms = []
-        if "Transforms" in self.loader_config:
-            self.transforms = self.loader_config["Transforms"]
+            name = config["loader"]["name"]
+            if name != "default":
+                print("other loaders are under construction")
+                quit()
+
+            self.transforms = []
+            if "Transforms" in self.loader_config:
+                self.transforms = self.loader_config["Transforms"]
 
     def prepare_data(self):
         pass
 
     def setup(self, stage):
-        # load settings #
-        config = self.config  # TODO, fix this
+        if stage == "fit":  # no setup is required for testing
+            # load settings #
+            config = self.config
 
-        # get validation and training filenames from input dir from config
-        validation_config = config["validation"]
-        loader_config = config["loader"]
-        if validation_config["metric"] is not None:
-            print("Preparing train/validation split...", end=" ")
-            filenames = glob(loader_config["datafolder"] + "/*_GT.ome.tif")
-            filenames.sort()
-            total_num = len(filenames)
-            LeaveOut = validation_config["leaveout"]
-            if len(LeaveOut) == 1:
-                if LeaveOut[0] > 0 and LeaveOut[0] < 1:
-                    num_train = int(np.floor((1 - LeaveOut[0]) * total_num))
-                    shuffled_idx = np.arange(total_num)
-                    random.shuffle(shuffled_idx)
-                    train_idx = shuffled_idx[:num_train]
-                    valid_idx = shuffled_idx[num_train:]
-                else:
-                    valid_idx = [int(LeaveOut[0])]
-                    train_idx = list(set(range(total_num)) - set(map(int, LeaveOut)))
-            elif LeaveOut:
-                valid_idx = list(map(int, LeaveOut))
-                train_idx = list(set(range(total_num)) - set(valid_idx))
+            # get validation and training filenames from input dir from config
+            validation_config = config["validation"]
+            loader_config = config["loader"]
+            if validation_config["metric"] is not None:
+                print("Preparing train/validation split...", end=" ")
+                filenames = glob(loader_config["datafolder"] + "/*_GT.ome.tif")
+                filenames.sort()
+                total_num = len(filenames)
+                LeaveOut = validation_config["leaveout"]
+                if len(LeaveOut) == 1:
+                    if LeaveOut[0] > 0 and LeaveOut[0] < 1:
+                        num_train = int(np.floor((1 - LeaveOut[0]) * total_num))
+                        shuffled_idx = np.arange(total_num)
+                        random.shuffle(shuffled_idx)
+                        train_idx = shuffled_idx[:num_train]
+                        valid_idx = shuffled_idx[num_train:]
+                    else:
+                        valid_idx = [int(LeaveOut[0])]
+                        train_idx = list(
+                            set(range(total_num)) - set(map(int, LeaveOut))
+                        )
+                elif LeaveOut:
+                    valid_idx = list(map(int, LeaveOut))
+                    train_idx = list(set(range(total_num)) - set(valid_idx))
 
-            valid_filenames = []
-            train_filenames = []
-            # remove file extensions from filenames
-            for fi, fn in enumerate(valid_idx):
-                valid_filenames.append(filenames[fn][:-11])
-            for fi, fn in enumerate(train_idx):
-                train_filenames.append(filenames[fn][:-11])
+                valid_filenames = []
+                train_filenames = []
+                # remove file extensions from filenames
+                for fi, fn in enumerate(valid_idx):
+                    valid_filenames.append(filenames[fn][:-11])
+                for fi, fn in enumerate(train_idx):
+                    train_filenames.append(filenames[fn][:-11])
 
-            self.valid_filenames = valid_filenames
-            self.train_filenames = train_filenames
-            print("Done.")
+                self.valid_filenames = valid_filenames
+                self.train_filenames = train_filenames
+                print("Done.")
 
-        else:
-            # TODO, update here
-            print("need validation in config file")
-            quit()
+            else:
+                # TODO, update here
+                print("need validation in config file")
+                quit()
 
     def train_dataloader(self):
         print("Initializing train dataloader: ", end=" ")
@@ -422,3 +498,12 @@ class DataModule(pytorch_lightning.LightningDataModule):
             num_workers=loader_config["NumWorkers"],
         )
         return val_set_loader
+
+    def test_dataloader(self):
+        test_set_loader = DataLoader(
+            TestDataset(self.config),
+            batch_size=1,
+            shuffle=False,
+            num_workers=8,  # HACK
+        )
+        return test_set_loader

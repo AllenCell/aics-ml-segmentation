@@ -10,7 +10,7 @@ model:
   out_channels: 2
   # input patch size given to the network (adapt to fit in your GPU memory, generally bigger patches are better)
   # network output will be of the same size
-  patch_size:    [52, 210,210] #[52, 210, 210]
+  patch_size:    [26, 105,105] #[52, 210, 210]
   # number of dimensions in data
   dimensions: 3
   
@@ -85,7 +85,7 @@ loader:
   # number of batch in each training iteration (related to patch size and GPU memory)
   batch_size: 4
   # number of patches loaded to cache 
-  PatchPerBuffer: 100
+  PatchPerBuffer: 32
   # number of epoches for every time the patches in cache are cleared and resampled (smaller = heavier i/o, larger = higher chance of overfitting)
   epoch_shuffle: 27
   # number of workers for loading data in each training iteration

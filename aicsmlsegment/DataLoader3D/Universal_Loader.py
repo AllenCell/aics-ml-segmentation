@@ -3,8 +3,13 @@ import random
 from tqdm import tqdm
 from torch import from_numpy, Tensor, unsqueeze, cat
 from aicsimageio import AICSImage
+from aicsmlsegment.utils import (
+    image_normalization,
+)
 from random import shuffle
 from torch.utils.data import Dataset
+from scipy.ndimage import zoom
+
 
 from torchio.transforms import RandomAffine
 
@@ -21,6 +26,53 @@ from torchio.transforms import RandomAffine
 #       SS = Size Scaling by a ratio between -0.1 to 0.1 (TODO)
 #       IJ = Intensity Jittering (TODO)
 #       DD = Dense Deformation (TODO)
+
+
+def minmax(img):
+    return (img - img.min()) / (img.max() - img.min())
+
+
+def resize(img, config, min_max=False):
+    if len(config["ResizeRatio"]) > 0 and config["ResizeRatio"] != [
+        1.0,
+        1.0,
+        1.0,
+    ]:
+        # don't resize if resize ratio is all 1s
+        # note that struct_img is only a view of img, so changes made on
+        # struct_img also affects img
+        img = zoom(
+            img,
+            (
+                1,
+                config["ResizeRatio"][0],
+                config["ResizeRatio"][1],
+                config["ResizeRatio"][2],
+            ),
+            order=2,
+            mode="reflect",
+        )
+        if min_max:
+            for ch_idx in range(img.shape[0]):
+                struct_img = img[ch_idx, :, :, :]
+                img[ch_idx, :, :, :] = minmax(struct_img)
+    return img
+
+
+def undo_resize(img, config):
+    if len(config["ResizeRatio"]) > 0 and config["ResizeRatio"] != [1.0, 1.0, 1.0]:
+        img = zoom(
+            img,
+            (
+                1.0,
+                1 / config["ResizeRatio"][0],
+                1 / config["ResizeRatio"][1],
+                1 / config["ResizeRatio"][2],
+            ),
+            order=2,
+            mode="reflect",
+        )
+    return img.astype(np.float32)
 
 
 def load_img(filename, img_type, n_channel):
@@ -238,6 +290,80 @@ class UniversalDataset(Dataset):
 
     def __len__(self):
         return len(self.img)
+
+
+class TestDataset(Dataset):
+    def __init__(self, config):
+        self.imgs = []
+        self.tts = []
+        inf_config = config["mode"]
+        self.mode = inf_config
+
+        if inf_config["name"] == "file":
+            fn = inf_config["InputFile"]
+            data_reader = AICSImage(fn)
+            self.filenames = [fn]
+            if inf_config["timelapse"]:
+                assert data_reader.shape[1] > 1, "not a timelapse, check your data"
+
+                for tt in range(data_reader.shape[1]):
+                    # Assume:  dimensions = TCZYX
+                    img = data_reader.get_image_data(
+                        "CZYX", S=0, T=tt, C=config["InputCh"]
+                    ).astype(float)
+                    img = image_normalization(img, config["Normalization"])
+                    img = resize(img, config)
+                    self.imgs.append(img)
+                    self.tts.append(tt)
+            else:
+                img = data_reader.get_image_data(
+                    "CZYX", S=0, T=0, C=config["InputCh"]
+                ).astype(float)
+
+                img = image_normalization(img, config["Normalization"])
+                img = resize(img, config)
+                self.imgs.append(img)
+
+        elif inf_config["name"] == "folder":
+            from glob import glob
+
+            filenames = glob(inf_config["InputDir"] + "/*" + inf_config["DataType"])
+            filenames.sort()
+            print("files to be processed:")
+            print(filenames)
+            self.filenames = filenames
+
+            for _, fn in enumerate(filenames):
+                # load data
+                data_reader = AICSImage(fn)
+                img = data_reader.get_image_data(
+                    "CZYX", S=0, T=0, C=config["InputCh"]
+                ).astype(float)
+
+                img = resize(img, config, min_max=False)
+                img = image_normalization(img, config["Normalization"])
+
+                self.imgs.append(img)
+
+    def __getitem__(self, index):
+        """
+        Returns:
+            image, filename, and timepoint
+        """
+        if len(self.filenames) > 0:
+            fn = self.filenames[index]
+        else:
+            fn = self.filenames[0]
+
+        if len(self.tts) > 0:
+            tt = self.tts[index]
+        else:
+            tt = []
+
+        return {"img": self.imgs[index], "fn": fn, "tt": tt}
+
+    def __len__(self):
+        return len(self.imgs)
 
 
 class RR_FH_M0C(Dataset):
