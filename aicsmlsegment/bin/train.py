@@ -16,18 +16,18 @@ def main():
 
     # create logger
     logger = get_logger("ModelTrainer")
-    config = load_config(args.config)
+    config, model_config = load_config(args.config, train=True)
     logger.info(config)
 
     # load a specified saved model
     if config["resume"] is not None:
         print(f"Loading checkpoint '{config['resume']}'...")
         model = Monai_BasicUNet.load_from_checkpoint(
-            config["resume"], config=config, train=True
+            config["resume"], config=config, model_config=model_config, train=True
         )
     else:
         print("Training new model from scratch")
-        model = Monai_BasicUNet(config, train=True)
+        model = Monai_BasicUNet(config, model_config, train=True)
 
     checkpoint_dr = config["checkpoint_dir"]
     # model checkpoint every n epochs as specified in config
@@ -39,7 +39,6 @@ def main():
     )
     callbacks = [MC]
 
-    assert "callbacks" in config, "callbacks are required in config"
     callbacks_config = config["callbacks"]
 
     if callbacks_config["name"] == "EarlyStopping":
@@ -53,16 +52,12 @@ def main():
         callbacks.append(es)
 
     gpu_config = config["gpus"]
-    if gpu_config is None:
-        gpu_config = -1
     if gpu_config < -1:
         print("Number of GPUs must be -1 or > 0")
         quit()
 
     # ddp is the default unless only one gpu is requested
     accelerator = config["dist_backend"]
-    if accelerator is None and gpu_config != 1:
-        accelerator = "ddp"
 
     print("Training on ", gpu_config, "GPUs with backend", accelerator)
     print("Initializing trainer...", end=" ")

@@ -135,9 +135,7 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
             self.args_inference["mode"] = config["mode"]["name"]
             self.args_inference["Threshold"] = config["Threshold"]
 
-        self.args_inference["size_in"] = config["model"]["patch_size"]
         self.args_inference["size_out"] = config["model"]["patch_size"]
-        self.args_inference["nclass"] = config["model"]["out_channels"]
 
     def forward(self, x):
         """
