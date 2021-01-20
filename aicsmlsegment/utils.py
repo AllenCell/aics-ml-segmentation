@@ -43,6 +43,7 @@ REQUIRED_CONFIG_FIELDS = {
         "RuntimeAug": None,
         "batch_size": None,
         "mode": ["name"],
+        "NumWorkers": None,
     },
 }
 OPTIONAL_CONFIG_FIELDS = {

@@ -34,9 +34,12 @@ Threshold: -1 #0.5 # 0.3
 RuntimeAug: False
 #adjust this to fit your GPU
 batch_size: 4
-
+#number of gpus to use
 gpus: 1 
-dist_backend: ddp
+#dist backend is not required if only 1 gpu is used. defaults to ddp.
+dist_backend: 
+# number of workers to load testing data.
+NumWorkers: 8
 
 ##########################################################################################################
 # Execution mode: all files of specific type within a directory
