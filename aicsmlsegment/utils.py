@@ -7,21 +7,159 @@ from scipy.ndimage import zoom
 from scipy import ndimage as ndi
 from scipy import stats
 import yaml
+import torch
+from monai.networks.layers import Norm, Act
 
 
-def load_config(config_path):
-    import torch
+REQUIRED_CONFIG_FIELDS = {
+    True: {
+        "model": ["name", "in_channels", "out_channels", "patch_size", "dimensions"],
+        "checkpoint_dir": None,
+        "learning_rate": None,
+        "weight_decay": None,
+        "epochs": None,
+        "save_every_n_epoch": None,
+        "loss": ["name", "loss_weight"],
+        "loader": [
+            "name",
+            "datafolder",
+            "batch_size",
+            "PatchPerBuffer",
+            "epoch_shuffle",
+            "NumWorkers",
+            "Transforms",
+        ],
+        "validation": ["metric", "leaveout", "OutputCh", "validate_every_n_epoch"],
+    },
+    False: {
+        "model": ["name", "in_channels", "out_channels", "patch_size", "dimensions"],
+        "model_path": None,
+        "OutputCh": None,
+        "OutputDir": None,
+        "InputCh": None,
+        "ResizeRatio": None,
+        "Normalization": None,
+        "Threshold": None,
+        "RuntimeAug": None,
+        "batch_size": None,
+        "mode": ["name"],
+    },
+}
+OPTIONAL_CONFIG_FIELDS = {
+    True: {
+        "resume": None,
+        "scheduler": ["name", "verbose"],
+        "gpus": None,
+        "dist_backend": None,
+        "callbacks": ["name"],
+    },
+    False: {
+        "gpus": None,
+        "dist_backend": None,
+        "model": ["norm", "act", "features", "dropout"],
+    },
+}
 
-    config = _load_config_yaml(config_path)
-    # Get a device to train on
-    device_name = config.get("device", "cuda:0")
-    device = torch.device(device_name if torch.cuda.is_available() else "cpu")
-    config["device"] = device
-    return config
+GPUS = torch.cuda.device_count()
+DEFAULT_CONFIG = {
+    "resume": None,
+    "scheduler": {"name": None},
+    "gpus": GPUS,
+    "dist_backend": "ddp" if GPUS > 1 else None,
+}
+
+MODEL_PARAMETERS = {
+    "BasicUNet": {
+        "Optional": [
+            "features",
+            "act",
+            "norm",
+            "dropout",
+        ],
+        "Required": ["dimensions", "in_channels", "out_channels"],
+    }
+}
+
+ACTIVATIONS = {
+    "LeakyReLU": Act.LEAKYRELU,
+    "PReLU": Act.PRELU,
+    "ReLU": Act.RELU,
+    "ReLU6": Act.RELU6,
+}
+
+NORMALIZATIONS = {
+    "batch": Norm.BATCH,
+    "instance": Norm.INSTANCE,
+}
 
 
-def _load_config_yaml(config_file):
-    return yaml.load(open(config_file, "r"), Loader=yaml.FullLoader)
+def get_model_configurations(config):
+    model_config = config["model"]
+    model_parameters = {}
+    all_parameters = MODEL_PARAMETERS[model_config["name"]]
+
+    # allow users to overwrite specific parameters
+    for param in all_parameters["Optional"]:
+        # if optional parameters are not specified, skip them to use monai defaults
+        if param in model_config and not model_config[param] is None:
+            if param == "norm":
+                try:
+                    model_parameters[param] = NORMALIZATIONS[model_config[param]]
+                except KeyError:
+                    print(f"{model_config[param]} is not an acceptable normalization.")
+                    quit()
+            elif param == "act":
+                try:
+                    model_parameters[param] = ACTIVATIONS[model_config[param]]
+                except KeyError:
+                    print(f"{model_config[param]} is not an acceptable activation.")
+                    quit()
+            else:
+                model_parameters[param] = model_config[param]
+    # find parameters that must be included
+    for param in all_parameters["Required"]:
+        assert (
+            param in model_config
+        ), f"{param} is required for model {model_config['name']}"
+        model_parameters[param] = model_config[param]
+
+    return model_parameters
+
+
+def validate_config(config, train):
+    # make sure that all required elements are in the config file
+    for key in REQUIRED_CONFIG_FIELDS[train]:
+        assert (
+            key in config and not config[key] is None
+        ), f"{key} is required in the config file"
+        if REQUIRED_CONFIG_FIELDS[train][key]:
+            for key2 in REQUIRED_CONFIG_FIELDS[train][key]:
+                assert (
+                    key2 in config[key] and config[key][key2] is not None
+                ), f"{key2} is required in {key} configuration."
+
+    # check for optional elements and replace them with defaults if not provided
+    for key in OPTIONAL_CONFIG_FIELDS[train]:
+        if key not in config or config[key] is None:
+            print(f"replacing {key} with default.")
+            config[key] = DEFAULT_CONFIG[key]
+
+    model_config = get_model_configurations(config)
+
+    print("CONFIGURATION:")
+    print(config)
+    print()
+    print("MODEL CONFIGURATION:")
+    print(model_config)
+    print()
+
+    return config, model_config
+
+
+def load_config(config_file, train):
+    config = yaml.load(open(config_file, "r"), Loader=yaml.FullLoader)
+    config, model_config = validate_config(config, train)
+    return config, model_config
 
 
 def get_samplers(num_training_data, validation_ratio, my_seed):

@@ -3,7 +3,6 @@ from torch.utils.data import DataLoader
 from torch.optim import Adam
 import torch
 
-from monai.networks.layers import Norm, Act
 from monai.networks.nets import BasicUNet
 import monai.losses as MonaiLosses
 
@@ -16,6 +15,7 @@ from aicsmlsegment.DataLoader3D.Universal_Loader import (
     minmax,
     undo_resize,
 )
+
 from monai.metrics import DiceMetric
 import random
 import numpy as np
@@ -42,30 +42,6 @@ SUPPORTED_METRICS = [
 ]
 # "IOU", "AveragePrecision"]
 
-MODEL_PARAMETERS = {
-    "BasicUNet": {
-        "Optional": [
-            "features",
-            "act",
-            "norm",
-            "dropout",
-        ],
-        "Required": ["dimensions", "in_channels", "out_channels"],
-    }
-}
-
-ACTIVATIONS = {
-    "LeakyReLU": Act.LEAKYRELU,
-    "PReLU": Act.PRELU,
-    "ReLU": Act.RELU,
-    "ReLU6": Act.RELU6,
-}
-
-NORMALIZATIONS = {
-    "batch": Norm.BATCH,
-    "instance": Norm.INSTANCE,
-}
-
 
 def get_loss_criterion(config):
     """
@@ -73,7 +49,6 @@ def get_loss_criterion(config):
     :param config: (dict) a top level configuration object containing the 'loss' key
     :return: an instance of the loss function and whether it accepts a costmap
     """
-    assert "loss" in config, "Could not find loss function configuration"
     loss_config = config["loss"]
     name = loss_config["name"]
     weight = loss_config["loss_weight"]
@@ -104,9 +79,7 @@ def get_loss_criterion(config):
 
 
 def get_metric(config):
-    assert "validation" in config, "Could not find validation information"
     validation_config = config["validation"]
-    assert "metric" in validation_config, "Could not find validation metric"
     metric = validation_config["metric"]
 
     assert (
@@ -121,57 +94,18 @@ def get_metric(config):
         return CustomMetrics.AveragePrecision()
 
 
-def get_model_configurations(config):
-    assert "model" in config, "Model specifications must be included"
-    model_config = config["model"]
-
-    model_parameters = {}
-
-    all_parameters = MODEL_PARAMETERS[model_config["name"]]
-
-    # allow users to overwrite specific parameters
-    for param in all_parameters["Optional"]:
-        # if optional parameters are not specified, skip them to use monai defaults
-        if param in model_config and not model_config[param] is None:
-            if param == "norm":
-                try:
-                    model_parameters[param] = NORMALIZATIONS[model_config[param]]
-                except KeyError:
-                    print(f"{model_config[param]} is not an acceptable normalization.")
-                    quit()
-            elif param == "act":
-                try:
-                    model_parameters[param] = ACTIVATIONS[model_config[param]]
-                except KeyError:
-                    print(f"{model_config[param]} is not an acceptable activation.")
-                    quit()
-            else:
-                model_parameters[param] = model_config[param]
-    # find parameters that must be included
-    for param in all_parameters["Required"]:
-        assert (
-            param in model_config
-        ), f"{param} is required for model {model_config['name']}"
-        model_parameters[param] = model_config[param]
-
-    return model_parameters
-
-
 class Monai_BasicUNet(pytorch_lightning.LightningModule):
-    def __init__(self, config, train):
+    def __init__(self, config, model_config, train):
         super().__init__()
-        model_configuration = get_model_configurations(config)
-        self.model = BasicUNet(**model_configuration)
+        self.model = BasicUNet(**model_config)
         self.config = config
         self.args_inference = {}
         if train:
-            assert "loader" in config, "loader required"
             loader_config = config["loader"]
             self.datapath = loader_config["datafolder"]
             self.nworkers = loader_config["NumWorkers"]
             self.batchsize = loader_config["batch_size"]
 
-            assert "validation" in config, "validation required"
             validation_config = config["validation"]
             self.leaveout = validation_config["leaveout"]
             self.validation_period = validation_config["validate_every_n_epoch"]
@@ -189,7 +123,6 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
             ) = get_loss_criterion(config)
             self.metric = get_metric(config)
 
-            assert "scheduler" in config, "scheduler required, but can be blank"
             self.scheduler_params = config["scheduler"]
 
         else:
@@ -263,7 +196,7 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
 
                 assert 0 < scheduler_params["factor"] < 1
                 assert scheduler_params["patience"] > 0
-                # if patience is too short, validation metrics won't be available for the optimizer
+                # if patience is too short, validation metrics won't be available
                 if "val" in scheduler_params["monitor"]:
                     assert (
                         scheduler_params["patience"] > self.validation_period
@@ -394,9 +327,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
         self.config = config
 
         if train:
-            assert "loader" in config, "Could not find loader configuration"
             self.loader_config = config["loader"]
-
             self.model_config = config["model"]
 
             name = config["loader"]["name"]
@@ -499,10 +430,12 @@ class DataModule(pytorch_lightning.LightningDataModule):
         return val_set_loader
 
     def test_dataloader(self):
+        print("Initializing testing dataloader...", end="")
         test_set_loader = DataLoader(
             TestDataset(self.config),
             batch_size=1,
             shuffle=False,
             num_workers=8,  # HACK
         )
+        print("done")
         return test_set_loader
