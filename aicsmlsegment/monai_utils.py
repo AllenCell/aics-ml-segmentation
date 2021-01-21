@@ -126,12 +126,12 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
             self.scheduler_params = config["scheduler"]
 
         else:
-            self.args_inference["OutputCh"] = config["OutputCh"]
-            self.args_inference["inference_batch_size"] = config["batch_size"]
             if config["RuntimeAug"] <= 0:
                 self.args_inference["RuntimeAug"] = False
             else:
                 self.args_inference["RuntimeAug"] = True
+            self.args_inference["OutputCh"] = config["OutputCh"]
+            self.args_inference["inference_batch_size"] = config["batch_size"]
             self.args_inference["mode"] = config["mode"]["name"]
             self.args_inference["Threshold"] = config["Threshold"]
 
@@ -144,6 +144,7 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         return self.model(x)
 
     def configure_optimizers(self):
+        print("Configuring optimizers")
         optims = []
         scheds = []
 
@@ -212,7 +213,7 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
                     "lr_scheduler": scheduler,
                     "monitor": scheduler_params["monitor"],
                 }
-
+            print("done")
             scheds.append(scheduler)
             return optims, scheds
         else:
@@ -270,6 +271,7 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         img = batch["img"]
         fn = batch["fn"][0]
         tt = batch["tt"]
+        # default comes through as double tensor
         img = img.float()
 
         args_inference = self.args_inference
@@ -383,7 +385,6 @@ class DataModule(pytorch_lightning.LightningDataModule):
                 print("Done.")
 
             else:
-                # TODO, update here
                 print("need validation in config file")
                 quit()
 
@@ -395,7 +396,6 @@ class DataModule(pytorch_lightning.LightningDataModule):
             UniversalDataset(
                 self.train_filenames,
                 loader_config["PatchPerBuffer"],
-                model_config["patch_size"],
                 model_config["patch_size"],
                 model_config["in_channels"],
                 self.transforms,
@@ -416,24 +416,21 @@ class DataModule(pytorch_lightning.LightningDataModule):
                 self.valid_filenames,
                 loader_config["PatchPerBuffer"],
                 model_config["patch_size"],
-                model_config["patch_size"],
                 model_config["in_channels"],
                 [],  # no transforms for validation data
                 patchize=False,  # validate on entire image
             ),
-            batch_size=1,
+            batch_size=loader_config["batch_size"],
             shuffle=False,
             num_workers=loader_config["NumWorkers"],
         )
         return val_set_loader
 
     def test_dataloader(self):
-        print("Initializing testing dataloader...", end="")
         test_set_loader = DataLoader(
             TestDataset(self.config),
             batch_size=1,
             shuffle=False,
-            num_workers=8,  # HACK
+            num_workers=self.config["NumWorkers"],
         )
-        print("done")
         return test_set_loader

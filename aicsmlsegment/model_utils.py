@@ -39,6 +39,7 @@ def apply_on_image(
             RuntimeAug: boolean, if True inference is run on each of 4 flips
                 and final output is averaged across each of these augmentations
             SizeOut: size of sliding window for inference
+            OutputCh: channel to extract label from
         squeeze: boolean, if true removes the batch dimension in the output image
         to_numpy: boolean, if true converts output to a numpy array and send to cpu
 
@@ -54,7 +55,7 @@ def apply_on_image(
 
         input_img = input_img.cpu().numpy()[0]  # remove batch_dimension for flip
         for i in range(3):
-            aug = flip(input_img, axis=i)
+            aug = flip(input_img, axis=i, to_tensor=True)
             out = model_inference(model, aug, args, squeeze=True, to_numpy=True)
             aug_flip = flip(out, axis=i, to_tensor=False)
             out0 += aug_flip
