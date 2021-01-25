@@ -5,6 +5,18 @@ import torch
 import numpy as np
 
 
+class CombinedLoss(torch.nn.Module):
+    def __init__(self, loss1, loss2):
+        super(CombinedLoss, self).__init__()
+        self.loss1 = loss1
+        self.loss2 = loss2
+
+    def forward(self, input, target):
+        loss1_result = self.loss1(input, target)
+        loss2_result = self.loss2(input, target)
+        return loss1_result + loss2_result
+
+
 class ElementNLLLoss(torch.nn.Module):
     def __init__(self, num_class):
         super(ElementNLLLoss, self).__init__()
@@ -39,8 +51,6 @@ class MultiAuxillaryElementNLLLoss(torch.nn.Module):
             self.criteria_list.append(ElementNLLLoss(num_class[n]))
 
     def forward(self, input, target, cmap):
-        print(input.shape)
-        print(target.shape)
 
         total_loss = self.weight[0] * self.criteria_list[0](
             input[0], target.view(target.numel()), cmap.view(cmap.numel())
