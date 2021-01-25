@@ -28,6 +28,9 @@ import pathlib
 SUPPORTED_LOSSES = [
     "Dice",
     "GeneralizedDice",
+    "Dice+CrossEntropy",
+    "GeneralizedDice+CrossEntropy",
+    "CrossEntropy",
 ]
 #     "MultiTaskElementNLL",
 # "ElementNLL",
@@ -47,35 +50,37 @@ def get_loss_criterion(config):
     """
     Returns the loss function based on provided configuration
     :param config: (dict) a top level configuration object containing the 'loss' key
-    :return: an instance of the loss function and whether it accepts a costmap
+    :return: an instance of the loss function and whether it accepts a costmap and loss weights
     """
-    loss_config = config["loss"]
-    name = loss_config["name"]
-    weight = loss_config["loss_weight"]
+    name = config["loss"]["name"]
+    # weight = loss_config["loss_weight"]
     assert (
         name in SUPPORTED_LOSSES
     ), f"Invalid loss: {name}. Supported losses: {SUPPORTED_LOSSES}"
 
-    if name == "ElementNLL":
-        return CustomLosses.ElementNLLLoss(config["nclass"]), False, weight
-    elif name == "MultiTaskElementNLL":
-        return (
-            CustomLosses.MultiTaskElementNLLLoss(
-                loss_config["loss_weight"], loss_config["nclass"]
-            ),
-            True,
-            weight,
-        )
-    elif name == "ElementAngularMSE":
-        return CustomLosses.ElementAngularMSELoss(), True, weight
-    elif name == "Dice":
+    if name == "Dice":
         return MonaiLosses.DiceLoss(sigmoid=True), False, None
     elif name == "GeneralizedDice":
         return MonaiLosses.GeneralizedDiceLoss(sigmoid=True), False, None
-    elif name == "WeightedCrossEntropy":
-        return CustomLosses.WeightedCrossEntropyLoss(), False, weight
-    elif name == "PixelwiseCrossEntropy":
-        return CustomLosses.PixelWiseCrossEntropyLoss(), True, weight
+    elif name == "Dice+CrossEntropy":
+        return (
+            CustomLosses.CombinedLoss(
+                MonaiLosses.DiceLoss(sigmoid=True), torch.nn.BCEWithLogitsLoss()
+            ),
+            False,
+            None,
+        )
+    elif name == "GeneralizedDice+CrossEntropy":
+        return (
+            CustomLosses.CombinedLoss(
+                MonaiLosses.GeneralizedDiceLoss(sigmoid=True),
+                torch.nn.BCEWithLogitsLoss(),
+            ),
+            False,
+            None,
+        )
+    elif name == "CrossEntropy":
+        return (torch.nn.BCEWithLogitsLoss(), False, None)
 
 
 def get_metric(config):
@@ -213,6 +218,11 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
                     "lr_scheduler": scheduler,
                     "monitor": scheduler_params["monitor"],
                 }
+            else:
+                print(
+                    "That scheduler is not yet supported. No scheduler is being used."
+                )
+                return optims
             print("done")
             scheds.append(scheduler)
             return optims, scheds

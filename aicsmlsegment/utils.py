@@ -142,8 +142,10 @@ def validate_config(config, train):
     # check for optional elements and replace them with defaults if not provided
     for key in OPTIONAL_CONFIG_FIELDS[train]:
         if key not in config or config[key] is None:
-            print(f"replacing {key} with default.")
             config[key] = DEFAULT_CONFIG[key]
+
+    if GPUS == 1:
+        config["dist_backend"] = None
 
     model_config = get_model_configurations(config)
 

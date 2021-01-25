@@ -127,13 +127,13 @@ class UniversalDataset(Dataset):
             size_out: size of output from model
             n_channel: number of iput channels expected by model
             transforms: list of strings specifying transforms
+            patchize: whether to divide image into patches
         """
         print("Generating samples...", end=" ")
         self.img = []
         self.gt = []
         self.cmap = []
         self.transforms = transforms
-
         num_data = len(filenames)
         shuffle(filenames)
         num_patch_per_img = np.zeros((num_data,), dtype=int)
