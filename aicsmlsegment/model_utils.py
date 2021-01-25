@@ -72,14 +72,14 @@ def model_inference(model, input_img, args, squeeze=False, to_numpy=False):
         result = sliding_window_inference(
             inputs=input_img.cuda(),
             roi_size=args["size_out"],
-            sw_batch_size=args["inference_batch_size"],
+            sw_batch_size=1,
             predictor=model.forward,
             overlap=0.25,
             mode="gaussian",
         )
         result = result[:, args["OutputCh"], :, :, :]
     if not squeeze:
-        result = torch.unsqueeze(result, dim=0)  # remove batch dimension
+        result = torch.unsqueeze(result, dim=1)
     if to_numpy:
         result = result.cpu().numpy()
     return result
