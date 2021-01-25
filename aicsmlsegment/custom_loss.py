@@ -4,6 +4,8 @@ import torch.functional as F
 import torch
 import numpy as np
 
+import monai.losses as MonaiLosses
+
 
 class CombinedLoss(torch.nn.Module):
     def __init__(self, loss1, loss2):
@@ -15,6 +17,44 @@ class CombinedLoss(torch.nn.Module):
         loss1_result = self.loss1(input, target)
         loss2_result = self.loss2(input, target)
         return loss1_result + loss2_result
+
+
+class DiceFocalLoss(torch.nn.Module):
+    def __init__(self, OutputCh):
+        super(DiceFocalLoss, self).__init__()
+        self.OutputCh = OutputCh
+
+    def forward(self, input, target):
+        focal_loss = MonaiLosses.FocalLoss()
+        dice_loss = MonaiLosses.DiceLoss(sigmoid=True)
+
+        f_res = focal_loss(input, target)
+        input = input[:, self.OutputCh, :, :, :]
+        input = torch.unsqueeze(input, dim=1)
+
+        d_res = dice_loss(input, target)
+
+        return d_res + f_res
+
+
+class GeneralizedDiceFocalLoss(torch.nn.Module):
+    def __init__(self, OutputCh):
+        super(GeneralizedDiceFocalLoss, self).__init__()
+        self.OutputCh = OutputCh
+
+    def forward(self, input, target):
+        print(input.shape, target.shape)
+        focal_loss = MonaiLosses.FocalLoss()
+        g_dice_loss = MonaiLosses.GeneralizedDiceLoss(sigmoid=True)
+
+        f_res = focal_loss(input, target)
+        input = input[:, self.OutputCh, :, :, :]
+        input = torch.unsqueeze(input, dim=1)
+        print(input.shape, target.shape)
+
+        d_res = g_dice_loss(input, target)
+
+        return d_res + f_res
 
 
 class ElementNLLLoss(torch.nn.Module):

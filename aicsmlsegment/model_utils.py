@@ -29,7 +29,11 @@ def flip(img: np.ndarray, axis: int, to_tensor=True):
 
 
 def apply_on_image(
-    model, input_img: torch.Tensor, args: dict, squeeze: bool, to_numpy: bool
+    model,
+    input_img: torch.Tensor,
+    args: dict,
+    squeeze: bool,
+    to_numpy: bool,
 ) -> np.ndarray:
     """
     Inputs:
@@ -64,7 +68,9 @@ def apply_on_image(
         return out0
 
 
-def model_inference(model, input_img, args, squeeze=False, to_numpy=False):
+def model_inference(
+    model, input_img, args, squeeze=False, to_numpy=False, extract_output_ch=True
+):
     """
     perform model inference and extract output channel
     """
@@ -77,7 +83,8 @@ def model_inference(model, input_img, args, squeeze=False, to_numpy=False):
             overlap=0.25,
             mode="gaussian",
         )
-        result = result[:, args["OutputCh"], :, :, :]
+        if extract_output_ch:
+            result = result[:, args["OutputCh"], :, :, :]
     if not squeeze:
         result = torch.unsqueeze(result, dim=1)
     if to_numpy:

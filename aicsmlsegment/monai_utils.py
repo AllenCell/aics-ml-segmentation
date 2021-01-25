@@ -31,6 +31,8 @@ SUPPORTED_LOSSES = [
     "Dice+CrossEntropy",
     "GeneralizedDice+CrossEntropy",
     "CrossEntropy",
+    "Dice+FocalLoss",
+    "GeneralizedDice+FocalLoss",
 ]
 #     "MultiTaskElementNLL",
 # "ElementNLL",
@@ -53,6 +55,7 @@ def get_loss_criterion(config):
     :return: an instance of the loss function and whether it accepts a costmap and loss weights
     """
     name = config["loss"]["name"]
+
     # weight = loss_config["loss_weight"]
     assert (
         name in SUPPORTED_LOSSES
@@ -81,6 +84,18 @@ def get_loss_criterion(config):
         )
     elif name == "CrossEntropy":
         return (torch.nn.BCEWithLogitsLoss(), False, None)
+    elif name == "Dice+FocalLoss":
+        return (
+            CustomLosses.DiceFocalLoss(config["validation"]["OutputCh"]),
+            False,
+            None,
+        )
+    elif name == "GeneralizedDice+FocalLoss":
+        return (
+            CustomLosses.GeneralizedDiceFocalLoss(config["validation"]["OutputCh"]),
+            False,
+            None,
+        )
 
 
 def get_metric(config):
@@ -235,11 +250,13 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         targets = batch[1]
         outputs = self.forward(inputs)
 
-        # select output channel
-        outputs = outputs[:, self.args_inference["OutputCh"], :, :, :]
-        outputs = torch.unsqueeze(
-            outputs, dim=1
-        )  # add back in channel dimension to match targets
+        # focal loss requires > 1 channel
+        if "Focal" not in self.config["loss"]["name"]:
+            # select output channel
+            outputs = outputs[:, self.args_inference["OutputCh"], :, :, :]
+            outputs = torch.unsqueeze(
+                outputs, dim=1
+            )  # add back in channel dimension to match targets
 
         if self.accepts_costmap:
             cmap = batch[2]
@@ -264,7 +281,20 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
     def validation_step(self, batch, batch_idx):
         input_img = batch[0]
         label = batch[1]
-        outputs = model_inference(self.model, input_img, self.args_inference)
+
+        extract = True
+        squeeze = False
+        # focal loss needs >1 channel in predictions
+        if "Focal" in self.config["loss"]["name"]:
+            extract = False
+            squeeze = True
+        outputs = model_inference(
+            self.model,
+            input_img,
+            self.args_inference,
+            squeeze=squeeze,
+            extract_output_ch=extract,
+        )
 
         if self.accepts_costmap:
             costmap = batch[2]
