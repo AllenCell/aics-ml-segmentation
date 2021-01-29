@@ -3,6 +3,8 @@ from torch.utils.data import DataLoader
 from torch.optim import Adam
 import torch
 
+# from torchcontrib.optim import SWA    https://github.com/PyTorchLightning/pytorch-lightning/pull/5640
+
 from monai.networks.nets import BasicUNet
 import monai.losses as MonaiLosses
 
@@ -34,18 +36,12 @@ SUPPORTED_LOSSES = [
     "Dice+FocalLoss",
     "GeneralizedDice+FocalLoss",
 ]
-#     "MultiTaskElementNLL",
-# "ElementNLL",
-#       "ElementAngularMSE",
-#     "WeightedCrossEntropy",
-#     "PixelwiseCrossEntropy",
-# ]
+
 
 SUPPORTED_METRICS = [
     "default",
     "Dice",
 ]
-# "IOU", "AveragePrecision"]
 
 
 def get_loss_criterion(config):
@@ -118,6 +114,7 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
     def __init__(self, config, model_config, train):
         super().__init__()
         self.model = BasicUNet(**model_config)
+        self.norm = config["model"]["norm"]
         self.config = config
         self.args_inference = {}
         if train:
@@ -144,6 +141,7 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
             self.metric = get_metric(config)
 
             self.scheduler_params = config["scheduler"]
+            # self.swa_config = config["SWA"]
 
         else:
             if config["RuntimeAug"] <= 0:
@@ -316,14 +314,14 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
 
         args_inference = self.args_inference
         output_img = apply_on_image(
-            self.model, img, args_inference, squeeze=False, to_numpy=True
+            self.model, img, args_inference, squeeze=False, to_numpy=True, sigmoid=True
         )
 
         if args_inference["mode"] != "folder":
             out = minmax(output_img)
             out = undo_resize(out, self.config)
             if args_inference["Threshold"] > 0:
-                out = out > self.config["Threshold"]
+                out = out > args_inference["Threshold"]
                 out = out.astype(np.uint8)
                 out[out > 0] = 255
         else:

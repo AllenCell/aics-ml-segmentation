@@ -34,6 +34,7 @@ def apply_on_image(
     args: dict,
     squeeze: bool,
     to_numpy: bool,
+    sigmoid: bool,
 ) -> np.ndarray:
     """
     Inputs:
@@ -53,14 +54,18 @@ def apply_on_image(
     """
 
     if not args["RuntimeAug"]:
-        return model_inference(model, input_img, args, squeeze, to_numpy)
+        return model_inference(model, input_img, args, squeeze, to_numpy, sigmoid)
     else:
-        out0 = model_inference(model, input_img, args, squeeze=False, to_numpy=True)
+        out0 = model_inference(
+            model, input_img, args, squeeze=False, to_numpy=True, sigmoid=sigmoid
+        )
 
         input_img = input_img.cpu().numpy()[0]  # remove batch_dimension for flip
         for i in range(3):
             aug = flip(input_img, axis=i, to_tensor=True)
-            out = model_inference(model, aug, args, squeeze=True, to_numpy=True)
+            out = model_inference(
+                model, aug, args, squeeze=True, to_numpy=True, sigmoid=sigmoid
+            )
             aug_flip = flip(out, axis=i, to_tensor=False)
             out0 += aug_flip
 
@@ -69,7 +74,13 @@ def apply_on_image(
 
 
 def model_inference(
-    model, input_img, args, squeeze=False, to_numpy=False, extract_output_ch=True
+    model,
+    input_img,
+    args,
+    squeeze=False,
+    to_numpy=False,
+    extract_output_ch=True,
+    sigmoid=False,
 ):
     """
     perform model inference and extract output channel
@@ -83,8 +94,11 @@ def model_inference(
             overlap=0.25,
             mode="gaussian",
         )
-        if extract_output_ch:
-            result = result[:, args["OutputCh"], :, :, :]
+
+    if extract_output_ch:
+        result = result[:, args["OutputCh"], :, :, :]
+    if sigmoid:
+        result = torch.nn.Sigmoid()(result)
     if not squeeze:
         result = torch.unsqueeze(result, dim=1)
     if to_numpy:
