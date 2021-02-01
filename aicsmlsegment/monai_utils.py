@@ -352,7 +352,7 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
                 + os.sep
                 + pathlib.PurePosixPath(fn).stem
                 + "_T_"
-                + f"{tt:03}"
+                + f"{tt[0]:03}"
                 + "_struct_segmentation.tiff",
                 out,
             )
