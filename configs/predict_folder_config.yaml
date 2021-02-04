@@ -12,10 +12,19 @@ model:
   #number of dimensions of patch size
   dimensions: 3
 
+  # OPTIONAL PARAMETERS - these can be left blank to use defaults but must match the train configuration
+  norm: 'instance' # instance | batch |  defaults to batch
+  act: 'PReLU' # ReLU | LeakyReLU | PReLU | ReLU6, defaults to LeakyReLU
+  features: [32, 64, 128, 256, 512, 32] # list of 6 numbers,the first five specify the encoder feature sizes. The last value corresponds to the feature size after the last upsampling. defaults to [32, 32, 64, 128, 256, 32]
+  dropout: #True # True | False, defaults to False
+
 # path to the trained model
-model_path: '//allen/aics/assay-dev/users/Benji/model_checkpoints/checkpoint_epoch=4-v1.ckpt'
+model_path: '/allen/aics/assay-dev/users/Benji/model_checkpoints/checkpoint_epoch=199.ckpt'
 # the channel to extract from output tensors
 OutputCh: 1
+
+#splits large images into batches to speed up inference
+large_image_resize: #[1, 5, 5] # how many patches to divide each axis into, ZYX order
 
 ##########################################################################################################
 # Data Info
@@ -29,15 +38,15 @@ ResizeRatio: [1.0, 1.0, 1.0]
 # the method to normalize your data
 Normalization: 13
 # the threshold to be applied on your data
-Threshold: -1 #0.5 # 0.3
+Threshold: 0.5 # 0.3
 # whether to use run time augmentation (may improve the accuracy, but takes much longer to run)
 RuntimeAug: False
 #adjust this to fit your GPU
 batch_size: 4
 #number of gpus to use
-gpus: 1 
+gpus: -1
 #dist backend is not required if only 1 gpu is used. defaults to ddp.
-dist_backend: 
+dist_backend: ddp
 # number of workers to load testing data.
 NumWorkers: 8
 
@@ -47,6 +56,6 @@ NumWorkers: 8
 mode:
   name: folder
   # paths to the file
-  InputDir: '/allen/aics/assay-dev/users/Jianxu/data/training_assay_caax_cellmask/quick_test_caax'
+  InputDir: '//allen/aics/assay-dev/users/Jianxu/data/caax_20x/caax_seg_model/test/image'
   # the type of images to be processed in this folder
   DataType: .tiff #1869_100X_20180327_2r-Scene-14-P47-F04.ome.tiff

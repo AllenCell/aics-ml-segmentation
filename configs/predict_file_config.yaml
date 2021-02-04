@@ -8,37 +8,41 @@ model: # model parameters (except patch_size) should be the same as specified in
   # number of output channels/ classes
   out_channels: 2
   # input patch size given to the network (adapt to fit in your GPU memory, generally bigger patches are better)
-  patch_size: [26, 105, 105] #[52, 420, 420]
+  patch_size: [26, 150, 150] #[52, 420, 420]
   #number of dimensions of patch size
   dimensions: 3
 
-  norm: #'instance' # instance | batch |  defaults to batch
-  act: #'ReLU6' # ReLU | LeakyReLU | PReLU | ReLU6, defaults to LeakyReLU
-  features: #[32, 32, 64, 128, 512, 32] # list of 6 numbers,the first five specify the encoder feature sizes. The last value corresponds to the feature size after the last upsampling. defaults to [32, 32, 64, 128, 256, 32]
+  # OPTIONAL PARAMETERS - these can be left blank to use defaults
+  norm: 'instance' # instance | batch |  defaults to batch
+  act: 'PReLU' # ReLU | LeakyReLU | PReLU | ReLU6, defaults to LeakyReLU
+  features: [32, 64, 128, 256, 512, 32] # list of 6 numbers,the first five specify the encoder feature sizes. The last value corresponds to the feature size after the last upsampling. defaults to [32, 32, 64, 128, 256, 32]
   dropout: #True # True | False, defaults to False
 
 # path to the trained model
-model_path: '//allen/aics/assay-dev/users/Benji/model_checkpoints/checkpoint_epoch=169-v0.ckpt'
+model_path: '/allen/aics/assay-dev/users/Benji/model_checkpoints/checkpoint_epoch=209-v1.ckpt'
 # the channel to extract from output tensors
 OutputCh: 1
+#splits large images into batches to speed up inference
+large_image_resize: [1, 5, 5] # how many patches to divide each axis into, ZYX order
+
 
 ##########################################################################################################
 # Data Info
 ##########################################################################################################
 # the path to output folder
-OutputDir: '/allen/aics/assay-dev/users/Benji/mlsegmenter_output'
+OutputDir: '/allen/aics/assay-dev/users/Benji/'
 # the index of the input channel
-InputCh: [1]
+InputCh: [1] #[1]
 # the ratio to resize the image
 ResizeRatio: [1.0,1.0,1.0]
 # the method to normalize your data
 Normalization: 13
 # the threshold to be applied on your data
-Threshold: -1
+Threshold: 0.5
 # whether to use run time augmentation (may improve the accuracy, but takes much longer to run)
-RuntimeAug: True
+RuntimeAug: False
 #adjust this to fit your GPU
-batch_size: 4
+batch_size: 1
 
 gpus: 1
 dist_backend: ddp
@@ -49,6 +53,6 @@ NumWorkers: 8
 mode:
   name: file
   # paths to the file
-  InputFile: '//allen/aics/assay-dev/users/Jianxu/data/training_assay_caax_cellmask/quick_test_caax/3500001860_100X_20180326_1r-Scene-02-P5-E04.ome.tiff'
+  InputFile: '//allen/aics/assay-dev/users/Jianxu/data/caax_20x/caax_seg_model/test/image_big/img_20200622_N02_001-alignV2-Scene-03-T230-P4-B2.tiff'
   # is this file a timelapse image
   timelapse: False

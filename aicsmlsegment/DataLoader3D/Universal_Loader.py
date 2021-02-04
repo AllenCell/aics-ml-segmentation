@@ -271,17 +271,122 @@ class UniversalDataset(Dataset):
         return len(self.img)
 
 
+def patchize(img, pr, patch_size):
+    ijk = []
+    imgs = []
+
+    x_max = img.shape[-1]
+    y_max = img.shape[-2]
+    z_max = img.shape[-3]
+
+    x_patch_sz = x_max // pr[2]
+    y_patch_sz = y_max // pr[1]
+    z_patch_sz = z_max // pr[0]
+
+    assert (
+        x_patch_sz > patch_size[2]
+        and y_patch_sz > patch_size[1]
+        and z_patch_sz > patch_size[0]
+    ), "Large image resize patches must be larger than model patch size"
+
+    # assert (
+    #     x_patch_sz > x_max % pr[2]
+    #     and y_patch_sz > y_max % pr[1]
+    #     and z_patch_sz > z_max % pr[0]
+    # ), "Breaking up img wont work"
+
+    # total_vol = 0
+    # for i in range(pr[0]):  # z
+    #     for j in range(pr[1]):  # y
+    #         for k in range(pr[2]):  # x
+    #             # if the next patch will hit the edge of the image,
+    #             # add to current patch to avoid narrow patches that
+    #             # can't be convolved during inference
+    #             if z_max < (i + 2) * z_patch_sz:
+    #                 z_offset = 2
+    #             else:
+    #                 z_offset = 1
+
+    #             if y_max < (j + 2) * y_patch_sz:
+    #                 y_offset = 2
+    #             else:
+    #                 y_offset = 1
+
+    #             if x_max < (k + 2) * x_patch_sz:
+    #                 x_offset = 2
+    #             else:
+    #                 x_offset = 1
+
+    #             temp = np.array(
+    #                 img[
+    #                     :,  # preserve all channels
+    #                     i * z_patch_sz : (i + z_offset) * z_patch_sz,
+    #                     j * y_patch_sz : (j + y_offset) * y_patch_sz,
+    #                     k * x_patch_sz : (k + x_offset) * x_patch_sz,
+    #                 ]
+    #             )
+    #             ijk.append([i * z_patch_sz, j * y_patch_sz, k * x_patch_sz])
+    #             imgs.append(temp)
+
+    #             total_vol += np.prod(temp.shape)
+    # assert total_vol == np.prod(img.shape), "Splitting large image failed"
+
+    total_vol = 0
+    maxs = [z_max, y_max, x_max]
+    patch_szs = [z_patch_sz, y_patch_sz, x_patch_sz]
+
+    all_coords = []
+    for i in range(3):
+        # remainder is the number of pixels per axis not evenly divided into patches
+        remainder = maxs[i] % pr[i]
+        coords = [
+            # for the first *remainder* patches, we want to expand the
+            # patch_size by one pixel so that after *remainder* iterations,
+            # all pixels are included in exactly one patch.
+            j * patch_szs[i] + j if j < remainder
+            # once *remainder* pixels have been added we don't have to
+            # add an extra pixel to each patch's size, but we do
+            # have to shift the starts of the remaining patches
+            # by the *remainder* pixels we've already added
+            else j * patch_szs[i] + remainder
+            for j in range(pr[i] + 1)
+        ]
+        all_coords.append(coords)
+
+    for i in range(pr[0]):  # z
+        for j in range(pr[1]):  # y
+            for k in range(pr[2]):  # x
+                temp = np.array(
+                    img[
+                        :,
+                        all_coords[0][i] : all_coords[0][i + 1],
+                        all_coords[1][j] : all_coords[1][j + 1],
+                        all_coords[2][k] : all_coords[2][k + 1],
+                    ]
+                )
+                ijk.append([all_coords[0][i], all_coords[1][j], all_coords[2][k]])
+                imgs.append(temp)
+                total_vol += np.prod(temp.shape)
+    assert total_vol == np.prod(img.shape), "Splitting large image failed"
+    return ijk, imgs
+
+
 class TestDataset(Dataset):
     def __init__(self, config):
-        self.imgs = []
-        self.tts = []
         inf_config = config["mode"]
         self.mode = inf_config
+        self.patch_size = config["model"]["patch_size"]
+        self.save_n_batches = 1
+
+        self.filenames = []
+        self.ijk = []
+        self.im_shape = []
+        self.imgs = []
+        self.tts = []
 
         if inf_config["name"] == "file":
             fn = inf_config["InputFile"]
             data_reader = AICSImage(fn)
-            self.filenames = [fn]
             if inf_config["timelapse"]:
                 assert data_reader.shape[1] > 1, "not a timelapse, check your data"
 
@@ -294,14 +399,34 @@ class TestDataset(Dataset):
                     img = resize(img, config)
                     self.imgs.append(img)
                     self.tts.append(tt)
+                    self.filenames.append(fn)
             else:
-                img = data_reader.get_image_data(
-                    "CZYX", S=0, T=0, C=config["InputCh"]
-                ).astype(float)
+                # img = data_reader.get_image_data(
+                #     "CZYX", S=0, T=0, C=config["InputCh"]
+                # ).astype(float)
 
+                # HACK for large img
+                img = data_reader.get_image_data(
+                    "TZYX",
+                    S=0,
+                ).astype(float)
+                img = np.swapaxes(img, 0, 1)
+                # END HACK
                 img = image_normalization(img, config["Normalization"])
                 img = resize(img, config)
-                self.imgs.append(img)
+                pr = config["large_image_resize"]
+                if pr is None or pr == [1, 1, 1]:
+                    self.filenames.append(fn)
+                    self.imgs.append(img)
+                else:
+                    self.im_shape = img.shape
+                    # how many patches until aggregated image saved
+                    self.save_n_batches = np.prod(pr)
+                    # make sure that filename aligns with img in get_item
+                    self.filenames += [fn] * self.save_n_batches
+                    ijk, imgs = patchize(img, pr, self.patch_size)
+                    self.ijk += ijk
+                    self.imgs += imgs
 
         elif inf_config["name"] == "folder":
             from glob import glob
@@ -310,7 +435,6 @@ class TestDataset(Dataset):
             filenames.sort()
             print("files to be processed:")
             print(filenames)
-            self.filenames = filenames
 
             for _, fn in enumerate(filenames):
                 # load data
@@ -318,11 +442,32 @@ class TestDataset(Dataset):
                 img = data_reader.get_image_data(
                     "CZYX", S=0, T=0, C=config["InputCh"]
                 ).astype(float)
+                # print(img.shape)
+
+                # HACK for large img
+                # img = data_reader.get_image_data(
+                #     "TZYX",
+                #     S=0,
+                # ).astype(float)
+                # img = np.swapaxes(img, 0, 1)
+                # END HACK
 
                 img = resize(img, config, min_max=False)
                 img = image_normalization(img, config["Normalization"])
 
-                self.imgs.append(img)
+                pr = config["large_image_resize"]
+                if pr is None or pr == [1, 1, 1]:
+                    self.filenames.append(fn)
+                    self.imgs.append(img)
+                else:
+                    self.im_shape = img.shape
+                    # how many patches until aggregated image saved
+                    self.save_n_batches = np.prod(pr)
+                    # make sure that filename aligns with img in get_item
+                    self.filenames += [fn] * self.save_n_batches
+                    ijk, imgs = patchize(img, pr, self.patch_size)
+                    self.ijk += ijk
+                    self.imgs += imgs
 
     def __getitem__(self, index):
         """
@@ -339,7 +484,19 @@ class TestDataset(Dataset):
         else:
             tt = []
 
-        return {"img": self.imgs[index], "fn": fn, "tt": tt}
+        if len(self.ijk) > 0:
+            ijk = self.ijk[index]
+        else:
+            ijk = []
+
+        return {
+            "img": self.imgs[index],
+            "fn": fn,
+            "tt": tt,
+            "ijk": ijk,
+            "save_n_batches": self.save_n_batches,
+            "img_shape": self.im_shape,
+        }
 
     def __len__(self):
         return len(self.imgs)

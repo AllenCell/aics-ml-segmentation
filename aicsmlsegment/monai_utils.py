@@ -117,6 +117,7 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         self.norm = config["model"]["norm"]
         self.config = config
         self.args_inference = {}
+        self.aggregate_img = None
         if train:
             loader_config = config["loader"]
             self.datapath = loader_config["datafolder"]
@@ -152,6 +153,8 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
             self.args_inference["inference_batch_size"] = config["batch_size"]
             self.args_inference["mode"] = config["mode"]["name"]
             self.args_inference["Threshold"] = config["Threshold"]
+            if config["large_image_resize"] is not None:
+                self.aggregate_img = []
 
         self.args_inference["size_out"] = config["model"]["patch_size"]
 
@@ -286,6 +289,7 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         if "Focal" in self.config["loss"]["name"]:
             extract = False
             squeeze = True
+
         outputs = model_inference(
             self.model,
             input_img,
@@ -311,52 +315,73 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         tt = batch["tt"]
         # default comes through as double tensor
         img = img.float()
-
         args_inference = self.args_inference
         output_img = apply_on_image(
             self.model, img, args_inference, squeeze=False, to_numpy=True, sigmoid=True
         )
+        if self.aggregate_img is not None:
+            # initialize the aggregate img
+            if batch_idx == 0:
+                self.aggregate_img = np.zeros(batch["img_shape"])
+            i, j, k = (
+                batch["ijk"][0].cpu().numpy()[0],
+                batch["ijk"][1].cpu().numpy()[0],
+                batch["ijk"][2].cpu().numpy()[0],
+            )
+            self.aggregate_img[
+                :,  # preserve all channels
+                i : i + output_img.shape[2],
+                j : j + output_img.shape[3],
+                k : k + output_img.shape[4],
+            ] = output_img
 
-        if args_inference["mode"] != "folder":
-            out = minmax(output_img)
-            out = undo_resize(out, self.config)
-            if args_inference["Threshold"] > 0:
-                out = out > args_inference["Threshold"]
-                out = out.astype(np.uint8)
-                out[out > 0] = 255
-        else:
-            if args_inference["Threshold"] < 0:
+        # only want to perform post-processing and saving once the aggregated image
+        # is completeor we're not aggregating an image
+        if (batch_idx + 1) % batch["save_n_batches"].cpu().numpy()[0] == 0:
+            # prepare aggregate img for output
+            if self.aggregate_img is not None:
+                output_img = self.aggregate_img
+
+            if args_inference["mode"] != "folder":
                 out = minmax(output_img)
                 out = undo_resize(out, self.config)
-                out = minmax(out)
+                if args_inference["Threshold"] > 0:
+                    out = out > args_inference["Threshold"]
+                    out = out.astype(np.uint8)
+                    out[out > 0] = 255
             else:
-                out = remove_small_objects(
-                    output_img > args_inference["Threshold"],
-                    min_size=2,
-                    connectivity=1,
-                )
-                out = out.astype(np.uint8)
-                out[out > 0] = 255
+                if args_inference["Threshold"] < 0:
+                    out = minmax(output_img)
+                    out = undo_resize(out, self.config)
+                    out = minmax(out)
+                else:
+                    out = remove_small_objects(
+                        output_img > args_inference["Threshold"],
+                        min_size=2,
+                        connectivity=1,
+                    )
+                    out = out.astype(np.uint8)
+                    out[out > 0] = 255
 
-        if len(tt) == 0:
-            imsave(
-                self.config["OutputDir"]
-                + os.sep
-                + pathlib.PurePosixPath(fn).stem
-                + "_struct_segmentation.tiff",
-                out,
-            )
-        else:
-            imsave(
-                self.config["OutputDir"]
-                + os.sep
-                + pathlib.PurePosixPath(fn).stem
-                + "_T_"
-                + f"{tt[0]:03}"
-                + "_struct_segmentation.tiff",
-                out,
-            )
-        self.log("test_loss", 0, on_step=False, on_epoch=False)
+            if len(tt) == 0:
+                imsave(
+                    self.config["OutputDir"]
+                    + os.sep
+                    + pathlib.PurePosixPath(fn).stem
+                    + "_struct_segmentation.tiff",
+                    out,
+                )
+            else:
+                imsave(
+                    self.config["OutputDir"]
+                    + os.sep
+                    + pathlib.PurePosixPath(fn).stem
+                    + "_T_"
+                    + f"{tt[0]:03}"
+                    + "_struct_segmentation.tiff",
+                    out,
+                )
+            # self.log("", 0, on_step=False, on_epoch=False)
 
 
 class DataModule(pytorch_lightning.LightningDataModule):

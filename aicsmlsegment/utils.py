@@ -53,20 +53,26 @@ OPTIONAL_CONFIG_FIELDS = {
         "gpus": None,
         "dist_backend": None,
         "callbacks": ["name"],
+        "SWA": ["swa_start", "swa_freq", "swa_lr"],
+        "tensorboard": None,
     },
     False: {
         "gpus": None,
         "dist_backend": None,
         "model": ["norm", "act", "features", "dropout"],
+        "large_image_resize": None,
     },
 }
 
 GPUS = torch.cuda.device_count()
 DEFAULT_CONFIG = {
+    "SWA": None,
     "resume": None,
     "scheduler": {"name": None},
     "gpus": GPUS,
     "dist_backend": "ddp" if GPUS > 1 else None,
+    "tensorboard": False,
+    "large_image_resize": None,
 }
 
 MODEL_PARAMETERS = {
