@@ -115,6 +115,7 @@ class UniversalDataset(Dataset):
         self,
         filenames,
         num_patch,
+        size_in,
         size_out,
         n_channel,
         transforms=[],
@@ -124,6 +125,7 @@ class UniversalDataset(Dataset):
         input:
             filenames: path to images
             num_patch: number of random crops to be produced
+            size_in: size of input to model
             size_out: size of output from model
             n_channel: number of iput channels expected by model
             transforms: list of strings specifying transforms
@@ -150,15 +152,27 @@ class UniversalDataset(Dataset):
                 num_patch_per_img[: (num_patch - basic_num * num_data)] + 1
             )
 
+        padding = [(x - y) // 2 for x, y in zip(size_in, size_out)]
+
         # extract patches from images until num_patch reached
         for img_idx, fn in enumerate(filenames):
 
+            # if we're not dividing into patches, don't break before transforming imgs
             if patchize and len(self.img) == num_patch:
                 break
 
             label = load_img(fn, img_type="label", n_channel=n_channel)
-            raw = load_img(fn, img_type="input", n_channel=n_channel)
+            input_img = load_img(fn, img_type="input", n_channel=n_channel)
             costmap = load_img(fn, img_type="costmap", n_channel=n_channel)
+
+            img_pad0 = np.pad(
+                input_img,
+                ((0, 0), (0, 0), (padding[1], padding[1]), (padding[2], padding[2])),
+                "constant",
+            )
+            raw = np.pad(
+                img_pad0, ((0, 0), (padding[0], padding[0]), (0, 0), (0, 0)), "constant"
+            )
 
             cost_scale = costmap.max()
             if cost_scale < 1:  # this should not happen, but just in case
@@ -225,9 +239,9 @@ class UniversalDataset(Dataset):
                     (self.img).append(
                         raw[
                             :,
-                            pz : pz + size_out[0],
-                            py : py + size_out[1],
-                            px : px + size_out[2],
+                            pz : pz + size_in[0],
+                            py : py + size_in[1],
+                            px : px + size_in[2],
                         ]
                     )
                     (self.gt).append(
@@ -289,48 +303,6 @@ def patchize(img, pr, patch_size):
         and z_patch_sz > patch_size[0]
     ), "Large image resize patches must be larger than model patch size"
 
-    # assert (
-    #     x_patch_sz > x_max % pr[2]
-    #     and y_patch_sz > y_max % pr[1]
-    #     and z_patch_sz > z_max % pr[0]
-    # ), "Breaking up img wont work"
-
-    # total_vol = 0
-    # for i in range(pr[0]):  # z
-    #     for j in range(pr[1]):  # y
-    #         for k in range(pr[2]):  # x
-    #             # if the next patch will hit the edge of the image,
-    #             # add to current patch to avoid narrow patches that
-    #             # can't be convolved during inference
-    #             if z_max < (i + 2) * z_patch_sz:
-    #                 z_offset = 2
-    #             else:
-    #                 z_offset = 1
-
-    #             if y_max < (j + 2) * y_patch_sz:
-    #                 y_offset = 2
-    #             else:
-    #                 y_offset = 1
-
-    #             if x_max < (k + 2) * x_patch_sz:
-    #                 x_offset = 2
-    #             else:
-    #                 x_offset = 1
-
-    #             temp = np.array(
-    #                 img[
-    #                     :,  # preserve all channels
-    #                     i * z_patch_sz : (i + z_offset) * z_patch_sz,
-    #                     j * y_patch_sz : (j + y_offset) * y_patch_sz,
-    #                     k * x_patch_sz : (k + x_offset) * x_patch_sz,
-    #                 ]
-    #             )
-    #             ijk.append([i * z_patch_sz, j * y_patch_sz, k * x_patch_sz])
-    #             imgs.append(temp)
-
-    #             total_vol += np.prod(temp.shape)
-    # assert total_vol == np.prod(img.shape), "Splitting large image failed"
-
     total_vol = 0
     maxs = [z_max, y_max, x_max]
     patch_szs = [z_patch_sz, y_patch_sz, x_patch_sz]
@@ -375,7 +347,10 @@ class TestDataset(Dataset):
     def __init__(self, config):
         inf_config = config["mode"]
         self.mode = inf_config
-        self.patch_size = config["model"]["patch_size"]
+        try:  # basic unet
+            self.patch_size = config["model"]["patch_size"]
+        except KeyError:  # custom model
+            self.patch_size = config["model"]["size_in"]
         self.save_n_batches = 1
 
         self.filenames = []
@@ -400,26 +375,31 @@ class TestDataset(Dataset):
                     self.imgs.append(img)
                     self.tts.append(tt)
                     self.filenames.append(fn)
-            else:
-                # img = data_reader.get_image_data(
-                #     "CZYX", S=0, T=0, C=config["InputCh"]
-                # ).astype(float)
+                    self.im_shape.append(img.shape)
 
-                # HACK for large img
+            else:
                 img = data_reader.get_image_data(
-                    "TZYX",
-                    S=0,
+                    "CZYX", S=0, T=0, C=config["InputCh"]
                 ).astype(float)
-                img = np.swapaxes(img, 0, 1)
-                # END HACK
+
+                # # HACK for large img
+                # img = data_reader.get_image_data(
+                #     "TZYX",
+                #     S=0,
+                # ).astype(float)
+                # img = np.swapaxes(img, 0, 1)
+                # # END HACK
+
                 img = image_normalization(img, config["Normalization"])
                 img = resize(img, config)
                 pr = config["large_image_resize"]
+                self.im_shape.append(img.shape)
+
                 if pr is None or pr == [1, 1, 1]:
                     self.filenames.append(fn)
                     self.imgs.append(img)
+
                 else:
-                    self.im_shape = img.shape
                     # how many patches until aggregated image saved
                     self.save_n_batches = np.prod(pr)
                     # make sure that filename aligns with img in get_item
@@ -454,13 +434,13 @@ class TestDataset(Dataset):
 
                 img = resize(img, config, min_max=False)
                 img = image_normalization(img, config["Normalization"])
+                self.im_shape.append(img.shape)
 
                 pr = config["large_image_resize"]
                 if pr is None or pr == [1, 1, 1]:
                     self.filenames.append(fn)
                     self.imgs.append(img)
                 else:
-                    self.im_shape = img.shape
                     # how many patches until aggregated image saved
                     self.save_n_batches = np.prod(pr)
                     # make sure that filename aligns with img in get_item
@@ -468,6 +448,24 @@ class TestDataset(Dataset):
                     ijk, imgs = patchize(img, pr, self.patch_size)
                     self.ijk += ijk
                     self.imgs += imgs
+
+        if config["model"]["name"] in ["unet_xy", "unet_xy_zoom"]:
+            padding = [
+                (x - y) // 2
+                for x, y in zip(config["model"]["size_in"], config["model"]["size_out"])
+            ]
+
+            for i in range(len(self.imgs)):
+                self.imgs[i] = np.pad(
+                    self.imgs[i],
+                    (
+                        (0, 0),
+                        (padding[0], padding[0]),
+                        (padding[1], padding[1]),
+                        (padding[2], padding[2]),
+                    ),
+                    "constant",
+                )
 
     def __getitem__(self, index):
         """
@@ -489,13 +487,18 @@ class TestDataset(Dataset):
         else:
             ijk = []
 
+        if len(self.im_shape) > 0:
+            im_shape = self.im_shape[index]
+        else:
+            im_shape = self.im_shape[0]
+
         return {
             "img": self.imgs[index],
             "fn": fn,
             "tt": tt,
             "ijk": ijk,
             "save_n_batches": self.save_n_batches,
-            "img_shape": self.im_shape,
+            "img_shape": im_shape,
         }
 
     def __len__(self):

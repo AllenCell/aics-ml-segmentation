@@ -5,12 +5,15 @@ import torch
 
 # from torchcontrib.optim import SWA    https://github.com/PyTorchLightning/pytorch-lightning/pull/5640
 
-from monai.networks.nets import BasicUNet
 import monai.losses as MonaiLosses
 
 import aicsmlsegment.custom_loss as CustomLosses
 import aicsmlsegment.custom_metrics as CustomMetrics
-from aicsmlsegment.model_utils import model_inference, apply_on_image
+from aicsmlsegment.model_utils import (
+    model_inference,
+    old_model_inference,
+    apply_on_image,
+)
 from aicsmlsegment.DataLoader3D.Universal_Loader import (
     UniversalDataset,
     TestDataset,
@@ -35,6 +38,7 @@ SUPPORTED_LOSSES = [
     "CrossEntropy",
     "Dice+FocalLoss",
     "GeneralizedDice+FocalLoss",
+    "Aux",
 ]
 
 
@@ -92,6 +96,14 @@ def get_loss_criterion(config):
             False,
             None,
         )
+    elif name == "Aux":
+        return (
+            CustomLosses.MultiAuxillaryElementNLLLoss(
+                3, config["loss"]["loss_weight"], config["model"]["nclass"]
+            ),
+            True,
+            None,
+        )
 
 
 def get_metric(config):
@@ -110,13 +122,50 @@ def get_metric(config):
         return CustomMetrics.AveragePrecision()
 
 
-class Monai_BasicUNet(pytorch_lightning.LightningModule):
+class Model(pytorch_lightning.LightningModule):
     def __init__(self, config, model_config, train):
         super().__init__()
-        self.model = BasicUNet(**model_config)
-        self.norm = config["model"]["norm"]
-        self.config = config
+
         self.args_inference = {}
+
+        self.model_name = config["model"]["name"]
+        if self.model_name == "BasicUNet":
+            from monai.networks.nets import BasicUNet
+
+            del model_config["patch_size"]
+
+            self.model = BasicUNet(**model_config)
+            self.model.name = "BasicUNet"
+            self.args_inference["size_in"] = config["model"]["patch_size"]
+            self.args_inference["size_out"] = config["model"]["patch_size"]
+
+        elif self.model_name == "unet_xy":
+            from aicsmlsegment.Net3D.unet_xy import UNet3D as DNN
+            from aicsmlsegment.model_utils import weights_init
+
+            model = DNN(model_config["nchannel"], model_config["nclass"])
+            self.model = model.apply(weights_init)
+            self.model.name = "unet_xy"
+            self.args_inference["size_in"] = config["model"]["size_in"]
+            self.args_inference["size_out"] = config["model"]["size_out"]
+            self.args_inference["nclass"] = config["model"]["nclass"]
+
+        elif self.model_name == "unet_xy_zoom":
+            from aicsmlsegment.Net3D.unet_xy_enlarge import UNet3D as DNN
+            from aicsmlsegment.model_utils import weights_init
+
+            model = DNN(
+                config["nchannel"],
+                model_config["nclass"],
+                model_config.get("zoom_ratio", 3),
+            )
+            self.model = model.apply(weights_init)
+            self.model.name = "unet_xy_zoom"
+            self.args_inference["size_in"] = config["model"]["size_in"]
+            self.args_inference["size_out"] = config["model"]["size_out"]
+            self.args_inference["nclass"] = config["model"]["nclass"]
+
+        self.config = config
         self.aggregate_img = None
         if train:
             loader_config = config["loader"]
@@ -155,8 +204,6 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
             self.args_inference["Threshold"] = config["Threshold"]
             if config["large_image_resize"] is not None:
                 self.aggregate_img = []
-
-        self.args_inference["size_out"] = config["model"]["patch_size"]
 
     def forward(self, x):
         """
@@ -249,7 +296,22 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
     def training_step(self, batch, batch_idx):
         inputs = batch[0]
         targets = batch[1]
+
         outputs = self.forward(inputs)
+
+        if type(outputs) == list:  # old segmenter
+            cmap = batch[2]
+            loss = self.loss_function(outputs, targets, cmap)
+            self.log(
+                "epoch_train_loss",
+                loss,
+                sync_dist=True,
+                prog_bar=True,
+                on_epoch=True,
+                on_step=False,
+            )
+
+            return {"loss": loss}
 
         # focal loss requires > 1 channel
         if "Focal" not in self.config["loss"]["name"]:
@@ -283,31 +345,45 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         input_img = batch[0]
         label = batch[1]
 
-        extract = True
-        squeeze = False
-        # focal loss needs >1 channel in predictions
-        if "Focal" in self.config["loss"]["name"]:
-            extract = False
-            squeeze = True
+        if self.model_name == "BasicUNet":
+            extract = True
+            squeeze = False
+            # focal loss needs >1 channel in predictions
+            if "Focal" in self.config["loss"]["name"]:
+                extract = False
+                squeeze = True
+            outputs = model_inference(
+                self.model,
+                input_img,
+                self.args_inference,
+                squeeze=squeeze,
+                extract_output_ch=extract,
+            )
 
-        outputs = model_inference(
-            self.model,
-            input_img,
-            self.args_inference,
-            squeeze=squeeze,
-            extract_output_ch=extract,
-        )
+            if self.accepts_costmap:
+                costmap = batch[2]
+                costmap = torch.unsqueeze(costmap, dim=0)  # add batch
+                val_loss = self.loss_function(outputs, label, costmap)
+            else:
+                val_loss = self.loss_function(outputs, label)
+            # sync_dist on_epoch=True ensures that results will be averaged across gpus
+            self.log("val_loss", val_loss, sync_dist=True, on_epoch=True, prog_bar=True)
 
-        if self.accepts_costmap:
+        elif self.model_name in ["unet_xy", "unet_xy_zoom"]:
+            from aicsmlsegment.utils import compute_iou
+
+            outputs = old_model_inference(
+                self.model,
+                input_img,
+                self.model.final_activation,
+                self.args_inference,
+                label.shape,
+            )
+
             costmap = batch[2]
-            val_loss = self.loss_function(outputs, label, costmap)
-        else:
-            val_loss = self.loss_function(outputs, label)
-
-        # val_metric = self.metric(outputs, label)
-
-        # sync_dist on_epoch=True ensures that results will be averaged across gpus
-        self.log("val_loss", val_loss, sync_dist=True, on_epoch=True, prog_bar=True)
+            costmap = torch.unsqueeze(costmap, dim=0)
+            val_loss = compute_iou(outputs > 0.5, label, costmap)
+            self.log("val_iou", val_loss, sync_dist=True, on_epoch=True, prog_bar=True)
 
     def test_step(self, batch, batch_idx):
         img = batch["img"]
@@ -316,8 +392,16 @@ class Monai_BasicUNet(pytorch_lightning.LightningModule):
         # default comes through as double tensor
         img = img.float()
         args_inference = self.args_inference
+
+        img_shape = [s.cpu().numpy()[0] for s in batch["img_shape"]]
         output_img = apply_on_image(
-            self.model, img, args_inference, squeeze=False, to_numpy=True, sigmoid=True
+            self.model,
+            img,
+            args_inference,
+            squeeze=False,
+            to_numpy=True,
+            sigmoid=True,
+            original_image_shape=img_shape,
         )
         if self.aggregate_img is not None:
             # initialize the aggregate img
@@ -388,6 +472,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
     def __init__(self, config, train=True):
         super().__init__()
         self.config = config
+        self.model_name = config["model"]["name"]
 
         if train:
             self.loader_config = config["loader"]
@@ -455,12 +540,23 @@ class DataModule(pytorch_lightning.LightningDataModule):
         print("Initializing train dataloader: ", end=" ")
         loader_config = self.loader_config
         model_config = self.model_config
+
+        if self.model_name == "BasicUNet":
+            size_in = model_config["patch_size"]
+            size_out = size_in
+            nchannel = model_config["in_channels"]
+        elif self.model_name == "unet_xy" or self.model_name == "unet_xy_zoom":
+            size_in = model_config["size_in"]
+            size_out = model_config["size_out"]
+            nchannel = model_config["nchannel"]
+
         train_set_loader = DataLoader(
             UniversalDataset(
                 self.train_filenames,
                 loader_config["PatchPerBuffer"],
-                model_config["patch_size"],
-                model_config["in_channels"],
+                size_in,
+                size_out,
+                nchannel,
                 self.transforms,
                 patchize=True,
             ),
@@ -474,12 +570,23 @@ class DataModule(pytorch_lightning.LightningDataModule):
         print("Initializing validation dataloader: ", end=" ")
         loader_config = self.loader_config
         model_config = self.model_config
+
+        if self.model_name == "BasicUNet":
+            size_in = model_config["patch_size"]
+            size_out = size_in
+            nchannel = model_config["in_channels"]
+        elif self.model_name == "unet_xy" or self.model_name == "unet_xy_zoom":
+            size_in = model_config["size_in"]
+            size_out = model_config["size_out"]
+            nchannel = model_config["nchannel"]
+
         val_set_loader = DataLoader(
             UniversalDataset(
                 self.valid_filenames,
                 loader_config["PatchPerBuffer"],
-                model_config["patch_size"],
-                model_config["in_channels"],
+                size_in,
+                size_out,
+                nchannel,
                 [],  # no transforms for validation data
                 patchize=False,  # validate on entire image
             ),

@@ -13,7 +13,7 @@ from monai.networks.layers import Norm, Act
 
 REQUIRED_CONFIG_FIELDS = {
     True: {
-        "model": ["name", "in_channels", "out_channels", "patch_size", "dimensions"],
+        "model": ["name"],
         "checkpoint_dir": None,
         "learning_rate": None,
         "weight_decay": None,
@@ -32,7 +32,7 @@ REQUIRED_CONFIG_FIELDS = {
         "validation": ["metric", "leaveout", "OutputCh", "validate_every_n_epoch"],
     },
     False: {
-        "model": ["name", "in_channels", "out_channels", "patch_size", "dimensions"],
+        "model": ["name"],
         "model_path": None,
         "OutputCh": None,
         "OutputDir": None,
@@ -73,6 +73,7 @@ DEFAULT_CONFIG = {
     "dist_backend": "ddp" if GPUS > 1 else None,
     "tensorboard": False,
     "large_image_resize": None,
+    "callbacks": {"name": None},
 }
 
 MODEL_PARAMETERS = {
@@ -83,8 +84,16 @@ MODEL_PARAMETERS = {
             "norm",
             "dropout",
         ],
-        "Required": ["dimensions", "in_channels", "out_channels"],
-    }
+        "Required": ["dimensions", "in_channels", "out_channels", "patch_size"],
+    },
+    "unet_xy": {
+        "Optional": [],
+        "Required": ["nchannel", "nclass", "size_in", "size_out"],
+    },
+    "unet_xy_zoom": {
+        "Optional": [],
+        "Required": ["nchannel", "nclass", "size_in", "size_out", "zoom_ratio"],
+    },
 }
 
 ACTIVATIONS = {
@@ -373,6 +382,12 @@ def load_single_image(args, fn, time_flag=False):
 
 
 def compute_iou(prediction, gt, cmap):
+    if type(prediction) == torch.Tensor:
+        prediction = prediction.cpu().numpy()
+    if type(gt) == torch.Tensor:
+        gt = gt.cpu().numpy()
+    if type(cmap) == torch.Tensor:
+        cmap = cmap.cpu().numpy()
 
     area_i = np.logical_and(prediction, gt)
     area_i[cmap == 0] = False

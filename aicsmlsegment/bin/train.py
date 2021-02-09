@@ -1,15 +1,12 @@
 import pytorch_lightning
 import argparse
 from aicsmlsegment.utils import load_config, get_logger
-from aicsmlsegment.monai_utils import Monai_BasicUNet, DataModule
-
-
-SUPPORTED_MONAI_MODELS = [
-    "BasicUNet",
-]
+from aicsmlsegment.monai_utils import Model, DataModule
+from pytorch_lightning.callbacks import ModelCheckpoint  # , LearningRateLogger
 
 
 def main():
+    # torch.backends.cudnn.enabled = False
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
     args = parser.parse_args()
@@ -22,22 +19,31 @@ def main():
     # load a specified saved model
     if config["resume"] is not None:
         print(f"Loading checkpoint '{config['resume']}'...")
-        model = Monai_BasicUNet.load_from_checkpoint(
-            config["resume"], config=config, model_config=model_config, train=True
-        )
+        try:
+            model = Model.load_from_checkpoint(
+                config["resume"], config=config, model_config=model_config, train=True
+            )
+        except KeyError:  # backwards compatibility
+            from aicsmlsegment.model_utils import load_checkpoint
+
+            model = Model(config, model_config, train=True)
+            load_checkpoint(config["resume"], model)
     else:
         print("Training new model from scratch")
-        model = Monai_BasicUNet(config, model_config, train=True)
+        model = Model(config, model_config, train=True)
 
     checkpoint_dr = config["checkpoint_dir"]
     # model checkpoint every n epochs as specified in config
-    MC = pytorch_lightning.callbacks.ModelCheckpoint(
+    MC = ModelCheckpoint(
         dirpath=checkpoint_dr,
         filename="checkpoint_{epoch}",
         period=config["save_every_n_epoch"],
         save_top_k=-1,
     )
-    callbacks = [MC]
+    # LR = LearningRateLogger()
+    callbacks = [
+        MC,
+    ]  # LR]
 
     callbacks_config = config["callbacks"]
 
@@ -58,6 +64,10 @@ def main():
 
     # ddp is the default unless only one gpu is requested
     accelerator = config["dist_backend"]
+    if config["tensorboard"]:
+        logger = pytorch_lightning.loggers.TensorBoardLogger("../../lightning_logs/")
+    else:
+        logger = None
 
     print("Training on ", gpu_config, "GPUs with backend", accelerator)
     print("Initializing trainer...", end=" ")
@@ -70,11 +80,15 @@ def main():
         reload_dataloaders_every_epoch=False,  # check https://github.com/PyTorchLightning/pytorch-lightning/pull/5043 for updates on pull request
         # reload_dataloaders_every_n_epoch = config['loader']['epoch_shuffle']
         distributed_backend=accelerator,
+        logger=logger,
+        log_every_n_steps=10,
+        flush_logs_every_n_steps=10,
     )
     print("Done")
     print("Initializing data module...", end=" ")
     data_module = DataModule(config)
     print("Done")
+
     trainer.fit(model, data_module)
     print(
         "The best performing checkpoint is",

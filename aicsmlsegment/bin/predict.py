@@ -4,7 +4,7 @@ import argparse
 from aicsmlsegment.utils import (
     load_config,
 )
-from aicsmlsegment.monai_utils import Monai_BasicUNet, DataModule
+from aicsmlsegment.monai_utils import Model, DataModule
 import pytorch_lightning
 
 
@@ -18,9 +18,15 @@ def main():
     # load the trained model instance
     model_path = config["model_path"]
     print(f"Loading model from {model_path}...")
-    model = Monai_BasicUNet.load_from_checkpoint(
-        model_path, config=config, model_config=model_config, train=False
-    )
+    try:
+        model = Model.load_from_checkpoint(
+            config["model_path"], config=config, model_config=model_config, train=False
+        )
+    except KeyError:  # backwards compatibility
+        from aicsmlsegment.model_utils import load_checkpoint
+
+        model = Model(config, model_config, train=False)
+        load_checkpoint(config["model_path"], model)
 
     gpu_config = config["gpus"]
     if gpu_config < -1:
