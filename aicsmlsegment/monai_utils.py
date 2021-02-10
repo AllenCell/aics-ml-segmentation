@@ -155,7 +155,7 @@ class Model(pytorch_lightning.LightningModule):
             from aicsmlsegment.model_utils import weights_init
 
             model = DNN(
-                config["nchannel"],
+                model_config["nchannel"],
                 model_config["nclass"],
                 model_config.get("zoom_ratio", 3),
             )

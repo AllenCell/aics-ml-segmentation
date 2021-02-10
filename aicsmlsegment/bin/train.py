@@ -65,7 +65,7 @@ def main():
     # ddp is the default unless only one gpu is requested
     accelerator = config["dist_backend"]
     if config["tensorboard"]:
-        logger = pytorch_lightning.loggers.TensorBoardLogger("../../lightning_logs/")
+        logger = pytorch_lightning.loggers.TensorBoardLogger("../lightning_logs/")
     else:
         logger = None
 
