@@ -11,7 +11,6 @@ import aicsmlsegment.custom_loss as CustomLosses
 import aicsmlsegment.custom_metrics as CustomMetrics
 from aicsmlsegment.model_utils import (
     model_inference,
-    old_model_inference,
     apply_on_image,
 )
 from aicsmlsegment.DataLoader3D.Universal_Loader import (
@@ -20,6 +19,7 @@ from aicsmlsegment.DataLoader3D.Universal_Loader import (
     minmax,
     undo_resize,
 )
+from aicsmlsegment.utils import compute_iou
 
 from monai.metrics import DiceMetric
 import random
@@ -135,7 +135,6 @@ class Model(pytorch_lightning.LightningModule):
             del model_config["patch_size"]
 
             self.model = BasicUNet(**model_config)
-            self.model.name = "BasicUNet"
             self.args_inference["size_in"] = config["model"]["patch_size"]
             self.args_inference["size_out"] = config["model"]["patch_size"]
 
@@ -145,7 +144,6 @@ class Model(pytorch_lightning.LightningModule):
 
             model = DNN(model_config["nchannel"], model_config["nclass"])
             self.model = model.apply(weights_init)
-            self.model.name = "unet_xy"
             self.args_inference["size_in"] = config["model"]["size_in"]
             self.args_inference["size_out"] = config["model"]["size_out"]
             self.args_inference["nclass"] = config["model"]["nclass"]
@@ -160,7 +158,6 @@ class Model(pytorch_lightning.LightningModule):
                 model_config.get("zoom_ratio", 3),
             )
             self.model = model.apply(weights_init)
-            self.model.name = "unet_xy_zoom"
             self.args_inference["size_in"] = config["model"]["size_in"]
             self.args_inference["size_out"] = config["model"]["size_out"]
             self.args_inference["nclass"] = config["model"]["nclass"]
@@ -312,6 +309,7 @@ class Model(pytorch_lightning.LightningModule):
             )
 
             return {"loss": loss}
+        outputs = torch.nn.Sigmoid()(outputs)
 
         # focal loss requires > 1 channel
         if "Focal" not in self.config["loss"]["name"]:
@@ -345,21 +343,23 @@ class Model(pytorch_lightning.LightningModule):
         input_img = batch[0]
         label = batch[1]
 
-        if self.model_name == "BasicUNet":
-            extract = True
-            squeeze = False
-            # focal loss needs >1 channel in predictions
-            if "Focal" in self.config["loss"]["name"]:
-                extract = False
-                squeeze = True
-            outputs = model_inference(
-                self.model,
-                input_img,
-                self.args_inference,
-                squeeze=squeeze,
-                extract_output_ch=extract,
-            )
+        extract = True
+        squeeze = False
+        # focal loss needs >1 channel in predictions
+        if "Focal" in self.config["loss"]["name"]:
+            extract = False
+            squeeze = True
 
+        outputs = model_inference(
+            self.model,
+            input_img,
+            self.args_inference,
+            squeeze=squeeze,
+            extract_output_ch=extract,
+            sigmoid=True,
+        )
+
+        if self.model_name == "BasicUNet":
             if self.accepts_costmap:
                 costmap = batch[2]
                 costmap = torch.unsqueeze(costmap, dim=0)  # add batch
@@ -370,16 +370,6 @@ class Model(pytorch_lightning.LightningModule):
             self.log("val_loss", val_loss, sync_dist=True, on_epoch=True, prog_bar=True)
 
         elif self.model_name in ["unet_xy", "unet_xy_zoom"]:
-            from aicsmlsegment.utils import compute_iou
-
-            outputs = old_model_inference(
-                self.model,
-                input_img,
-                self.model.final_activation,
-                self.args_inference,
-                label.shape,
-            )
-
             costmap = batch[2]
             costmap = torch.unsqueeze(costmap, dim=0)
             val_loss = compute_iou(outputs > 0.5, label, costmap)
@@ -393,7 +383,6 @@ class Model(pytorch_lightning.LightningModule):
         img = img.float()
         args_inference = self.args_inference
 
-        img_shape = [s.cpu().numpy()[0] for s in batch["img_shape"]]
         output_img = apply_on_image(
             self.model,
             img,
@@ -401,7 +390,6 @@ class Model(pytorch_lightning.LightningModule):
             squeeze=False,
             to_numpy=True,
             sigmoid=True,
-            original_image_shape=img_shape,
         )
         if self.aggregate_img is not None:
             # initialize the aggregate img
