@@ -223,7 +223,6 @@ class UniversalDataset(Dataset):
                 # take specified number of patches from current image
                 new_patch_num = 0
                 while new_patch_num < num_patch_per_img[img_idx]:
-
                     pz = random.randint(0, label.shape[1] - size_out[0])
                     py = random.randint(0, label.shape[2] - size_out[1])
                     px = random.randint(0, label.shape[3] - size_out[2])
@@ -378,26 +377,26 @@ class TestDataset(Dataset):
                     self.im_shape.append(img.shape)
 
             else:
-                img = data_reader.get_image_data(
-                    "CZYX", S=0, T=0, C=config["InputCh"]
-                ).astype(float)
+                # img = data_reader.get_image_data(
+                #     "CZYX", S=0, T=0, C=config["InputCh"]
+                # ).astype(float)
 
                 # # HACK for large img
-                # img = data_reader.get_image_data(
-                #     "TZYX",
-                #     S=0,
-                # ).astype(float)
-                # img = np.swapaxes(img, 0, 1)
+                img = data_reader.get_image_data(
+                    "TZYX",
+                    S=0,
+                ).astype(float)
+                img = np.swapaxes(img, 0, 1)
                 # # END HACK
 
                 img = image_normalization(img, config["Normalization"])
                 img = resize(img, config)
                 pr = config["large_image_resize"]
-                self.im_shape.append(img.shape)
 
                 if pr is None or pr == [1, 1, 1]:
                     self.filenames.append(fn)
                     self.imgs.append(img)
+                    self.im_shape.append(img.shape)
 
                 else:
                     # how many patches until aggregated image saved
@@ -407,6 +406,7 @@ class TestDataset(Dataset):
                     ijk, imgs = patchize(img, pr, self.patch_size)
                     self.ijk += ijk
                     self.imgs += imgs
+                    self.im_shape += [img.shape] * len(imgs)
 
         elif inf_config["name"] == "folder":
             from glob import glob
@@ -434,12 +434,12 @@ class TestDataset(Dataset):
 
                 img = resize(img, config, min_max=False)
                 img = image_normalization(img, config["Normalization"])
-                self.im_shape.append(img.shape)
 
                 pr = config["large_image_resize"]
                 if pr is None or pr == [1, 1, 1]:
                     self.filenames.append(fn)
                     self.imgs.append(img)
+                    self.im_shape.append(img.shape)
                 else:
                     # how many patches until aggregated image saved
                     self.save_n_batches = np.prod(pr)
@@ -448,6 +448,7 @@ class TestDataset(Dataset):
                     ijk, imgs = patchize(img, pr, self.patch_size)
                     self.ijk += ijk
                     self.imgs += imgs
+                    self.im_shape += [img.shape] * len(imgs)
 
         if config["model"]["name"] in ["unet_xy", "unet_xy_zoom"]:
             padding = [
