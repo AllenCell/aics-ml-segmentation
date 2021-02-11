@@ -106,7 +106,7 @@ def model_inference(
         )
 
     if extract_output_ch:
-        # old model inference
+        # old models
         if type(args["OutputCh"]) == list and len(args["OutputCh"]) > 2:
             args["OutputCh"] = args["OutputCh"][1]
 

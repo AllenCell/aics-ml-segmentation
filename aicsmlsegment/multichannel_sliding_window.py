@@ -129,7 +129,6 @@ def sliding_window_inference(
     #############################
 
     out_slices = dense_patch_slices(original_image_size, out_size, scan_interval)
-
     # Create window-level importance map
     importance_map = compute_importance_map(
         get_valid_patch_size(original_image_size, out_size),
@@ -169,14 +168,10 @@ def sliding_window_inference(
         # old models output a list of three predictions
         if type(seg_prob) == list:
             seg_prob = seg_prob[0]
-            seg_prob = seg_prob.cpu().data.float()
-            seg_prob = seg_prob.view(
-                1,
-                2,
-                out_size[0],
-                out_size[1],
-                out_size[2],
-            )
+            seg_prob = torch.softmax(seg_prob, dim=1)
+            seg_prob = seg_prob.view(1, 1, out_size[0], out_size[1], out_size[2], 2)
+            seg_prob = torch.transpose(seg_prob, 1, 5)
+            seg_prob = torch.squeeze(seg_prob, dim=5)
 
         seg_prob = seg_prob.to(device)  # batched patch segmentation
         if not _initialized:  # init. buffer at the first iteration

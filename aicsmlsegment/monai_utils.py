@@ -391,6 +391,7 @@ class Model(pytorch_lightning.LightningModule):
             to_numpy=True,
             sigmoid=True,
         )
+
         if self.aggregate_img is not None:
             # initialize the aggregate img
             if batch_idx == 0:
