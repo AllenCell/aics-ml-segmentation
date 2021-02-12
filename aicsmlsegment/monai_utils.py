@@ -273,7 +273,7 @@ class Model(pytorch_lightning.LightningModule):
                     verbose=scheduler_params["verbose"],
                 )
                 # monitoring metric must be specified
-               return {
+                return {
                     "optimizer": optims[0],
                     "lr_scheduler": scheduler,
                     "monitor": scheduler_params["monitor"],
