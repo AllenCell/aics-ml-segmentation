@@ -273,7 +273,7 @@ class Model(pytorch_lightning.LightningModule):
                     verbose=scheduler_params["verbose"],
                 )
                 # monitoring metric must be specified
-                return {
+               return {
                     "optimizer": optims[0],
                     "lr_scheduler": scheduler,
                     "monitor": scheduler_params["monitor"],
@@ -294,7 +294,7 @@ class Model(pytorch_lightning.LightningModule):
         inputs = batch[0]
         targets = batch[1]
 
-        outputs = self.forward(inputs)
+        outputs = self(inputs)
 
         if type(outputs) == list:  # old segmenter
             cmap = batch[2]
@@ -309,8 +309,8 @@ class Model(pytorch_lightning.LightningModule):
             )
 
             return {"loss": loss}
-        outputs = torch.nn.Sigmoid()(outputs)
 
+        outputs = torch.nn.Sigmoid()(outputs)
         # focal loss requires > 1 channel
         if "Focal" not in self.config["loss"]["name"]:
             # select output channel
