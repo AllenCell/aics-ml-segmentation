@@ -86,14 +86,13 @@ def model_inference(
     """
     perform model inference and extract output channel
     """
+    input_image_size = np.array((input_img.shape)[-3:])
+    added_padding = np.array(
+        [2 * ((x - y) // 2) for x, y in zip(args["size_in"], args["size_out"])]
+    )
+
+    original_image_size = input_image_size - added_padding
     with torch.no_grad():
-        input_image_size = np.array((input_img.shape)[-3:])
-        added_padding = np.array(
-            [2 * ((x - y) // 2) for x, y in zip(args["size_in"], args["size_out"])]
-        )
-
-        original_image_size = input_image_size - added_padding
-
         result = sliding_window_inference(
             inputs=input_img.cuda(),
             roi_size=args["size_in"],

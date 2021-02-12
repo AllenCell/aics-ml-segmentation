@@ -123,7 +123,6 @@ def sliding_window_inference(
     slices = dense_patch_slices(image_size, roi_size, scan_interval)
     num_win = len(slices)  # number of windows per image
     total_slices = num_win * batch_size  # total number of window
-
     ###########################
     # EDIT                        #
     #############################
@@ -162,14 +161,15 @@ def sliding_window_inference(
         window_data = torch.cat([inputs[win_slice] for win_slice in unravel_slice]).to(
             sw_device
         )
-
         seg_prob = predictor(window_data, *args, **kwargs)
 
         # old models output a list of three predictions
         if type(seg_prob) == list:
             seg_prob = seg_prob[0]
             seg_prob = torch.softmax(seg_prob, dim=1)
-            seg_prob = seg_prob.view(1, 1, out_size[0], out_size[1], out_size[2], 2)
+            seg_prob = seg_prob.view(
+                sw_batch_size, 1, out_size[0], out_size[1], out_size[2], 2
+            )
             seg_prob = torch.transpose(seg_prob, 1, 5)
             seg_prob = torch.squeeze(seg_prob, dim=5)
 
