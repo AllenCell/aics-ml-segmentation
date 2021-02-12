@@ -53,7 +53,7 @@ OPTIONAL_CONFIG_FIELDS = {
         "gpus": None,
         "dist_backend": None,
         "callbacks": ["name"],
-        "SWA": ["swa_start", "swa_freq", "swa_lr"],
+        "SWA": ["swa_start", "swa_lr", "annealing_epochs", "annealing_strategy"],
         "tensorboard": None,
     },
     False: {

@@ -2,7 +2,7 @@ import pytorch_lightning
 import argparse
 from aicsmlsegment.utils import load_config, get_logger
 from aicsmlsegment.monai_utils import Model, DataModule
-from pytorch_lightning.callbacks import ModelCheckpoint  # , LearningRateLogger
+from pytorch_lightning.callbacks import ModelCheckpoint
 
 
 def main():
@@ -40,10 +40,8 @@ def main():
         period=config["save_every_n_epoch"],
         save_top_k=-1,
     )
-    # LR = LearningRateLogger()
-    callbacks = [
-        MC,
-    ]  # LR]
+    # LR = pytorch_lightning.callbacks.LearningRateLogger()
+    callbacks = [MC]  # LR]
 
     callbacks_config = config["callbacks"]
 
@@ -57,6 +55,18 @@ def main():
         )
         callbacks.append(es)
 
+    if config["SWA"] is not None:
+        assert (
+            config["scheduler"]["name"] != "ReduceLROnPlateau"
+        ), "ReduceLROnPlateau scheduler is not currently compatible with SWA"
+        swa = pytorch_lightning.callbacks.StochasticWeightAveraging(
+            swa_epoch_start=config["SWA"]["swa_start"],
+            swa_lrs=config["SWA"]["swa_lr"],
+            annealing_epochs=config["SWA"]["annealing_epochs"],
+            annealing_strategy=config["SWA"]["annealing_strategy"],
+        )
+        callbacks.append(swa)
+
     gpu_config = config["gpus"]
     if gpu_config < -1:
         print("Number of GPUs must be -1 or > 0")
@@ -65,7 +75,7 @@ def main():
     # ddp is the default unless only one gpu is requested
     accelerator = config["dist_backend"]
     if config["tensorboard"]:
-        logger = pytorch_lightning.loggers.TensorBoardLogger("../lightning_logs/")
+        logger = pytorch_lightning.loggers.TensorBoardLogger("../../../lightning_logs/")
     else:
         logger = None
 
@@ -75,7 +85,7 @@ def main():
         gpus=gpu_config,
         max_epochs=config["epochs"],
         check_val_every_n_epoch=config["validation"]["validate_every_n_epoch"],
-        num_sanity_val_steps=0,
+        num_sanity_val_steps=1,
         callbacks=callbacks,
         reload_dataloaders_every_epoch=False,  # check https://github.com/PyTorchLightning/pytorch-lightning/pull/5043 for updates on pull request
         # reload_dataloaders_every_n_epoch = config['loader']['epoch_shuffle']
@@ -85,6 +95,7 @@ def main():
         flush_logs_every_n_steps=10,
     )
     print("Done")
+
     print("Initializing data module...", end=" ")
     data_module = DataModule(config)
     print("Done")
