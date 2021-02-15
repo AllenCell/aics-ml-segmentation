@@ -379,8 +379,7 @@ class Model(pytorch_lightning.LightningModule):
         img = batch["img"]
         fn = batch["fn"][0]
         tt = batch["tt"]
-        # default comes through as double tensor
-        img = img.float()
+
         args_inference = self.args_inference
 
         output_img = apply_on_image(
@@ -468,10 +467,13 @@ class DataModule(pytorch_lightning.LightningDataModule):
             self.model_config = config["model"]
 
             name = config["loader"]["name"]
-            if name != "default":
+            if name not in ["default", "focus"]:
                 print("other loaders are under construction")
                 quit()
-
+            if name == "focus":
+                self.check_crop = True
+            else:
+                self.check_crop = False
             self.transforms = []
             if "Transforms" in self.loader_config:
                 self.transforms = self.loader_config["Transforms"]
@@ -548,6 +550,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
                 nchannel,
                 self.transforms,
                 patchize=True,
+                check_crop=self.check_crop,
             ),
             batch_size=loader_config["batch_size"],
             shuffle=True,

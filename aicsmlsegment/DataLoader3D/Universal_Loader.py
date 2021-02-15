@@ -8,8 +8,6 @@ from aicsmlsegment.utils import (
 from random import shuffle
 from torch.utils.data import Dataset
 from scipy.ndimage import zoom
-
-
 from torchio.transforms import RandomAffine
 
 
@@ -119,7 +117,8 @@ class UniversalDataset(Dataset):
         size_out,
         n_channel,
         transforms=[],
-        patchize=True,
+        patchize: bool = True,
+        check_crop: bool = False,
     ):
         """
         input:
@@ -130,6 +129,7 @@ class UniversalDataset(Dataset):
             n_channel: number of iput channels expected by model
             transforms: list of strings specifying transforms
             patchize: whether to divide image into patches
+            check_crop: whether to check
         """
         print("Generating samples...", end=" ")
         self.img = []
@@ -168,7 +168,7 @@ class UniversalDataset(Dataset):
             img_pad0 = np.pad(
                 input_img,
                 ((0, 0), (0, 0), (padding[1], padding[1]), (padding[2], padding[2])),
-                "constant",
+                "symmetric",
             )
             raw = np.pad(
                 img_pad0, ((0, 0), (padding[0], padding[0]), (0, 0), (0, 0)), "constant"
@@ -222,6 +222,7 @@ class UniversalDataset(Dataset):
             if patchize:
                 # take specified number of patches from current image
                 new_patch_num = 0
+                num_fail = 0
                 while new_patch_num < num_patch_per_img[img_idx]:
                     pz = random.randint(0, label.shape[1] - size_out[0])
                     py = random.randint(0, label.shape[2] - size_out[1])
@@ -233,6 +234,15 @@ class UniversalDataset(Dataset):
                         py : py + size_out[1],
                         px : px + size_out[2],
                     ]
+
+                    if check_crop:
+                        # enough valida samples
+                        if np.count_nonzero(ref_patch_cmap > 1e-5) < 1000:
+                            num_fail = num_fail + 1
+                            if num_fail > 50:
+                                print("Failed to generate valid crops")
+                                break
+                            continue
 
                     # confirmed good crop
                     (self.img).append(
@@ -261,24 +271,16 @@ class UniversalDataset(Dataset):
         print("Done.")
 
     def __getitem__(self, index):
-
-        image_tensor = from_numpy(self.img[index].astype(float))
-        cmap_tensor = from_numpy(self.cmap[index].astype(float))
-
-        label_tensor = []
-        if self.gt[index].shape[0] > 0:
-            for zz in range(self.gt[index].shape[0]):
-                label_tensor.append(
-                    from_numpy(self.gt[index][zz, :, :, :].astype(float)).float()
-                )
-        else:
-            label_tensor.append(from_numpy(self.gt[index].astype(float)).float())
-
-        # convert to tensor
-        label_tensor_2 = Tensor(self.gt[index].shape)
-        label_tensor = unsqueeze(cat(label_tensor, out=label_tensor_2), 0)
-
-        return image_tensor.float(), label_tensor, cmap_tensor.float()
+        # converting to tensor in get item prevents conversion to double tensor
+        # and saves gpu memory
+        img_tensor = from_numpy(self.img[index].astype(float)).float()
+        gt_tensor = from_numpy(self.gt[index].astype(float)).float()
+        cmap_tensor = from_numpy(self.cmap[index].astype(float)).float()
+        return (
+            img_tensor,
+            gt_tensor,
+            cmap_tensor,
+        )
 
     def __len__(self):
         return len(self.img)
@@ -377,16 +379,17 @@ class TestDataset(Dataset):
                     self.im_shape.append(img.shape)
 
             else:
-                # img = data_reader.get_image_data(
-                #     "CZYX", S=0, T=0, C=config["InputCh"]
-                # ).astype(float)
+                img = data_reader.get_image_data(
+                    "CZYX", S=0, T=0, C=config["InputCh"]
+                ).astype(float)
 
                 # # HACK for large img
-                img = data_reader.get_image_data(
-                    "TZYX",
-                    S=0,
-                ).astype(float)
-                img = np.swapaxes(img, 0, 1)
+
+                # img = data_reader.get_image_data(
+                #     "TZYX",
+                #     S=0,
+                # ).astype(float)
+                # img = np.swapaxes(img, 0, 1)
                 # # END HACK
 
                 img = image_normalization(img, config["Normalization"])
@@ -397,7 +400,6 @@ class TestDataset(Dataset):
                     self.filenames.append(fn)
                     self.imgs.append(img)
                     self.im_shape.append(img.shape)
-
                 else:
                     # how many patches until aggregated image saved
                     self.save_n_batches = np.prod(pr)
@@ -457,21 +459,27 @@ class TestDataset(Dataset):
             ]
 
             for i in range(len(self.imgs)):
-                self.imgs[i] = np.pad(
+                xy_padded = np.pad(
                     self.imgs[i],
                     (
                         (0, 0),
-                        (padding[0], padding[0]),
+                        (0, 0),
                         (padding[1], padding[1]),
                         (padding[2], padding[2]),
                     ),
+                    "symmetric",
+                )
+                self.imgs[i] = np.pad(
+                    xy_padded,
+                    ((0, 0), (padding[0], padding[0]), (0, 0), (0, 0)),
                     "constant",
                 )
 
     def __getitem__(self, index):
         """
         Returns:
-            image, filename, and timepoint
+            image, filename, timepoint, coordinates of patch corner,
+            number of batches to save, and shape of input image
         """
         if len(self.filenames) > 0:
             fn = self.filenames[index]
@@ -494,7 +502,7 @@ class TestDataset(Dataset):
             im_shape = self.im_shape[0]
 
         return {
-            "img": self.imgs[index],
+            "img": from_numpy(self.imgs[index].astype(float)).float(),
             "fn": fn,
             "tt": tt,
             "ijk": ijk,

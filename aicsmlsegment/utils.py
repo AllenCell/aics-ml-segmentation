@@ -71,7 +71,7 @@ DEFAULT_CONFIG = {
     "scheduler": {"name": None},
     "gpus": GPUS,
     "dist_backend": "ddp" if GPUS > 1 else None,
-    "tensorboard": False,
+    "tensorboard": None,
     "large_image_resize": None,
     "callbacks": {"name": None},
 }

@@ -33,7 +33,7 @@ def main():
         model = Model(config, model_config, train=True)
 
     checkpoint_dr = config["checkpoint_dir"]
-    # model checkpoint every n epochs as specified in config
+    # model checkpoint every n epochs
     MC = ModelCheckpoint(
         dirpath=checkpoint_dr,
         filename="checkpoint_{epoch}",
@@ -44,7 +44,6 @@ def main():
     callbacks = [MC]  # LR]
 
     callbacks_config = config["callbacks"]
-
     if callbacks_config["name"] == "EarlyStopping":
         es = pytorch_lightning.callbacks.EarlyStopping(
             monitor=callbacks_config["monitor"],
@@ -74,8 +73,8 @@ def main():
 
     # ddp is the default unless only one gpu is requested
     accelerator = config["dist_backend"]
-    if config["tensorboard"]:
-        logger = pytorch_lightning.loggers.TensorBoardLogger("../../../lightning_logs/")
+    if config["tensorboard"] is not None:
+        logger = pytorch_lightning.loggers.TensorBoardLogger(config["tensorboard"])
     else:
         logger = None
 
