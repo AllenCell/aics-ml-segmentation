@@ -40,7 +40,6 @@ def main():
         period=config["save_every_n_epoch"],
         save_top_k=-1,
     )
-    # LR = pytorch_lightning.callbacks.LearningRateLogger()
     callbacks = [MC]  # LR]
 
     callbacks_config = config["callbacks"]
@@ -74,7 +73,11 @@ def main():
     # ddp is the default unless only one gpu is requested
     accelerator = config["dist_backend"]
     if config["tensorboard"] is not None:
+        from pytorch_lightning.callbacks import LearningRateMonitor
+
         logger = pytorch_lightning.loggers.TensorBoardLogger(config["tensorboard"])
+        callbacks.append(LearningRateMonitor(logging_interval="epoch"))
+
     else:
         logger = None
 
@@ -90,8 +93,8 @@ def main():
         # reload_dataloaders_every_n_epoch = config['loader']['epoch_shuffle']
         distributed_backend=accelerator,
         logger=logger,
-        log_every_n_steps=10,
-        flush_logs_every_n_steps=10,
+        log_every_n_steps=100,
+        flush_logs_every_n_steps=100,
     )
     print("Done")
 
