@@ -236,9 +236,8 @@ class UniversalDataset(Dataset):
                     ]
 
                     if check_crop:
-                        # enough valida samples
                         if np.count_nonzero(ref_patch_cmap > 1e-5) < 1000:
-                            num_fail = num_fail + 1
+                            num_fail += 1
                             if num_fail > 50:
                                 print("Failed to generate valid crops")
                                 break

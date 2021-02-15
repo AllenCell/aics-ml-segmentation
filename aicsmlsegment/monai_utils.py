@@ -2,9 +2,6 @@ import pytorch_lightning
 from torch.utils.data import DataLoader
 from torch.optim import Adam
 import torch
-
-# from torchcontrib.optim import SWA    https://github.com/PyTorchLightning/pytorch-lightning/pull/5640
-
 import monai.losses as MonaiLosses
 
 import aicsmlsegment.custom_loss as CustomLosses

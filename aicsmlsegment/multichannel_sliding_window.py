@@ -188,9 +188,6 @@ def sliding_window_inference(
             count_map[original_idx] += importance_map
 
     # account for any overlapping sections
-    import numpy as np
-
-    print(np.count_nonzero(output_image.cpu().numpy() == 0))
     output_image = output_image / count_map
 
     final_slicing: List[slice] = []
