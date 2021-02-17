@@ -154,7 +154,7 @@ class Model(pytorch_lightning.LightningModule):
 
             module = importlib.import_module("monai.networks.nets." + self.model_name)
             # deal with monai name scheme - module name != class name for networks
-            net_name = [attr for attr in dir(module) if "net" in attr][0]
+            net_name = [attr for attr in dir(module) if "Net" in attr][0]
             model = getattr(module, net_name)
             del model_config["patch_size"]
 
@@ -201,6 +201,7 @@ class Model(pytorch_lightning.LightningModule):
             self.args_inference["Threshold"] = config["Threshold"]
             if config["large_image_resize"] is not None:
                 self.aggregate_img = []
+        self.save_hyperparameters()
 
     def forward(self, x):
         """
@@ -309,8 +310,6 @@ class Model(pytorch_lightning.LightningModule):
             )
 
             return {"loss": loss}
-
-        outputs = torch.nn.Sigmoid()(outputs)
         # focal loss requires > 1 channel
         if "Focal" not in self.config["loss"]["name"]:
             # select output channel
@@ -356,10 +355,16 @@ class Model(pytorch_lightning.LightningModule):
             self.args_inference,
             squeeze=squeeze,
             extract_output_ch=extract,
-            sigmoid=True,
+            # sigmoid=True,
         )
 
-        if self.model_name == "basic_unet":
+        if self.model_name in ["unet_xy", "unet_xy_zoom"]:
+            costmap = batch[2]
+            costmap = torch.unsqueeze(costmap, dim=0)
+            val_loss = compute_iou(outputs > 0.5, label, costmap)
+            self.log("val_iou", val_loss, sync_dist=True, on_epoch=True, prog_bar=True)
+
+        else:  # monai model
             if self.accepts_costmap:
                 costmap = batch[2]
                 costmap = torch.unsqueeze(costmap, dim=0)  # add batch
@@ -368,12 +373,6 @@ class Model(pytorch_lightning.LightningModule):
                 val_loss = self.loss_function(outputs, label)
             # sync_dist on_epoch=True ensures that results will be averaged across gpus
             self.log("val_loss", val_loss, sync_dist=True, on_epoch=True, prog_bar=True)
-
-        elif self.model_name in ["unet_xy", "unet_xy_zoom"]:
-            costmap = batch[2]
-            costmap = torch.unsqueeze(costmap, dim=0)
-            val_loss = compute_iou(outputs > 0.5, label, costmap)
-            self.log("val_iou", val_loss, sync_dist=True, on_epoch=True, prog_bar=True)
 
     def test_step(self, batch, batch_idx):
         img = batch["img"]
@@ -434,7 +433,13 @@ class Model(pytorch_lightning.LightningModule):
                     )
                     out = out.astype(np.uint8)
                     out[out > 0] = 255
-
+            print(
+                self.config["OutputDir"]
+                + os.sep
+                + pathlib.PurePosixPath(fn).stem
+                + "_struct_segmentation.tiff"
+            )
+            print(out.shape)
             if len(tt) == 0:
                 imsave(
                     self.config["OutputDir"]
@@ -532,14 +537,15 @@ class DataModule(pytorch_lightning.LightningDataModule):
         loader_config = self.loader_config
         model_config = self.model_config
 
-        if self.model_name == "basic_unet":
-            size_in = model_config["patch_size"]
-            size_out = size_in
-            nchannel = model_config["in_channels"]
-        elif self.model_name == "unet_xy" or self.model_name == "unet_xy_zoom":
+        if self.model_name == "unet_xy" or self.model_name == "unet_xy_zoom":
             size_in = model_config["size_in"]
             size_out = model_config["size_out"]
             nchannel = model_config["nchannel"]
+
+        else:
+            size_in = model_config["patch_size"]
+            size_out = size_in
+            nchannel = model_config["in_channels"]
 
         train_set_loader = DataLoader(
             UniversalDataset(
@@ -563,14 +569,15 @@ class DataModule(pytorch_lightning.LightningDataModule):
         loader_config = self.loader_config
         model_config = self.model_config
 
-        if self.model_name == "basic_unet":
-            size_in = model_config["patch_size"]
-            size_out = size_in
-            nchannel = model_config["in_channels"]
-        elif self.model_name == "unet_xy" or self.model_name == "unet_xy_zoom":
+        if self.model_name == "unet_xy" or self.model_name == "unet_xy_zoom":
             size_in = model_config["size_in"]
             size_out = model_config["size_out"]
             nchannel = model_config["nchannel"]
+
+        else:
+            size_in = model_config["patch_size"]
+            size_out = size_in
+            nchannel = model_config["in_channels"]
 
         val_set_loader = DataLoader(
             UniversalDataset(

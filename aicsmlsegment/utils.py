@@ -94,6 +94,34 @@ MODEL_PARAMETERS = {
         "Optional": [],
         "Required": ["nchannel", "nclass", "size_in", "size_out", "zoom_ratio"],
     },
+    # "ahnet": {
+    #     "Optional": [
+    #         "layers",
+    #         "psp_block_name",
+    #         "upsample_mode",
+    #         "pretrained",
+    #         "progress",
+    #     ],
+    #     "Required": ["in_channels", "out_channels", "patch_size", "spatial_dims"],
+    # },
+    "unet": {
+        "Optional": [
+            "kernel_size",
+            "up_kernel_size",
+            "num_res_units",
+            "act",
+            "norm",
+            "dropout",
+        ],
+        "Required": [
+            "dimensions",
+            "in_channels",
+            "out_channels",
+            "channels",
+            "strides",
+            "patch_size",
+        ],
+    },
 }
 
 ACTIVATIONS = {

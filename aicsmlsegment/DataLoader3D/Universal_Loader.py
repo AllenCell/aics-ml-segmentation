@@ -234,7 +234,6 @@ class UniversalDataset(Dataset):
                         py : py + size_out[1],
                         px : px + size_out[2],
                     ]
-
                     if check_crop:
                         if np.count_nonzero(ref_patch_cmap > 1e-5) < 1000:
                             num_fail += 1
@@ -242,7 +241,6 @@ class UniversalDataset(Dataset):
                                 print("Failed to generate valid crops")
                                 break
                             continue
-
                     # confirmed good crop
                     (self.img).append(
                         raw[
