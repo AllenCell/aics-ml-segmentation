@@ -77,7 +77,7 @@ DEFAULT_CONFIG = {
 }
 
 MODEL_PARAMETERS = {
-    "BasicUNet": {
+    "basic_unet": {
         "Optional": [
             "features",
             "act",
@@ -112,6 +112,10 @@ NORMALIZATIONS = {
 def get_model_configurations(config):
     model_config = config["model"]
     model_parameters = {}
+
+    assert (
+        model_config["name"] in MODEL_PARAMETERS
+    ), f"{model_config['name']} is not a supported model name, supported model names are {list(MODEL_PARAMETERS.keys())}"
     all_parameters = MODEL_PARAMETERS[model_config["name"]]
 
     # allow users to overwrite specific parameters

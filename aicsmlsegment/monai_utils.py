@@ -126,16 +126,7 @@ class Model(pytorch_lightning.LightningModule):
         self.args_inference = {}
 
         self.model_name = config["model"]["name"]
-        if self.model_name == "BasicUNet":
-            from monai.networks.nets import BasicUNet
-
-            del model_config["patch_size"]
-
-            self.model = BasicUNet(**model_config)
-            self.args_inference["size_in"] = config["model"]["patch_size"]
-            self.args_inference["size_out"] = config["model"]["patch_size"]
-
-        elif self.model_name == "unet_xy":
+        if self.model_name == "unet_xy":
             from aicsmlsegment.Net3D.unet_xy import UNet3D as DNN
             from aicsmlsegment.model_utils import weights_init
 
@@ -158,6 +149,18 @@ class Model(pytorch_lightning.LightningModule):
             self.args_inference["size_in"] = config["model"]["size_in"]
             self.args_inference["size_out"] = config["model"]["size_out"]
             self.args_inference["nclass"] = config["model"]["nclass"]
+        else:  # monai model
+            import importlib
+
+            module = importlib.import_module("monai.networks.nets." + self.model_name)
+            # deal with monai name scheme - module name != class name for networks
+            net_name = [attr for attr in dir(module) if "net" in attr][0]
+            model = getattr(module, net_name)
+            del model_config["patch_size"]
+
+            self.model = model(**model_config)
+            self.args_inference["size_in"] = config["model"]["patch_size"]
+            self.args_inference["size_out"] = config["model"]["patch_size"]
 
         self.config = config
         self.aggregate_img = None
@@ -356,7 +359,7 @@ class Model(pytorch_lightning.LightningModule):
             sigmoid=True,
         )
 
-        if self.model_name == "BasicUNet":
+        if self.model_name == "basic_unet":
             if self.accepts_costmap:
                 costmap = batch[2]
                 costmap = torch.unsqueeze(costmap, dim=0)  # add batch
@@ -529,7 +532,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
         loader_config = self.loader_config
         model_config = self.model_config
 
-        if self.model_name == "BasicUNet":
+        if self.model_name == "basic_unet":
             size_in = model_config["patch_size"]
             size_out = size_in
             nchannel = model_config["in_channels"]
@@ -560,7 +563,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
         loader_config = self.loader_config
         model_config = self.model_config
 
-        if self.model_name == "BasicUNet":
+        if self.model_name == "basic_unet":
             size_in = model_config["patch_size"]
             size_out = size_in
             nchannel = model_config["in_channels"]
