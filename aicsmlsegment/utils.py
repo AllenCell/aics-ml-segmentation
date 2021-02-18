@@ -122,6 +122,36 @@ MODEL_PARAMETERS = {
             "patch_size",
         ],
     },
+    "dynunet": {
+        "Optional": ["norm_name", "deep_supr_num", "res_block"],
+        "Required": [
+            "spatial_dims",
+            "in_channels",
+            "out_channels",
+            "kernel_size",
+            "strides",
+            "upsample_kernel_size",
+            "patch_size",
+        ],
+    },
+    "segresnet": {
+        "Optional": [
+            "dropout_prob",
+            "norm_name",
+            "num_groups",
+            "use_conv_final",
+            "blocks_down",
+            "blocks_up",
+            "upsample_mode",
+            "init_filters",
+        ],
+        "Required": [
+            "patch_size",
+            "spatial_dims",
+            "in_channels",
+            "out_channels",
+        ],
+    },
 }
 
 ACTIVATIONS = {

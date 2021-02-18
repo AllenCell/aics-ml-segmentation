@@ -294,10 +294,9 @@ class Model(pytorch_lightning.LightningModule):
     def training_step(self, batch, batch_idx):
         inputs = batch[0]
         targets = batch[1]
-
         outputs = self(inputs)
 
-        if type(outputs) == list:  # old segmenter
+        if self.model_name in ["unet_xy", "unet_xy_zoom"]:  # old segmenter
             cmap = batch[2]
             loss = self.loss_function(outputs, targets, cmap)
             self.log(
@@ -308,8 +307,12 @@ class Model(pytorch_lightning.LightningModule):
                 on_epoch=True,
                 on_step=False,
             )
-
             return {"loss": loss}
+
+        if self.model_name == "dynunet":
+            # extract only first head
+            outputs = outputs[0]
+
         # focal loss requires > 1 channel
         if "Focal" not in self.config["loss"]["name"]:
             # select output channel
@@ -355,7 +358,7 @@ class Model(pytorch_lightning.LightningModule):
             self.args_inference,
             squeeze=squeeze,
             extract_output_ch=extract,
-            # sigmoid=True,
+            sigmoid=False,  # all loss functions accept logits
         )
 
         if self.model_name in ["unet_xy", "unet_xy_zoom"]:
@@ -381,13 +384,18 @@ class Model(pytorch_lightning.LightningModule):
 
         args_inference = self.args_inference
 
+        if self.model_name in ["unet_xy", "unet_xy_zoom"]:
+            sigmoid = False
+        else:
+            sigmoid = True
+
         output_img = apply_on_image(
             self.model,
             img,
             args_inference,
             squeeze=False,
             to_numpy=True,
-            sigmoid=True,
+            sigmoid=sigmoid,
         )
 
         if self.aggregate_img is not None:
