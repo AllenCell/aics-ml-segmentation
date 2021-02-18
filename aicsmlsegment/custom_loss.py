@@ -43,14 +43,12 @@ class GeneralizedDiceFocalLoss(torch.nn.Module):
         self.OutputCh = OutputCh
 
     def forward(self, input, target):
-        print(input.shape, target.shape)
         focal_loss = MonaiLosses.FocalLoss()
         g_dice_loss = MonaiLosses.GeneralizedDiceLoss(sigmoid=True)
 
         f_res = focal_loss(input, target)
         input = input[:, self.OutputCh, :, :, :]
         input = torch.unsqueeze(input, dim=1)
-        print(input.shape, target.shape)
 
         d_res = g_dice_loss(input, target)
 
