@@ -342,7 +342,7 @@ class Model(pytorch_lightning.LightningModule):
         # metric = self.metric(outputs, targets)
 
         if self.model_name == "segresnetvae":
-            loss += vae_loss
+            loss += 0.1 * vae_loss  # from https://arxiv.org/pdf/1810.11654.pdf
 
         self.log(
             "epoch_train_loss",
@@ -391,7 +391,7 @@ class Model(pytorch_lightning.LightningModule):
             # sync_dist on_epoch=True ensures that results will be averaged across gpus
             self.log(
                 "val_loss",
-                val_loss + vae_loss,
+                val_loss + 0.1 * vae_loss,  # from https://arxiv.org/pdf/1810.11654.pdf
                 sync_dist=True,
                 on_epoch=True,
                 prog_bar=True,
