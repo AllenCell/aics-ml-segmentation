@@ -141,6 +141,7 @@ def sliding_window_inference(
         0.0, device=device
     )
     _initialized = False
+
     for slice_g in range(0, total_slices, sw_batch_size):
         slice_range = range(slice_g, min(slice_g + sw_batch_size, total_slices))
 
@@ -172,6 +173,12 @@ def sliding_window_inference(
             )
             seg_prob = torch.transpose(seg_prob, 1, 5)
             seg_prob = torch.squeeze(seg_prob, dim=5)
+        elif type(seg_prob) == tuple:  # segresnetvae
+            seg_prob, loss = seg_prob
+            if loss:
+                vae_loss += loss
+            else:
+                vae_loss = 0
 
         seg_prob = seg_prob.to(device)  # batched patch segmentation
         if not _initialized:  # init. buffer at the first iteration
@@ -199,7 +206,7 @@ def sliding_window_inference(
         final_slicing.insert(0, slice_dim)
     while len(final_slicing) < len(output_image.shape):
         final_slicing.insert(0, slice(None))
-    return output_image[final_slicing]
+    return output_image[final_slicing], vae_loss
 
 
 def _get_scan_interval(

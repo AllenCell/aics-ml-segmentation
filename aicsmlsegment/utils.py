@@ -152,6 +152,22 @@ MODEL_PARAMETERS = {
             "out_channels",
         ],
     },
+    "segresnetvae": {
+        "Optional": [
+            "vae_estimate_std",
+            "vae_default_std",
+            "vae_nz",
+            "init_filters",
+            "dropout_prob",
+            "norm_name",
+            "num_groups",
+            "use_conv_final",
+            "blocks_down",
+            "blocks_up",
+            "upsample_mode",
+        ],
+        "Required": ["patch_size", "spatial_dims", "in_channels", "out_channels"],
+    },
 }
 
 ACTIVATIONS = {

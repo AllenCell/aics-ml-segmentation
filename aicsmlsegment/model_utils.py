@@ -62,16 +62,19 @@ def apply_on_image(
         )
 
         input_img = input_img.cpu().numpy()[0]  # remove batch_dimension for flip
+        vae_loss = 0
         for i in range(3):
             aug = flip(input_img, axis=i, to_tensor=True)
-            out = model_inference(
+            out, loss = model_inference(
                 model, aug, args, squeeze=True, to_numpy=True, sigmoid=sigmoid
             )
             aug_flip = flip(out, axis=i, to_tensor=False)
             out0 += aug_flip
+            vae_loss += loss
 
         out0 /= 4
-        return out0
+        vae_loss /= 4
+        return out0, vae_loss
 
 
 def model_inference(
@@ -93,7 +96,7 @@ def model_inference(
 
     original_image_size = input_image_size - added_padding
     with torch.no_grad():
-        result = sliding_window_inference(
+        result, vae_loss = sliding_window_inference(
             inputs=input_img.cuda(),
             roi_size=args["size_in"],
             out_size=args["size_out"],
@@ -116,7 +119,7 @@ def model_inference(
         result = torch.unsqueeze(result, dim=1)
     if to_numpy:
         result = result.cpu().numpy()
-    return result
+    return result, vae_loss
 
 
 def weights_init(m):

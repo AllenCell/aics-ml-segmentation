@@ -150,12 +150,20 @@ class Model(pytorch_lightning.LightningModule):
             self.args_inference["size_out"] = config["model"]["size_out"]
             self.args_inference["nclass"] = config["model"]["nclass"]
         else:  # monai model
-            import importlib
+            if self.model_name == "segresnetvae":
+                from monai.networks.nets.segresnet import SegResNetVAE as model
 
-            module = importlib.import_module("monai.networks.nets." + self.model_name)
-            # deal with monai name scheme - module name != class name for networks
-            net_name = [attr for attr in dir(module) if "Net" in attr][0]
-            model = getattr(module, net_name)
+                model_config["input_image_size"] = model_config["patch_size"]
+            else:
+                import importlib
+
+                module = importlib.import_module(
+                    "monai.networks.nets." + self.model_name
+                )
+                # deal with monai name scheme - module name != class name for networks
+                net_name = [attr for attr in dir(module) if "Net" in attr][0]
+                model = getattr(module, net_name)
+
             del model_config["patch_size"]
 
             self.model = model(**model_config)
@@ -312,6 +320,8 @@ class Model(pytorch_lightning.LightningModule):
         if self.model_name == "dynunet":
             # extract only first head
             outputs = outputs[0]
+        if self.model_name == "segresnetvae":
+            outputs, vae_loss = outputs
 
         # focal loss requires > 1 channel
         if "Focal" not in self.config["loss"]["name"]:
@@ -330,6 +340,10 @@ class Model(pytorch_lightning.LightningModule):
             else:
                 loss = self.loss_function(outputs, targets)
         # metric = self.metric(outputs, targets)
+
+        if self.model_name == "segresnetvae":
+            loss += vae_loss
+
         self.log(
             "epoch_train_loss",
             loss,
@@ -352,7 +366,7 @@ class Model(pytorch_lightning.LightningModule):
             extract = False
             squeeze = True
 
-        outputs = model_inference(
+        outputs, vae_loss = model_inference(
             self.model,
             input_img,
             self.args_inference,
@@ -375,7 +389,13 @@ class Model(pytorch_lightning.LightningModule):
             else:
                 val_loss = self.loss_function(outputs, label)
             # sync_dist on_epoch=True ensures that results will be averaged across gpus
-            self.log("val_loss", val_loss, sync_dist=True, on_epoch=True, prog_bar=True)
+            self.log(
+                "val_loss",
+                val_loss + vae_loss,
+                sync_dist=True,
+                on_epoch=True,
+                prog_bar=True,
+            )
 
     def test_step(self, batch, batch_idx):
         img = batch["img"]
@@ -389,7 +409,7 @@ class Model(pytorch_lightning.LightningModule):
         else:
             sigmoid = True
 
-        output_img = apply_on_image(
+        output_img, _ = apply_on_image(
             self.model,
             img,
             args_inference,
@@ -441,13 +461,7 @@ class Model(pytorch_lightning.LightningModule):
                     )
                     out = out.astype(np.uint8)
                     out[out > 0] = 255
-            print(
-                self.config["OutputDir"]
-                + os.sep
-                + pathlib.PurePosixPath(fn).stem
-                + "_struct_segmentation.tiff"
-            )
-            print(out.shape)
+
             if len(tt) == 0:
                 imsave(
                     self.config["OutputDir"]
