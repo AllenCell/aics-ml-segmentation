@@ -94,16 +94,6 @@ MODEL_PARAMETERS = {
         "Optional": [],
         "Required": ["nchannel", "nclass", "size_in", "size_out", "zoom_ratio"],
     },
-    # "ahnet": {
-    #     "Optional": [
-    #         "layers",
-    #         "psp_block_name",
-    #         "upsample_mode",
-    #         "pretrained",
-    #         "progress",
-    #     ],
-    #     "Required": ["in_channels", "out_channels", "patch_size", "spatial_dims"],
-    # },
     "unet": {
         "Optional": [
             "kernel_size",
@@ -123,7 +113,7 @@ MODEL_PARAMETERS = {
         ],
     },
     "dynunet": {
-        "Optional": ["norm_name", "deep_supr_num", "res_block"],
+        "Optional": ["norm_name", "deep_supr_num", "res_block", "deep_supervision"],
         "Required": [
             "spatial_dims",
             "in_channels",
