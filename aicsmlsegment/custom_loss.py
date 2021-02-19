@@ -7,6 +7,21 @@ import numpy as np
 import monai.losses as MonaiLosses
 
 
+class MaskedDiceLoss(torch.nn.Module):
+    def __init__(self):
+        super(MaskedDiceLoss, self).__init__()
+        self.loss = MonaiLosses.MaskedDiceLoss(sigmoid=True)
+
+    def forward(self, input, target, cmap):
+        loss = 0
+        for i in range(input.shape[-3]):  # go through z
+            loss += self.loss(
+                input[:, :, i, :, :], target[:, :, i, :, :], cmap[:, :, i, :, :]
+            )
+        # average loss across z dimensions
+        return loss / input.shape[-3]
+
+
 class CombinedLoss(torch.nn.Module):
     def __init__(self, loss1, loss2):
         super(CombinedLoss, self).__init__()
