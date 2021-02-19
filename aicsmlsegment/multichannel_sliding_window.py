@@ -28,6 +28,7 @@ def sliding_window_inference(
     roi_size: Union[Sequence[int], int],
     out_size,
     original_image_size,
+    model_name,
     sw_batch_size: int,
     predictor: Callable[..., torch.Tensor],
     overlap: float = 0.25,
@@ -141,7 +142,7 @@ def sliding_window_inference(
         0.0, device=device
     )
     _initialized = False
-
+    vae_loss = 0
     for slice_g in range(0, total_slices, sw_batch_size):
         slice_range = range(slice_g, min(slice_g + sw_batch_size, total_slices))
 
@@ -165,7 +166,7 @@ def sliding_window_inference(
         seg_prob = predictor(window_data, *args, **kwargs)
 
         # old models output a list of three predictions
-        if type(seg_prob) == list:
+        if model_name in ["unet_xy", "unet_xy_zoom"]:
             seg_prob = seg_prob[0]
             seg_prob = torch.softmax(seg_prob, dim=1)
             seg_prob = seg_prob.view(
@@ -173,12 +174,12 @@ def sliding_window_inference(
             )
             seg_prob = torch.transpose(seg_prob, 1, 5)
             seg_prob = torch.squeeze(seg_prob, dim=5)
-        elif type(seg_prob) == tuple:  # segresnetvae
+        elif model_name == "dynunet":
+            seg_prob = seg_prob[0]
+        elif model_name == "segresnetvae":  # segresnetvae
             seg_prob, loss = seg_prob
             if loss:
                 vae_loss += loss
-            else:
-                vae_loss = 0
 
         seg_prob = seg_prob.to(device)  # batched patch segmentation
         if not _initialized:  # init. buffer at the first iteration

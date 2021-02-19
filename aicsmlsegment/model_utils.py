@@ -36,6 +36,7 @@ def apply_on_image(
     squeeze: bool,
     to_numpy: bool,
     sigmoid: bool,
+    model_name,
 ) -> np.ndarray:
     """
     Inputs:
@@ -55,18 +56,31 @@ def apply_on_image(
     """
 
     if not args["RuntimeAug"]:
-        return model_inference(model, input_img, args, squeeze, to_numpy, sigmoid)
+        return model_inference(
+            model, input_img, args, model_name, squeeze, to_numpy, sigmoid
+        )
     else:
-        out0 = model_inference(
-            model, input_img, args, squeeze=False, to_numpy=True, sigmoid=sigmoid
+        out0, vae_loss = model_inference(
+            model,
+            input_img,
+            args,
+            squeeze=False,
+            to_numpy=True,
+            sigmoid=sigmoid,
+            model_name=model_name,
         )
 
         input_img = input_img.cpu().numpy()[0]  # remove batch_dimension for flip
-        vae_loss = 0
         for i in range(3):
             aug = flip(input_img, axis=i, to_tensor=True)
             out, loss = model_inference(
-                model, aug, args, squeeze=True, to_numpy=True, sigmoid=sigmoid
+                model,
+                aug,
+                args,
+                squeeze=True,
+                to_numpy=True,
+                sigmoid=sigmoid,
+                model_name=model_name,
             )
             aug_flip = flip(out, axis=i, to_tensor=False)
             out0 += aug_flip
@@ -81,6 +95,7 @@ def model_inference(
     model,
     input_img,
     args,
+    model_name,
     squeeze=False,
     to_numpy=False,
     extract_output_ch=True,
@@ -93,7 +108,6 @@ def model_inference(
     added_padding = np.array(
         [2 * ((x - y) // 2) for x, y in zip(args["size_in"], args["size_out"])]
     )
-
     original_image_size = input_image_size - added_padding
     with torch.no_grad():
         result, vae_loss = sliding_window_inference(
@@ -105,6 +119,7 @@ def model_inference(
             predictor=model.forward,
             overlap=0.25,
             mode="gaussian",
+            model_name=model_name,
         )
 
     if extract_output_ch:

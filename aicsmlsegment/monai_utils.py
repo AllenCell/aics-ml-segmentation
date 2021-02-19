@@ -36,6 +36,8 @@ SUPPORTED_LOSSES = [
     "Dice+FocalLoss",
     "GeneralizedDice+FocalLoss",
     "Aux",
+    "MaskedDiceLoss",
+    "MaskedDiceLoss+CrossEntropy",
 ]
 
 
@@ -101,6 +103,16 @@ def get_loss_criterion(config):
             True,
             None,
         )
+    elif name == "MaskedDiceLoss":
+        return CustomLosses.MaskedDiceLoss(), True, None
+    elif name == "MaskedDiceLoss+CrossEntropy":
+        return (
+            CustomLosses.CombinedLoss(
+                CustomLosses.MaskedDiceLoss(), torch.nn.BCEWithLogitsLoss()
+            ),
+            True,
+            None,
+        )
 
 
 def get_metric(config):
@@ -126,6 +138,7 @@ class Model(pytorch_lightning.LightningModule):
         self.args_inference = {}
 
         self.model_name = config["model"]["name"]
+        self.model_config = model_config
         if self.model_name == "unet_xy":
             from aicsmlsegment.Net3D.unet_xy import UNet3D as DNN
             from aicsmlsegment.model_utils import weights_init
@@ -333,6 +346,7 @@ class Model(pytorch_lightning.LightningModule):
 
         if self.accepts_costmap:
             cmap = batch[2]
+            cmap = torch.unsqueeze(cmap, dim=1)  # add cchannel dim
             loss = self.loss_function(outputs, targets, cmap)
         else:
             if self.loss_weight is not None:
@@ -373,29 +387,31 @@ class Model(pytorch_lightning.LightningModule):
             squeeze=squeeze,
             extract_output_ch=extract,
             sigmoid=False,  # all loss functions accept logits
+            model_name=self.model_name,
         )
 
         if self.model_name in ["unet_xy", "unet_xy_zoom"]:
             costmap = batch[2]
-            costmap = torch.unsqueeze(costmap, dim=0)
+            costmap = torch.unsqueeze(costmap, dim=1)
             val_loss = compute_iou(outputs > 0.5, label, costmap)
             self.log("val_iou", val_loss, sync_dist=True, on_epoch=True, prog_bar=True)
+            return
 
-        else:  # monai model
-            if self.accepts_costmap:
-                costmap = batch[2]
-                costmap = torch.unsqueeze(costmap, dim=0)  # add batch
-                val_loss = self.loss_function(outputs, label, costmap)
-            else:
-                val_loss = self.loss_function(outputs, label)
-            # sync_dist on_epoch=True ensures that results will be averaged across gpus
-            self.log(
-                "val_loss",
-                val_loss + 0.1 * vae_loss,  # from https://arxiv.org/pdf/1810.11654.pdf
-                sync_dist=True,
-                on_epoch=True,
-                prog_bar=True,
-            )
+        if self.accepts_costmap:
+            costmap = batch[2]
+            costmap = torch.unsqueeze(costmap, dim=1)  # add channel
+            val_loss = self.loss_function(outputs, label, costmap)
+        else:
+            val_loss = self.loss_function(outputs, label)
+
+        # sync_dist on_epoch=True ensures that results will be averaged across gpus
+        self.log(
+            "val_loss",
+            val_loss + 0.1 * vae_loss,  # from https://arxiv.org/pdf/1810.11654.pdf
+            sync_dist=True,
+            on_epoch=True,
+            prog_bar=True,
+        )
 
     def test_step(self, batch, batch_idx):
         img = batch["img"]
@@ -405,7 +421,7 @@ class Model(pytorch_lightning.LightningModule):
         args_inference = self.args_inference
 
         if self.model_name in ["unet_xy", "unet_xy_zoom"]:
-            sigmoid = False
+            sigmoid = False  # softmax is applied to outputs during apply_on_image
         else:
             sigmoid = True
 
@@ -416,6 +432,7 @@ class Model(pytorch_lightning.LightningModule):
             squeeze=False,
             to_numpy=True,
             sigmoid=sigmoid,
+            model_name=self.model_name,
         )
 
         if self.aggregate_img is not None:
@@ -537,7 +554,6 @@ class DataModule(pytorch_lightning.LightningDataModule):
                 elif LeaveOut:
                     valid_idx = list(map(int, LeaveOut))
                     train_idx = list(set(range(total_num)) - set(valid_idx))
-
                 valid_filenames = []
                 train_filenames = []
                 # remove file extensions from filenames
