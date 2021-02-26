@@ -37,7 +37,12 @@ SUPPORTED_LOSSES = [
     "GeneralizedDice+FocalLoss",
     "Aux",
     "MaskedDiceLoss",
-    "MaskedDiceLoss+CrossEntropy",
+    # "MaskedDiceLoss+CrossEntropy",
+    "PixelWiseCrossEntropyLoss",
+    "MaskedDice+MaskedPixelwiseCrossEntropy",
+    "ElementAngularMSELoss",
+    "MaskedMSELoss",
+    "MaskedDice+MaskedMSELoss",
 ]
 
 
@@ -105,10 +110,30 @@ def get_loss_criterion(config):
         )
     elif name == "MaskedDiceLoss":
         return CustomLosses.MaskedDiceLoss(), True, None
-    elif name == "MaskedDiceLoss+CrossEntropy":
+    # elif name == "MaskedDiceLoss+CrossEntropy":
+    #     return (
+    #         CustomLosses.CombinedLoss(
+    #             CustomLosses.MaskedDiceLoss(), torch.nn.BCEWithLogitsLoss()
+    #         ),
+    #         True,
+    #         None,
+    #     )
+    elif name == "PixelWiseCrossEntropyLoss":
+        return CustomLosses.PixelWiseCrossEntropyLoss(), True, None
+    elif name == "MaskedDice+MaskedPixelwiseCrossEntropy":
+        return (
+            CustomLosses.MaskedDiceCELoss(config["validation"]["OutputCh"]),
+            True,
+            None,
+        )
+    elif name == "ElementAngularMSELoss":
+        return CustomLosses.ElementAngularMSELoss(), True, None
+    elif name == "MaskedMSELoss":
+        return CustomLosses.MaskedMSELoss(), True, None
+    elif name == "MaskedDice+MaskedMSELoss":
         return (
             CustomLosses.CombinedLoss(
-                CustomLosses.MaskedDiceLoss(), torch.nn.BCEWithLogitsLoss()
+                CustomLosses.MaskedMSELoss(), CustomLosses.MaskedDiceLoss()
             ),
             True,
             None,
@@ -336,8 +361,11 @@ class Model(pytorch_lightning.LightningModule):
         if self.model_name == "segresnetvae":
             outputs, vae_loss = outputs
 
-        # focal loss requires > 1 channel
-        if "Focal" not in self.config["loss"]["name"]:
+        # # focal loss requires > 1 channel
+        if (
+            "Focal" not in self.config["loss"]["name"]
+            and "Pixel" not in self.config["loss"]["name"]
+        ):
             # select output channel
             outputs = outputs[:, self.args_inference["OutputCh"], :, :, :]
             outputs = torch.unsqueeze(
@@ -376,7 +404,10 @@ class Model(pytorch_lightning.LightningModule):
         extract = True
         squeeze = False
         # focal loss needs >1 channel in predictions
-        if "Focal" in self.config["loss"]["name"]:
+        if (
+            "Focal" in self.config["loss"]["name"]
+            or "Pixel" in self.config["loss"]["name"]
+        ):
             extract = False
             squeeze = True
 
@@ -399,7 +430,8 @@ class Model(pytorch_lightning.LightningModule):
 
         if self.accepts_costmap:
             costmap = batch[2]
-            costmap = torch.unsqueeze(costmap, dim=1)  # add channel
+            if self.config["loss"]["name"] != "ElementAngularMSELoss":
+                costmap = torch.unsqueeze(costmap, dim=1)  # add channel
             val_loss = self.loss_function(outputs, label, costmap)
         else:
             val_loss = self.loss_function(outputs, label)
@@ -431,7 +463,7 @@ class Model(pytorch_lightning.LightningModule):
             args_inference,
             squeeze=False,
             to_numpy=True,
-            sigmoid=sigmoid,
+            sigmoid=sigmoid,  # sigmoid,
             model_name=self.model_name,
         )
 

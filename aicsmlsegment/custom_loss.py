@@ -15,7 +15,7 @@ class MaskedDiceLoss(torch.nn.Module):
     def forward(self, input, target, cmap):
         loss = 0
         for i in range(input.shape[-3]):  # go through z
-            loss += self.loss(
+            loss = self.loss(
                 input[:, :, i, :, :], target[:, :, i, :, :], cmap[:, :, i, :, :]
             )
         # average loss across z dimensions
@@ -28,10 +28,29 @@ class CombinedLoss(torch.nn.Module):
         self.loss1 = loss1
         self.loss2 = loss2
 
-    def forward(self, input, target):
-        loss1_result = self.loss1(input, target)
-        loss2_result = self.loss2(input, target)
+    def forward(self, input, target, cmap=None):
+        if cmap is not None:
+            loss1_result = self.loss1(input, target, cmap)
+            loss2_result = self.loss2(input, target, cmap)
+        else:
+            loss1_result = self.loss1(input, target)
+            loss2_result = self.loss2(input, target)
         return loss1_result + loss2_result
+
+
+class MaskedDiceCELoss(torch.nn.Module):
+    def __init__(self, OutputCh):
+        super(MaskedDiceCELoss, self).__init__()
+        self.OutputCh = OutputCh
+
+    def forward(self, input, target, cmap):
+        masked_dice_loss = MaskedDiceLoss()
+        masked_ce = PixelWiseCrossEntropyLoss()
+
+        ce_res = masked_ce(input, target, cmap)
+        input = torch.unsqueeze(input[:, self.OutputCh, :, :, :], dim=1)
+        dice_res = masked_dice_loss(input, target, cmap)
+        return dice_res + ce_res
 
 
 class DiceFocalLoss(torch.nn.Module):
@@ -83,6 +102,7 @@ class ElementNLLLoss(torch.nn.Module):
         row_num = target_np.shape[0]
         mask = np.zeros((row_num, self.num_class))
         mask[np.arange(row_num), target_np] = 1
+
         class_x = torch.masked_select(
             input, Variable(torch.from_numpy(mask).cuda().bool())
         )
@@ -143,6 +163,17 @@ class MultiTaskElementNLLLoss(torch.nn.Module):
         return total_loss
 
 
+class MaskedMSELoss(torch.nn.Module):
+    def __init__(self):
+        super(MaskedMSELoss, self).__init__()
+
+    def forward(self, input, target, weight):
+        return (
+            torch.sum(torch.mul((input - target) ** 2, weight))
+            / torch.gt(weight, 0).data.nelement()
+        )
+
+
 class ElementAngularMSELoss(torch.nn.Module):
     def __init__(self):
         super(ElementAngularMSELoss, self).__init__()
@@ -150,7 +181,6 @@ class ElementAngularMSELoss(torch.nn.Module):
     def forward(self, input, target, weight):
 
         # ((input - target) ** 2).sum() / input.data.nelement()
-
         return (
             torch.sum(
                 torch.mul(
@@ -364,12 +394,13 @@ class PixelWiseCrossEntropyLoss(nn.Module):
         assert target.size() == weights.size()
         # normalize the input
         log_probabilities = self.log_softmax(input)
+
         # standard CrossEntropyLoss requires the target to be (NxDxHxW), so we need to expand it to (NxCxDxHxW)
         target = expand_as_one_hot(
-            target, C=input.size()[1], ignore_index=self.ignore_index
+            target[:, 0, :, :, :], C=input.size()[1], ignore_index=self.ignore_index
         )
         # expand weights
-        weights = weights.unsqueeze(0)
+        # weights = weights.unsqueeze(0)
         weights = weights.expand_as(input)
 
         # mask ignore_index if present
@@ -389,7 +420,6 @@ class PixelWiseCrossEntropyLoss(nn.Module):
         class_weights = Variable(class_weights, requires_grad=False)
         # add class_weights to each channel
         weights = class_weights + weights
-
         # compute the losses
         result = -weights * target * log_probabilities
         # average the losses
@@ -442,4 +472,5 @@ def expand_as_one_hot(input, C, ignore_index=None):
         return result
     else:
         # scatter to get the one-hot tensor
+        src = src.type(torch.int64)
         return torch.zeros(shape).to(input.device).scatter_(1, src, 1)
