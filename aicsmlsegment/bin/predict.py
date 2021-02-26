@@ -6,6 +6,7 @@ from aicsmlsegment.utils import (
 )
 from aicsmlsegment.monai_utils import Model, DataModule
 import pytorch_lightning
+import os
 
 
 def main():
@@ -32,6 +33,11 @@ def main():
     if gpu_config < -1:
         print("Number of GPUs must be -1 or > 0")
         quit()
+
+    output_dir = config["OutputDir"]
+    print(output_dir)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
     # ddp is the default unless only one gpu is requested
     accelerator = config["dist_backend"]

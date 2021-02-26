@@ -3,6 +3,7 @@ import argparse
 from aicsmlsegment.utils import load_config, get_logger
 from aicsmlsegment.monai_utils import Model, DataModule
 from pytorch_lightning.callbacks import ModelCheckpoint
+import os
 
 
 def main():
@@ -32,10 +33,13 @@ def main():
         print("Training new model from scratch")
         model = Model(config, model_config, train=True)
 
-    checkpoint_dr = config["checkpoint_dir"]
+    checkpoint_dir = config["checkpoint_dir"]
+    if not os.path.exists(checkpoint_dir):
+        os.makedirs(checkpoint_dir)
+
     # model checkpoint every n epochs
     MC = ModelCheckpoint(
-        dirpath=checkpoint_dr,
+        dirpath=checkpoint_dir,
         filename="checkpoint_{epoch}",
         period=config["save_every_n_epoch"],
         save_top_k=-1,
@@ -93,8 +97,8 @@ def main():
         # reload_dataloaders_every_n_epoch = config['loader']['epoch_shuffle']
         distributed_backend=accelerator,
         logger=logger,
-        log_every_n_steps=100,
-        flush_logs_every_n_steps=100,
+        log_every_n_steps=30,
+        flush_logs_every_n_steps=30,
     )
     print("Done")
 
