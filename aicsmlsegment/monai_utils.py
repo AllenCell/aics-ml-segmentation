@@ -43,6 +43,7 @@ SUPPORTED_LOSSES = [
     "ElementAngularMSELoss",
     "MaskedMSELoss",
     "MaskedDice+MaskedMSELoss",
+    "MSELoss",
 ]
 
 
@@ -132,12 +133,16 @@ def get_loss_criterion(config):
         return CustomLosses.MaskedMSELoss(), True, None
     elif name == "MaskedDice+MaskedMSELoss":
         return (
-            CustomLosses.CombinedLoss(
-                CustomLosses.MaskedMSELoss(), CustomLosses.MaskedDiceLoss()
+            (
+                CustomLosses.CombinedLoss(
+                    CustomLosses.MaskedMSELoss(), CustomLosses.MaskedDiceLoss()
+                ),
+                True,
+                None,
             ),
-            True,
-            None,
         )
+    elif name == "MSELoss":
+        return torch.nn.MSELoss(), False, None
 
 
 def get_metric(config):
@@ -187,11 +192,17 @@ class Model(pytorch_lightning.LightningModule):
             self.args_inference["size_in"] = config["model"]["size_in"]
             self.args_inference["size_out"] = config["model"]["size_out"]
             self.args_inference["nclass"] = config["model"]["nclass"]
+
         else:  # monai model
             if self.model_name == "segresnetvae":
                 from monai.networks.nets.segresnet import SegResNetVAE as model
 
                 model_config["input_image_size"] = model_config["patch_size"]
+            elif self.model_name == "extended_vnet":
+                from aicsmlsegment.Net3D.vnet import VNet as model
+            elif self.model_name == "extended_dynunet":
+                from aicsmlsegment.Net3D.dynunet import DynUNet as model
+
             else:
                 import importlib
 
@@ -318,6 +329,7 @@ class Model(pytorch_lightning.LightningModule):
                     factor=scheduler_params["factor"],
                     patience=scheduler_params["patience"],
                     verbose=scheduler_params["verbose"],
+                    min_lr=0.00001,
                 )
                 # monitoring metric must be specified
                 return {
@@ -359,9 +371,10 @@ class Model(pytorch_lightning.LightningModule):
             # extract only first head
             outputs = outputs[0]
         if self.model_name == "segresnetvae":
+            # segresnetvae forward returns an additional vae loss term
             outputs, vae_loss = outputs
 
-        # # focal loss requires > 1 channel
+        # focal loss requires > 1 channel
         if (
             "Focal" not in self.config["loss"]["name"]
             and "Pixel" not in self.config["loss"]["name"]
@@ -436,6 +449,13 @@ class Model(pytorch_lightning.LightningModule):
         else:
             val_loss = self.loss_function(outputs, label)
 
+        self.log(
+            "val_iou",
+            compute_iou(outputs > 0.5, label, torch.ones(outputs.shape)),
+            sync_dist=True,
+            on_epoch=True,
+            prog_bar=True,
+        )
         # sync_dist on_epoch=True ensures that results will be averaged across gpus
         self.log(
             "val_loss",
@@ -465,31 +485,41 @@ class Model(pytorch_lightning.LightningModule):
             to_numpy=True,
             sigmoid=sigmoid,  # sigmoid,
             model_name=self.model_name,
+            extract_output_ch=True,
         )
 
         if self.aggregate_img is not None:
             # initialize the aggregate img
             if batch_idx == 0:
                 self.aggregate_img = np.zeros(batch["img_shape"])
+                self.count_map = np.zeros(batch["img_shape"])
+
             i, j, k = (
                 batch["ijk"][0].cpu().numpy()[0],
                 batch["ijk"][1].cpu().numpy()[0],
                 batch["ijk"][2].cpu().numpy()[0],
             )
+
             self.aggregate_img[
                 :,  # preserve all channels
                 i : i + output_img.shape[2],
                 j : j + output_img.shape[3],
                 k : k + output_img.shape[4],
-            ] = output_img
+            ] += np.squeeze(output_img, axis=0)
+
+            self.count_map[
+                :,  # preserve all channels
+                i : i + output_img.shape[2],
+                j : j + output_img.shape[3],
+                k : k + output_img.shape[4],
+            ] += 1
 
         # only want to perform post-processing and saving once the aggregated image
         # is completeor we're not aggregating an image
         if (batch_idx + 1) % batch["save_n_batches"].cpu().numpy()[0] == 0:
             # prepare aggregate img for output
             if self.aggregate_img is not None:
-                output_img = self.aggregate_img
-
+                output_img = self.aggregate_img / self.count_map
             if args_inference["mode"] != "folder":
                 out = minmax(output_img)
                 out = undo_resize(out, self.config)
@@ -510,7 +540,6 @@ class Model(pytorch_lightning.LightningModule):
                     )
                     out = out.astype(np.uint8)
                     out[out > 0] = 255
-
             if len(tt) == 0:
                 imsave(
                     self.config["OutputDir"]
@@ -553,6 +582,12 @@ class DataModule(pytorch_lightning.LightningDataModule):
             self.transforms = []
             if "Transforms" in self.loader_config:
                 self.transforms = self.loader_config["Transforms"]
+
+            (
+                _,
+                self.accepts_costmap,
+                _,
+            ) = get_loss_criterion(config)
 
     def prepare_data(self):
         pass
@@ -624,7 +659,8 @@ class DataModule(pytorch_lightning.LightningDataModule):
                 size_in,
                 size_out,
                 nchannel,
-                self.transforms,
+                use_costmap=self.accepts_costmap,
+                transforms=self.transforms,
                 patchize=True,
                 check_crop=self.check_crop,
             ),
@@ -656,7 +692,8 @@ class DataModule(pytorch_lightning.LightningDataModule):
                 size_in,
                 size_out,
                 nchannel,
-                [],  # no transforms for validation data
+                transforms=[],  # no transforms for validation data
+                use_costmap=self.accepts_costmap,
                 patchize=False,  # validate on entire image
             ),
             batch_size=loader_config["batch_size"],

@@ -37,6 +37,7 @@ def apply_on_image(
     to_numpy: bool,
     sigmoid: bool,
     model_name,
+    extract_output_ch: bool,
 ) -> np.ndarray:
     """
     Inputs:
@@ -57,7 +58,14 @@ def apply_on_image(
 
     if not args["RuntimeAug"]:
         return model_inference(
-            model, input_img, args, model_name, squeeze, to_numpy, sigmoid
+            model,
+            input_img,
+            args,
+            model_name,
+            squeeze,
+            to_numpy,
+            extract_output_ch,
+            sigmoid,
         )
     else:
         out0, vae_loss = model_inference(
@@ -81,6 +89,7 @@ def apply_on_image(
                 to_numpy=True,
                 sigmoid=sigmoid,
                 model_name=model_name,
+                extract_output_ch=extract_output_ch,
             )
             aug_flip = flip(out, axis=i, to_tensor=False)
             out0 += aug_flip
@@ -126,8 +135,8 @@ def model_inference(
         # old models
         if type(args["OutputCh"]) == list and len(args["OutputCh"]) > 2:
             args["OutputCh"] = args["OutputCh"][1]
-
         result = result[:, args["OutputCh"], :, :, :]
+
     if sigmoid:
         result = torch.nn.Sigmoid()(result)
     if not squeeze:

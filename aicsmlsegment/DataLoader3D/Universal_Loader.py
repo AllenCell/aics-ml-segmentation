@@ -1,6 +1,6 @@
 import numpy as np
 import random
-from torch import from_numpy, Tensor, unsqueeze, cat
+from torch import from_numpy
 from aicsimageio import AICSImage
 from aicsmlsegment.utils import (
     image_normalization,
@@ -116,6 +116,7 @@ class UniversalDataset(Dataset):
         size_in,
         size_out,
         n_channel,
+        use_costmap=True,
         transforms=[],
         patchize: bool = True,
         check_crop: bool = False,
@@ -156,6 +157,7 @@ class UniversalDataset(Dataset):
 
         # extract patches from images until num_patch reached
         for img_idx, fn in enumerate(filenames):
+            # print("training on", fn)
 
             # if we're not dividing into patches, don't break before transforming imgs
             if patchize and len(self.img) == num_patch:
@@ -163,7 +165,10 @@ class UniversalDataset(Dataset):
 
             label = load_img(fn, img_type="label", n_channel=n_channel)
             input_img = load_img(fn, img_type="input", n_channel=n_channel)
-            costmap = load_img(fn, img_type="costmap", n_channel=n_channel)
+            if use_costmap:
+                costmap = load_img(fn, img_type="costmap", n_channel=n_channel)
+            else:
+                costmap = np.zeros((1))
 
             img_pad0 = np.pad(
                 input_img,
@@ -174,10 +179,6 @@ class UniversalDataset(Dataset):
                 img_pad0, ((0, 0), (padding[0], padding[0]), (0, 0), (0, 0)), "constant"
             )
 
-            cost_scale = costmap.max()
-            if cost_scale < 1:  # this should not happen, but just in case
-                cost_scale = 1
-
             if "RF" in transforms:
                 # random flip
                 flip_flag = random.random()
@@ -185,7 +186,8 @@ class UniversalDataset(Dataset):
                     raw = np.flip(
                         raw, axis=-1
                     ).copy()  # avoid negative stride error when converting to tensor
-                    costmap = np.flip(costmap, axis=-1).copy()
+                    if use_costmap:
+                        costmap = np.flip(costmap, axis=-1).copy()
                     label = np.flip(label, axis=-1).copy()
 
             if "RR" in transforms:
@@ -213,11 +215,11 @@ class UniversalDataset(Dataset):
                 # rotate label and costmap
                 out_label = trans_label(np.transpose(label, (0, 3, 2, 1)))
                 label = np.transpose(out_label, (0, 3, 2, 1))
-
-                out_map = trans_label(
-                    np.transpose(np.expand_dims(costmap, axis=0), (0, 3, 2, 1))
-                )
-                costmap = np.transpose(out_map[0, :, :, :], (2, 1, 0))
+                if use_costmap:
+                    out_map = trans_label(
+                        np.transpose(np.expand_dims(costmap, axis=0), (0, 3, 2, 1))
+                    )
+                    costmap = np.transpose(out_map[0, :, :, :], (2, 1, 0))
 
             if patchize:
                 # take specified number of patches from current image
@@ -228,20 +230,21 @@ class UniversalDataset(Dataset):
                     py = random.randint(0, label.shape[2] - size_out[1])
                     px = random.randint(0, label.shape[3] - size_out[2])
 
-                    # check if this is a good crop
-                    ref_patch_cmap = costmap[
-                        pz : pz + size_out[0],
-                        py : py + size_out[1],
-                        px : px + size_out[2],
-                    ]
-                    if check_crop:
-                        if np.count_nonzero(ref_patch_cmap > 1e-5) < 1000:
-                            num_fail += 1
-                            if num_fail > 50:
-                                print("Failed to generate valid crops")
-                                break
-                            continue
-                    # confirmed good crop
+                    if use_costmap:
+                        # check if this is a good crop
+                        ref_patch_cmap = costmap[
+                            pz : pz + size_out[0],
+                            py : py + size_out[1],
+                            px : px + size_out[2],
+                        ]
+                        if check_crop:
+                            if np.count_nonzero(ref_patch_cmap > 1e-5) < 1000:
+                                num_fail += 1
+                                if num_fail > 50:
+                                    print("Failed to generate valid crops")
+                                    break
+                                continue
+                        # confirmed good crop
                     (self.img).append(
                         raw[
                             :,
@@ -258,7 +261,10 @@ class UniversalDataset(Dataset):
                             px : px + size_out[2],
                         ]
                     )
-                    (self.cmap).append(ref_patch_cmap)
+                    if use_costmap:
+                        (self.cmap).append(ref_patch_cmap)
+                    else:
+                        self.cmap.append(costmap)
 
                     new_patch_num += 1
             else:
@@ -301,7 +307,6 @@ def patchize(img, pr, patch_size):
         and z_patch_sz > patch_size[0]
     ), "Large image resize patches must be larger than model patch size"
 
-    total_vol = 0
     maxs = [z_max, y_max, x_max]
     patch_szs = [z_patch_sz, y_patch_sz, x_patch_sz]
 
@@ -326,18 +331,25 @@ def patchize(img, pr, patch_size):
     for i in range(pr[0]):  # z
         for j in range(pr[1]):  # y
             for k in range(pr[2]):  # x
+                i_start = max(0, all_coords[0][i] - 5)
+                i_end = min(z_max, all_coords[0][i + 1] + 5)
+
+                j_start = max(0, all_coords[1][j] - 5)
+                j_end = min(y_max, all_coords[1][j + 1] + 5)
+
+                k_start = max(0, all_coords[2][k] - 5)
+                k_end = min(x_max, all_coords[2][k + 1] + 5)
+
                 temp = np.array(
                     img[
                         :,
-                        all_coords[0][i] : all_coords[0][i + 1],
-                        all_coords[1][j] : all_coords[1][j + 1],
-                        all_coords[2][k] : all_coords[2][k + 1],
+                        i_start:i_end,
+                        j_start:j_end,
+                        k_start:k_end,
                     ]
                 )
-                ijk.append([all_coords[0][i], all_coords[1][j], all_coords[2][k]])
+                ijk.append([i_start, j_start, k_start])
                 imgs.append(temp)
-                total_vol += np.prod(temp.shape)
-    assert total_vol == np.prod(img.shape), "Splitting large image failed"
     return ijk, imgs
 
 
@@ -388,7 +400,6 @@ class TestDataset(Dataset):
                 # ).astype(float)
                 # img = np.swapaxes(img, 0, 1)
                 # # END HACK
-
                 img = image_normalization(img, config["Normalization"])
                 img = resize(img, config)
                 pr = config["large_image_resize"]
@@ -424,11 +435,12 @@ class TestDataset(Dataset):
                 # print(img.shape)
 
                 # HACK for large img
-                # img = data_reader.get_image_data(
-                #     "TZYX",
-                #     S=0,
-                # ).astype(float)
-                # img = np.swapaxes(img, 0, 1)
+                # with profiler.record_function("load"):
+                #     img = data_reader.get_image_data(
+                #         "TZYX",
+                #         S=0,
+                #     ).astype(float)
+                #     img = np.swapaxes(img, 0, 1)
                 # END HACK
 
                 img = resize(img, config, min_max=False)
