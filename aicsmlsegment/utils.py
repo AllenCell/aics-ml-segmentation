@@ -124,6 +124,18 @@ MODEL_PARAMETERS = {
             "patch_size",
         ],
     },
+    "extended_dynunet": {
+        "Optional": ["norm_name", "deep_supr_num", "res_block", "deep_supervision"],
+        "Required": [
+            "spatial_dims",
+            "in_channels",
+            "out_channels",
+            "kernel_size",
+            "strides",
+            "upsample_kernel_size",
+            "patch_size",
+        ],
+    },
     "segresnet": {
         "Optional": [
             "dropout_prob",
@@ -157,6 +169,15 @@ MODEL_PARAMETERS = {
             "upsample_mode",
         ],
         "Required": ["patch_size", "spatial_dims", "in_channels", "out_channels"],
+    },
+    "extended_vnet": {
+        "Optional": ["act", "dropout_prob", "dropout_dim"],
+        "Required": [
+            "spatial_dims",
+            "in_channels",
+            "out_channels",
+            "patch_size",
+        ],
     },
 }
 
@@ -339,7 +360,6 @@ def input_normalization(img, args):
             struct_img = background_sub(struct_img, 50)
             struct_img = simple_norm(struct_img, 2.5, 10)
             img[ch_idx, :, :, :] = struct_img[:, :, :]
-            print("subtracted background")
         elif args.Normalization == 11:
             struct_img = background_sub(struct_img, 50)
             # struct_img = simple_norm(struct_img, 2.5, 10)
