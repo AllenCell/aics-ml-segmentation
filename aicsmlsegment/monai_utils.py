@@ -110,15 +110,8 @@ def get_loss_criterion(config):
             None,
         )
     elif name == "MaskedDiceLoss":
-        return CustomLosses.MaskedDiceLoss(), True, None
-    # elif name == "MaskedDiceLoss+CrossEntropy":
-    #     return (
-    #         CustomLosses.CombinedLoss(
-    #             CustomLosses.MaskedDiceLoss(), torch.nn.BCEWithLogitsLoss()
-    #         ),
-    #         True,
-    #         None,
-    #     )
+        return MonaiLosses.MaskedDiceLoss(sigmoid=True), True, None
+
     elif name == "PixelWiseCrossEntropyLoss":
         return CustomLosses.PixelWiseCrossEntropyLoss(), True, None
     elif name == "MaskedDice+MaskedPixelwiseCrossEntropy":
@@ -179,6 +172,19 @@ class Model(pytorch_lightning.LightningModule):
             self.args_inference["size_out"] = config["model"]["size_out"]
             self.args_inference["nclass"] = config["model"]["nclass"]
 
+        elif self.model_name == "unet_xy_zoom_0pad":
+            from aicsmlsegment.Net3D.unet_xy_enlarge_0pad import UNet3D as DNN
+            from aicsmlsegment.model_utils import weights_init
+
+            model = DNN(
+                model_config["nchannel"],
+                model_config["nclass"],
+                model_config.get("zoom_ratio", 3),
+            )
+            self.model = model.apply(weights_init)
+            self.args_inference["size_in"] = config["model"]["size_in"]
+            self.args_inference["size_out"] = config["model"]["size_out"]
+            self.args_inference["nclass"] = config["model"]["nclass"]
         elif self.model_name == "unet_xy_zoom":
             from aicsmlsegment.Net3D.unet_xy_enlarge import UNet3D as DNN
             from aicsmlsegment.model_utils import weights_init
@@ -329,7 +335,7 @@ class Model(pytorch_lightning.LightningModule):
                     factor=scheduler_params["factor"],
                     patience=scheduler_params["patience"],
                     verbose=scheduler_params["verbose"],
-                    min_lr=0.00001,
+                    min_lr=0.0000001,
                 )
                 # monitoring metric must be specified
                 return {
@@ -387,7 +393,8 @@ class Model(pytorch_lightning.LightningModule):
 
         if self.accepts_costmap:
             cmap = batch[2]
-            cmap = torch.unsqueeze(cmap, dim=1)  # add cchannel dim
+            cmap = torch.unsqueeze(cmap, dim=1)  # add channel dim
+            # cmap = torch.ones(targets.shape)
             loss = self.loss_function(outputs, targets, cmap)
         else:
             if self.loss_weight is not None:
@@ -437,6 +444,7 @@ class Model(pytorch_lightning.LightningModule):
         if self.model_name in ["unet_xy", "unet_xy_zoom"]:
             costmap = batch[2]
             costmap = torch.unsqueeze(costmap, dim=1)
+            # costmap = torch.ones(label.shape)
             val_loss = compute_iou(outputs > 0.5, label, costmap)
             self.log("val_iou", val_loss, sync_dist=True, on_epoch=True, prog_bar=True)
             return
@@ -667,6 +675,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
             batch_size=loader_config["batch_size"],
             shuffle=True,
             num_workers=loader_config["NumWorkers"],
+            pin_memory=True,
         )
         return train_set_loader
 
@@ -699,6 +708,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
             batch_size=loader_config["batch_size"],
             shuffle=False,
             num_workers=loader_config["NumWorkers"],
+            pin_memory=True,
         )
         return val_set_loader
 
@@ -708,5 +718,6 @@ class DataModule(pytorch_lightning.LightningDataModule):
             batch_size=1,
             shuffle=False,
             num_workers=self.config["NumWorkers"],
+            pin_memory=True,
         )
         return test_set_loader
