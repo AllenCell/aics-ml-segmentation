@@ -3,6 +3,7 @@ from torch.utils.data import DataLoader
 from torch.optim import Adam
 import torch
 import monai.losses as MonaiLosses
+from typing import Dict
 
 import aicsmlsegment.custom_loss as CustomLosses
 import aicsmlsegment.custom_metrics as CustomMetrics
@@ -53,15 +54,22 @@ SUPPORTED_METRICS = [
 ]
 
 
-def get_loss_criterion(config):
+def get_loss_criterion(config: Dict):
     """
     Returns the loss function based on provided configuration
-    :param config: (dict) a top level configuration object containing the 'loss' key
-    :return: an instance of the loss function and whether it accepts a costmap and loss weights
+
+    Parameters
+    ----------
+    config: Dict
+        a top level configuration object containing the 'loss' key
+
+    Return:
+    -------------
+    an instance of the loss function and whether it accepts a costmap and loss weights
     """
     name = config["loss"]["name"]
 
-    # weight = loss_config["loss_weight"]
+    # validate the name of the selected loss function
     assert (
         name in SUPPORTED_LOSSES
     ), f"Invalid loss: {name}. Supported losses: {SUPPORTED_LOSSES}"
@@ -111,7 +119,6 @@ def get_loss_criterion(config):
         )
     elif name == "MaskedDiceLoss":
         return MonaiLosses.MaskedDiceLoss(sigmoid=True), True, None
-
     elif name == "PixelWiseCrossEntropyLoss":
         return CustomLosses.PixelWiseCrossEntropyLoss(), True, None
     elif name == "MaskedDice+MaskedPixelwiseCrossEntropy":
@@ -139,9 +146,22 @@ def get_loss_criterion(config):
 
 
 def get_metric(config):
+    """
+    Returns the metric function based on provided configuration
+
+    Parameters
+    ----------
+    config: Dict
+        a top level configuration object containing the 'validation' key
+
+    Return:
+    -------------
+    an instance of the validation metric function
+    """
     validation_config = config["validation"]
     metric = validation_config["metric"]
 
+    # validate the name of selected metric
     assert (
         metric in SUPPORTED_METRICS
     ), f"Invalid metric: {metric}. Supported metrics are: {SUPPORTED_METRICS}"
@@ -202,16 +222,13 @@ class Model(pytorch_lightning.LightningModule):
         else:  # monai model
             if self.model_name == "segresnetvae":
                 from monai.networks.nets.segresnet import SegResNetVAE as model
-
                 model_config["input_image_size"] = model_config["patch_size"]
             elif self.model_name == "extended_vnet":
                 from aicsmlsegment.Net3D.vnet import VNet as model
             elif self.model_name == "extended_dynunet":
                 from aicsmlsegment.Net3D.dynunet import DynUNet as model
-
             else:
                 import importlib
-
                 module = importlib.import_module(
                     "monai.networks.nets." + self.model_name
                 )
@@ -222,6 +239,7 @@ class Model(pytorch_lightning.LightningModule):
             del model_config["patch_size"]
 
             self.model = model(**model_config)
+            # monai model assumes same size for input and output
             self.args_inference["size_in"] = config["model"]["patch_size"]
             self.args_inference["size_out"] = config["model"]["patch_size"]
 
@@ -251,7 +269,6 @@ class Model(pytorch_lightning.LightningModule):
             self.metric = get_metric(config)
 
             self.scheduler_params = config["scheduler"]
-            # self.swa_config = config["SWA"]
 
         else:
             if config["RuntimeAug"] <= 0:

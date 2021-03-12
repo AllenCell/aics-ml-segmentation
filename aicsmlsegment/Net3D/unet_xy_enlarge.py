@@ -4,6 +4,9 @@ import torch.nn.functional as F
 
 
 class UNet3D(nn.Module):
+    """
+    unet_xy_zoom, see Figure 20 in https://www.biorxiv.org/content/10.1101/491035v2
+    """
     def __init__(self, in_channel, n_classes, down_ratio, batchnorm_flag=True):
         self.in_channel = in_channel
         self.n_classes = n_classes
@@ -96,9 +99,6 @@ class UNet3D(nn.Module):
         self.predict2a = nn.Conv3d(n_classes[2], n_classes[2], 1)
         self.predict1a = nn.Conv3d(n_classes[1], n_classes[1], 1)
 
-        # self.conv_final = nn.Conv3d(n_classes[0]+n_classes[1]+n_classes[2], n_classes[0]+n_classes[1]+n_classes[2], 3, stride=1, padding=1, bias=True)
-        # self.predict_final = nn.Conv3d(n_classes[0]+n_classes[1]+n_classes[2], n_classes[3], 1)
-
         self.softmax = F.log_softmax  # nn.LogSoftmax(1)
 
         self.final_activation = nn.Softmax(dim=1)
@@ -108,7 +108,6 @@ class UNet3D(nn.Module):
         self.numClass2 = n_classes[2]
 
         self.k = k
-        # self.numClass_combine = n_classes[3]
 
     def encoder(
         self,
@@ -268,18 +267,11 @@ class UNet3D(nn.Module):
         p2a = F.pad(
             self.predict2a(self.conv2a(self.up2a(u2))),
             (-6 * k - 1, -6 * k - 1, -6 * k - 1, -6 * k - 1, -5, -5),
-        )  ## fix +5
+        )  # fix +5
         p2_final = p2a.permute(
             0, 2, 3, 4, 1
         ).contiguous()  # move the class channel to the last dimension
         p2_final = p2_final.view(p2_final.numel() // self.numClass2, self.numClass2)
         p2_final = self.softmax(p2_final, dim=1)
-
-        """
-        p_combine0 = self.predict_final(self.conv_final(torch.cat((p0, p1a, p2a), 1)))  # BCZYX
-        p_combine = p_combine0.permute(0, 2, 3, 4, 1).contiguous() # move the class channel to the last dimension
-        p_combine = p_combine.view(p_combine.numel() // self.numClass_combine, self.numClass_combine)
-        p_combine = self.softmax(p_combine)
-        """
 
         return [p0_final, p1_final, p2_final]
