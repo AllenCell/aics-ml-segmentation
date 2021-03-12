@@ -49,6 +49,7 @@ requirements = [
     "aicsimageio>3.3.0",
     "tqdm",
     "pyyaml",
+    "monai>=0.4.0",
     #'pytorch=1.0.0'
 ]
 

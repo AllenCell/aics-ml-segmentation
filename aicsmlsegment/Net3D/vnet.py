@@ -1,3 +1,7 @@
+# This implementation was adapted from MONAI:
+# https://docs.monai.io/en/latest/_modules/monai/networks/nets/vnet.html
+# The adapted version allows to use more feature maps
+
 from monai.networks.nets.vnet import (
     DownTransition,
     UpTransition,
@@ -11,25 +15,34 @@ import torch.nn as nn
 
 class VNet(nn.Module):
     """
-    V-Net based on `Fully Convolutional Neural Networks for Volumetric Medical Image Segmentation
-    <https://arxiv.org/pdf/1606.04797.pdf>`_.
-    Adapted from `the official Caffe implementation
+    Adapted from https://docs.monai.io/en/latest/_modules/monai/networks/nets/vnet.html
+    to allow more feature maps than original implementation
+
+    V-Net: `Fully Convolutional Neural Networks for Volumetric Medical Image 
+    Segmentation <https://arxiv.org/pdf/1606.04797.pdf>`_. Original implementation in 
+    MONAI was adapted from `the official Caffe implementation
     <https://github.com/faustomilletari/VNet>`_. and `another pytorch implementation
     <https://github.com/mattmacy/vnet.pytorch/blob/master/vnet.py>`_.
     The model supports 2D or 3D inputs.
 
-    Args:
-        spatial_dims: spatial dimension of the input data. Defaults to 3.
-        in_channels: number of input channels for the network. Defaults to 1.
-            The value should meet the condition that ``16 % in_channels == 0``.
-        out_channels: number of output channels for the network. Defaults to 1.
-        act: activation type in the network. Defaults to ``("elu", {"inplace": True})``.
-        dropout_prob: dropout ratio. Defaults to 0.5. Defaults to 3.
-        dropout_dim: determine the dimensions of dropout. Defaults to 3.
-
-            - ``dropout_dim = 1``, randomly zeroes some of the elements for each channel.
-            - ``dropout_dim = 2``, Randomly zeroes out entire channels (a channel is a 2D feature map).
-            - ``dropout_dim = 3``, Randomly zeroes out entire channels (a channel is a 3D feature map).
+    Parameters
+    -------------
+    spatial_dims: 
+        spatial dimension of the input data. Defaults to 3.
+    in_channels: 
+        number of input channels for the network. Defaults to 1. The value should meet 
+        the condition that ``16 % in_channels == 0``.
+    out_channels: 
+        number of output channels for the network. Defaults to 1.
+    act: 
+        activation type in the network. Defaults to ``("elu", {"inplace": True})``.
+    dropout_prob: 
+        dropout ratio. Defaults to 0.5. Defaults to 3.
+    dropout_dim: 
+        determine the dimensions of dropout. Defaults to 3.
+        - ``dropout_dim = 1``, randomly zeroes some of the elements for each channel.
+        - ``dropout_dim = 2``, randomly zeroes out entire 2D feature maps.
+        - ``dropout_dim = 3``, Randomly zeroes out entire 3D feature maps.
     """
 
     def __init__(
