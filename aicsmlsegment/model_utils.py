@@ -4,29 +4,23 @@ import torch
 from aicsmlsegment.multichannel_sliding_window import sliding_window_inference
 
 
-def flip(img: np.ndarray, axis: int, to_tensor=True):
+def flip(img: np.ndarray, axis: int):
     """
     Inputs:
         img: image to be flipped
-        axis: axis along which to flip image. Should be indexed from the channel dimension
-        to_tensor: whether to unsqueeze to (1,C,Z,X,Y) and convert to tensor before returning
+        axis: axis along which to flip image. Should be indexed from the channel
+                dimension
     Outputs:
-        if to_tensor is True: (1,C,Z,X,Y)-shaped tensor
-        if to_tensor is false: numpy array of shape (C,Z,X,Y)
+        (1,C,Z,X,Y)-shaped tensor
     flip input img along axis
     """
 
-    out_img = img.copy()
+    out_img = img.detach().clone()
     for ch_idx in range(out_img.shape[0]):
         str_im = out_img[ch_idx, :, :, :]
-        out_img[ch_idx, :, :, :] = np.flip(str_im, axis=axis)
+        out_img[ch_idx, :, :, :] = torch.flip(str_im, dims=[axis])
 
-    if to_tensor:  # used for inference, also have to unsqueeze for sliding window
-        return torch.unsqueeze(
-            torch.as_tensor(out_img.astype(np.float32), dtype=torch.float), dim=0
-        )
-    else:
-        return out_img
+    return torch.unsqueeze(out_img, dim=0)
 
 
 def apply_on_image(
@@ -73,31 +67,30 @@ def apply_on_image(
             input_img,
             args,
             squeeze=False,
-            to_numpy=True,
+            to_numpy=False,
             sigmoid=sigmoid,
             model_name=model_name,
         )
-
-        input_img = input_img.cpu().numpy()[0]  # remove batch_dimension for flip
+        input_img = input_img[0]  # remove batch_dimension for flip
         for i in range(3):
-            aug = flip(input_img, axis=i, to_tensor=True)
+            aug = flip(input_img, axis=i)
             out, loss = model_inference(
                 model,
                 aug,
                 args,
                 squeeze=True,
-                to_numpy=True,
+                to_numpy=False,
                 sigmoid=sigmoid,
                 model_name=model_name,
                 extract_output_ch=extract_output_ch,
             )
-            aug_flip = flip(out, axis=i, to_tensor=False)
+            aug_flip = flip(out, axis=i)
             out0 += aug_flip
             vae_loss += loss
 
         out0 /= 4
         vae_loss /= 4
-        return out0, vae_loss
+        return out0.cpu().numpy(), vae_loss
 
 
 def model_inference(
@@ -133,7 +126,7 @@ def model_inference(
 
     if extract_output_ch:
         # old models
-        if type(args["OutputCh"]) == list and len(args["OutputCh"]) > 2:
+        if type(args["OutputCh"]) == list and len(args["OutputCh"]) >= 2:
             args["OutputCh"] = args["OutputCh"][1]
         result = result[:, args["OutputCh"], :, :, :]
 

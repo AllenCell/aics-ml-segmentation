@@ -37,7 +37,6 @@ SUPPORTED_LOSSES = [
     "GeneralizedDice+FocalLoss",
     "Aux",
     "MaskedDiceLoss",
-    # "MaskedDiceLoss+CrossEntropy",
     "PixelWiseCrossEntropyLoss",
     "MaskedDice+MaskedPixelwiseCrossEntropy",
     "ElementAngularMSELoss",
@@ -360,7 +359,11 @@ class Model(pytorch_lightning.LightningModule):
         targets = batch[1]
         outputs = self(inputs)
 
-        if self.model_name in ["unet_xy", "unet_xy_zoom"]:  # old segmenter
+        if self.model_name in [
+            "unet_xy",
+            "unet_xy_zoom",
+            "unet_xy_zoom_0pad",
+        ]:  # old segmenter
             cmap = batch[2]
             loss = self.loss_function(outputs, targets, cmap)
             self.log(
@@ -441,7 +444,7 @@ class Model(pytorch_lightning.LightningModule):
             model_name=self.model_name,
         )
 
-        if self.model_name in ["unet_xy", "unet_xy_zoom"]:
+        if self.model_name in ["unet_xy", "unet_xy_zoom", "unet_xy_zoom_0pad"]:
             costmap = batch[2]
             costmap = torch.unsqueeze(costmap, dim=1)
             # costmap = torch.ones(label.shape)
@@ -480,18 +483,20 @@ class Model(pytorch_lightning.LightningModule):
 
         args_inference = self.args_inference
 
-        if self.model_name in ["unet_xy", "unet_xy_zoom"]:
+        sigmoid = True
+        if self.model_name in ["unet_xy", "unet_xy_zoom", "unet_xy_zoom_0pad"]:
             sigmoid = False  # softmax is applied to outputs during apply_on_image
-        else:
-            sigmoid = True
+        to_numpy = True
+        if self.aggregate_img is not None:
+            to_numpy = False  # prevent excess gpu->cpu data transfer
 
         output_img, _ = apply_on_image(
             self.model,
             img,
             args_inference,
             squeeze=False,
-            to_numpy=True,
-            sigmoid=sigmoid,  # sigmoid,
+            to_numpy=to_numpy,
+            sigmoid=sigmoid,
             model_name=self.model_name,
             extract_output_ch=True,
         )
@@ -499,13 +504,17 @@ class Model(pytorch_lightning.LightningModule):
         if self.aggregate_img is not None:
             # initialize the aggregate img
             if batch_idx == 0:
-                self.aggregate_img = np.zeros(batch["img_shape"])
-                self.count_map = np.zeros(batch["img_shape"])
+                self.aggregate_img = torch.zeros(
+                    batch["img_shape"], dtype=torch.float32, device=self.device
+                )
+                self.count_map = torch.zeros(
+                    batch["img_shape"], dtype=torch.uint8, device=self.device
+                )
 
             i, j, k = (
-                batch["ijk"][0].cpu().numpy()[0],
-                batch["ijk"][1].cpu().numpy()[0],
-                batch["ijk"][2].cpu().numpy()[0],
+                batch["ijk"][0],
+                batch["ijk"][1],
+                batch["ijk"][2],
             )
 
             self.aggregate_img[
@@ -513,7 +522,7 @@ class Model(pytorch_lightning.LightningModule):
                 i : i + output_img.shape[2],
                 j : j + output_img.shape[3],
                 k : k + output_img.shape[4],
-            ] += np.squeeze(output_img, axis=0)
+            ] += torch.squeeze(output_img, dim=0)
 
             self.count_map[
                 :,  # preserve all channels
@@ -528,6 +537,7 @@ class Model(pytorch_lightning.LightningModule):
             # prepare aggregate img for output
             if self.aggregate_img is not None:
                 output_img = self.aggregate_img / self.count_map
+                output_img = output_img.cpu().numpy()
             if args_inference["mode"] != "folder":
                 out = minmax(output_img)
                 out = undo_resize(out, self.config)
@@ -650,7 +660,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
         loader_config = self.loader_config
         model_config = self.model_config
 
-        if self.model_name == "unet_xy" or self.model_name == "unet_xy_zoom":
+        if self.model_name in ["unet_xy", "unet_xy_zoom", "unet_xy_zoom_0pad"]:
             size_in = model_config["size_in"]
             size_out = model_config["size_out"]
             nchannel = model_config["nchannel"]
@@ -684,7 +694,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
         loader_config = self.loader_config
         model_config = self.model_config
 
-        if self.model_name == "unet_xy" or self.model_name == "unet_xy_zoom":
+        if self.model_name in ["unet_xy", "unet_xy_zoom", "unet_xy_zoom_0pad"]:
             size_in = model_config["size_in"]
             size_out = model_config["size_out"]
             nchannel = model_config["nchannel"]

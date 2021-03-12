@@ -302,9 +302,9 @@ def patchize(img, pr, patch_size):
     z_patch_sz = z_max // pr[0]
 
     assert (
-        x_patch_sz > patch_size[2]
-        and y_patch_sz > patch_size[1]
-        and z_patch_sz > patch_size[0]
+        x_patch_sz >= patch_size[2]
+        and y_patch_sz >= patch_size[1]
+        and z_patch_sz >= patch_size[0]
     ), "Large image resize patches must be larger than model patch size"
 
     maxs = [z_max, y_max, x_max]
@@ -357,9 +357,9 @@ class TestDataset(Dataset):
     def __init__(self, config):
         inf_config = config["mode"]
         self.mode = inf_config
-        try:  # basic unet
+        try:  # monai
             self.patch_size = config["model"]["patch_size"]
-        except KeyError:  # custom model
+        except KeyError:  # unet_xy_zoom
             self.patch_size = config["model"]["size_in"]
         self.save_n_batches = 1
 
@@ -392,14 +392,6 @@ class TestDataset(Dataset):
                     "CZYX", S=0, T=0, C=config["InputCh"]
                 ).astype(float)
 
-                # # HACK for large img
-
-                # img = data_reader.get_image_data(
-                #     "TZYX",
-                #     S=0,
-                # ).astype(float)
-                # img = np.swapaxes(img, 0, 1)
-                # # END HACK
                 img = image_normalization(img, config["Normalization"])
                 img = resize(img, config)
                 pr = config["large_image_resize"]
@@ -432,16 +424,6 @@ class TestDataset(Dataset):
                 img = data_reader.get_image_data(
                     "CZYX", S=0, T=0, C=config["InputCh"]
                 ).astype(float)
-                # print(img.shape)
-
-                # HACK for large img
-                # with profiler.record_function("load"):
-                #     img = data_reader.get_image_data(
-                #         "TZYX",
-                #         S=0,
-                #     ).astype(float)
-                #     img = np.swapaxes(img, 0, 1)
-                # END HACK
 
                 img = resize(img, config, min_max=False)
                 img = image_normalization(img, config["Normalization"])
@@ -461,7 +443,7 @@ class TestDataset(Dataset):
                     self.imgs += imgs
                     self.im_shape += [img.shape] * len(imgs)
 
-        if config["model"]["name"] in ["unet_xy", "unet_xy_zoom"]:
+        if config["model"]["name"] in ["unet_xy", "unet_xy_zoom", "unet_xy_zoom_0pad"]:
             padding = [
                 (x - y) // 2
                 for x, y in zip(config["model"]["size_in"], config["model"]["size_out"])
