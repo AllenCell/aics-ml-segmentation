@@ -84,7 +84,7 @@ class UNet3D(nn.Module):
             n_classes[1],
             kernel_size=(1, 2 * k, 2 * k),
             stride=(1, 2 * k, 2 * k),
-            padding=(1, 1, 1),
+            padding=0,
             output_padding=0,
             bias=True,
         )
@@ -93,7 +93,7 @@ class UNet3D(nn.Module):
             n_classes[2],
             kernel_size=(1, 4 * k, 4 * k),
             stride=(1, 4 * k, 4 * k),
-            padding=(1, 1, 1),
+            padding=0,
             output_padding=0,
             bias=True,
         )
@@ -105,8 +105,8 @@ class UNet3D(nn.Module):
             n_classes[1], n_classes[1], 3, stride=1, padding=(1, 1, 1), bias=True
         )
 
-        self.predict2a = nn.Conv3d(n_classes[2], n_classes[2], 1, padding=(1, 1, 1))
-        self.predict1a = nn.Conv3d(n_classes[1], n_classes[1], 1, padding=(1, 1, 1))
+        self.predict2a = nn.Conv3d(n_classes[2], n_classes[2], 1)
+        self.predict1a = nn.Conv3d(n_classes[1], n_classes[1], 1)
 
         # self.conv_final = nn.Conv3d(n_classes[0]+n_classes[1]+n_classes[2], n_classes[0]+n_classes[1]+n_classes[2], 3, stride=1, padding=1, bias=True)
         # self.predict_final = nn.Conv3d(n_classes[0]+n_classes[1]+n_classes[2], n_classes[3], 1)
@@ -239,18 +239,14 @@ class UNet3D(nn.Module):
         x0 = self.pool0(x)
         down1 = self.ec1(x0)
         x1 = self.pool1(down1)
-
         down2 = self.ec2(x1)
 
         x2 = self.pool2(down2)
-
         down3 = self.ec3(x2)
-
         x3 = self.pool3(down3)
-
         u3 = self.ec4(x3)
 
-        d3 = torch.cat((F.pad(self.up3(u3), (1, 0, 1, 0, 0, 0)), down3), 1)
+        d3 = torch.cat((self.up3(u3), down3), 1)
         u2 = self.dc3(d3)
         d2 = torch.cat((self.up2(u2), down2), 1)
         u1 = self.dc2(d2)
@@ -288,5 +284,4 @@ class UNet3D(nn.Module):
         p_combine = p_combine.view(p_combine.numel() // self.numClass_combine, self.numClass_combine)
         p_combine = self.softmax(p_combine)
         """
-
         return [p0_final, p1_final, p2_final]
