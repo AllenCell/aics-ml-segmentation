@@ -221,6 +221,7 @@ class Model(pytorch_lightning.LightningModule):
         else:  # monai model
             if self.model_name == "segresnetvae":
                 from monai.networks.nets.segresnet import SegResNetVAE as model
+
                 model_config["input_image_size"] = model_config["patch_size"]
             elif self.model_name == "extended_vnet":
                 from aicsmlsegment.Net3D.vnet import VNet as model
@@ -228,6 +229,7 @@ class Model(pytorch_lightning.LightningModule):
                 from aicsmlsegment.Net3D.dynunet import DynUNet as model
             else:
                 import importlib
+
                 module = importlib.import_module(
                     "monai.networks.nets." + self.model_name
                 )
@@ -359,6 +361,16 @@ class Model(pytorch_lightning.LightningModule):
                     "lr_scheduler": scheduler,
                     "monitor": scheduler_params["monitor"],
                 }
+            elif scheduler_params["name"] == "1cycle":
+                from torch.optim.lr_scheduler import OneCycleLR
+
+                scheduler = OneCycleLR(
+                    optims[0],
+                    max_lr=scheduler_params["max_lr"],
+                    total_steps=scheduler_params["total_steps"],
+                    pct_start=scheduler_params["pct_start"],
+                    verbose=scheduler_params["verbose"],
+                )
             else:
                 print(
                     "That scheduler is not yet supported. No scheduler is being used."
@@ -503,6 +515,7 @@ class Model(pytorch_lightning.LightningModule):
         sigmoid = True
         if self.model_name in ["unet_xy", "unet_xy_zoom", "unet_xy_zoom_0pad"]:
             sigmoid = False  # softmax is applied to outputs during apply_on_image
+
         to_numpy = True
         if self.aggregate_img is not None:
             to_numpy = False  # prevent excess gpu->cpu data transfer
