@@ -334,11 +334,11 @@ def patchize(img, pr, patch_size):
                 i_start = max(0, all_coords[0][i] - 5)
                 i_end = min(z_max, all_coords[0][i + 1] + 5)
 
-                j_start = max(0, all_coords[1][j] - 5)
-                j_end = min(y_max, all_coords[1][j + 1] + 5)
+                j_start = max(0, all_coords[1][j] - 20)
+                j_end = min(y_max, all_coords[1][j + 1] + 20)
 
-                k_start = max(0, all_coords[2][k] - 5)
-                k_end = min(x_max, all_coords[2][k + 1] + 5)
+                k_start = max(0, all_coords[2][k] - 20)
+                k_end = min(x_max, all_coords[2][k + 1] + 20)
 
                 temp = np.array(
                     img[
@@ -443,7 +443,7 @@ class TestDataset(Dataset):
                     self.imgs += imgs
                     self.im_shape += [img.shape] * len(imgs)
 
-        if config["model"]["name"] in ["unet_xy", "unet_xy_zoom", "unet_xy_zoom_0pad"]:
+        if config["model"]["size_in"] != config["model"]["size_out"]:
             padding = [
                 (x - y) // 2
                 for x, y in zip(config["model"]["size_in"], config["model"]["size_out"])
