@@ -55,12 +55,14 @@ OPTIONAL_CONFIG_FIELDS = {
         "callbacks": ["name"],
         "SWA": ["swa_start", "swa_lr", "annealing_epochs", "annealing_strategy"],
         "tensorboard": None,
+        "precision": None,
     },
     False: {
         "gpus": None,
         "dist_backend": None,
         "model": ["norm", "act", "features", "dropout"],
         "large_image_resize": None,
+        "precision": None,
     },
 }
 
@@ -74,6 +76,7 @@ DEFAULT_CONFIG = {
     "tensorboard": None,
     "large_image_resize": None,
     "callbacks": {"name": None},
+    "precision": 32,
 }
 
 MODEL_PARAMETERS = {

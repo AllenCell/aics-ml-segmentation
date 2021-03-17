@@ -33,10 +33,16 @@ def main():
         print("Training new model from scratch")
         model = Model(config, model_config, train=True)
 
+    print(model)
+
     checkpoint_dir = config["checkpoint_dir"]
     if not os.path.exists(checkpoint_dir):
         os.makedirs(checkpoint_dir)
 
+    GPU = pytorch_lightning.callbacks.GPUStatsMonitor(
+        intra_step_time=True, inter_step_time=True
+    )
+    LR = pytorch_lightning.callbacks.LearningRateMonitor(logging_interval="epoch")
     # model checkpoint every n epochs
     MC = ModelCheckpoint(
         dirpath=checkpoint_dir,
@@ -44,7 +50,7 @@ def main():
         period=config["save_every_n_epoch"],
         save_top_k=-1,
     )
-    callbacks = [MC]  # LR]
+    callbacks = [MC, LR, GPU]
 
     callbacks_config = config["callbacks"]
     if callbacks_config["name"] == "EarlyStopping":
@@ -99,6 +105,7 @@ def main():
         logger=logger,
         log_every_n_steps=30,
         flush_logs_every_n_steps=30,
+        precision=config["precision"],
     )
     print("Done")
 
