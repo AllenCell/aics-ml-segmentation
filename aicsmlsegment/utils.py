@@ -478,11 +478,11 @@ def load_single_image(args, fn, time_flag=False):
 
 def compute_iou(prediction, gt, cmap):
     if type(prediction) == torch.Tensor:
-        prediction = prediction.cpu().numpy()
+        prediction = prediction.cpu().detach().numpy()
     if type(gt) == torch.Tensor:
-        gt = gt.cpu().numpy()
+        gt = gt.cpu().detach().numpy()
     if type(cmap) == torch.Tensor:
-        cmap = cmap.cpu().numpy()
+        cmap = cmap.cpu().detach().numpy()
 
     area_i = np.logical_and(prediction, gt)
     area_i[cmap == 0] = False

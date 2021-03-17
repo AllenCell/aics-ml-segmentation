@@ -334,11 +334,11 @@ def patchize(img, pr, patch_size):
                 i_start = max(0, all_coords[0][i] - 5)
                 i_end = min(z_max, all_coords[0][i + 1] + 5)
 
-                j_start = max(0, all_coords[1][j] - 20)
-                j_end = min(y_max, all_coords[1][j + 1] + 20)
+                j_start = max(0, all_coords[1][j] - 30)
+                j_end = min(y_max, all_coords[1][j + 1] + 30)
 
-                k_start = max(0, all_coords[2][k] - 20)
-                k_end = min(x_max, all_coords[2][k + 1] + 20)
+                k_start = max(0, all_coords[2][k] - 30)
+                k_end = min(x_max, all_coords[2][k + 1] + 30)
 
                 temp = np.array(
                     img[

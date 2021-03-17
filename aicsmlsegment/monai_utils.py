@@ -567,7 +567,7 @@ class Model(pytorch_lightning.LightningModule):
             # prepare aggregate img for output
             if self.aggregate_img is not None:
                 output_img = self.aggregate_img / self.count_map
-                output_img = output_img.cpu().numpy()
+                output_img = output_img.cpu().detach().numpy()
             if args_inference["mode"] != "folder":
                 out = minmax(output_img)
                 out = undo_resize(out, self.config)

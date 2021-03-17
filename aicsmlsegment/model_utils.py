@@ -90,7 +90,9 @@ def apply_on_image(
 
         out0 /= 4
         vae_loss /= 4
-        return out0.cpu().numpy(), vae_loss
+        if to_numpy:
+            out0 = out0.cpu().detach().numpy()
+        return out0, vae_loss
 
 
 def model_inference(
@@ -135,7 +137,7 @@ def model_inference(
     if not squeeze:
         result = torch.unsqueeze(result, dim=1)
     if to_numpy:
-        result = result.cpu().numpy()
+        result = result.cpu().detach().numpy()
     return result, vae_loss
 
 
