@@ -5,6 +5,7 @@ import torch
 import monai.losses as MonaiLosses
 from typing import Dict
 
+
 import aicsmlsegment.custom_loss as CustomLosses
 import aicsmlsegment.custom_metrics as CustomMetrics
 from aicsmlsegment.model_utils import (
@@ -217,6 +218,22 @@ class Model(pytorch_lightning.LightningModule):
             self.args_inference["size_in"] = config["model"]["size_in"]
             self.args_inference["size_out"] = config["model"]["size_out"]
             self.args_inference["nclass"] = config["model"]["nclass"]
+            ###RND
+        elif self.model_name == "unet_xy_zoom_0pad_stridedconv":
+            from aicsmlsegment.Net3D.unet_xy_enlarge_0pad_stridedconv import (
+                UNet3D as DNN,
+            )
+            from aicsmlsegment.model_utils import weights_init
+
+            model = DNN(
+                model_config["nchannel"],
+                model_config["nclass"],
+                model_config.get("zoom_ratio", 3),
+            )
+            self.model = model.apply(weights_init)
+            self.args_inference["size_in"] = config["model"]["size_in"]
+            self.args_inference["size_out"] = config["model"]["size_out"]
+            self.args_inference["nclass"] = config["model"]["nclass"]
 
         else:  # monai model
             if self.model_name == "segresnetvae":
@@ -227,6 +244,7 @@ class Model(pytorch_lightning.LightningModule):
                 from aicsmlsegment.Net3D.vnet import VNet as model
             elif self.model_name == "extended_dynunet":
                 from aicsmlsegment.Net3D.dynunet import DynUNet as model
+
             else:
                 import importlib
 
@@ -388,11 +406,7 @@ class Model(pytorch_lightning.LightningModule):
         targets = batch[1]
         outputs = self(inputs)
 
-        if self.model_name in [
-            "unet_xy",
-            "unet_xy_zoom",
-            "unet_xy_zoom_0pad",
-        ]:  # old segmenter
+        if "unet_xy" in self.model_name:  # old segmenter
             cmap = batch[2]
             loss = self.loss_function(outputs, targets, cmap)
             self.log(
@@ -404,13 +418,37 @@ class Model(pytorch_lightning.LightningModule):
                 on_step=False,
             )
             return {"loss": loss}
-
-        if self.model_name == "dynunet":
-            # extract only first head
-            outputs = outputs[0]
         if self.model_name == "segresnetvae":
             # segresnetvae forward returns an additional vae loss term
             outputs, vae_loss = outputs
+
+        if (
+            self.model_name == "extended_dynunet"
+            and self.model_config["deep_supervision"]
+        ):  # output is a stacked tensor all of same shape instead of a list
+            outputs = torch.unbind(outputs, dim=1)
+
+            if self.accepts_costmap:
+                cmap = batch[2]
+                cmap = torch.unsqueeze(cmap, dim=1)  # add channel dim
+            loss = torch.zeros(1, device=self.device)
+            for out in outputs:
+                out = torch.unsqueeze(
+                    out[:, self.args_inference["OutputCh"], :, :, :], dim=1
+                )
+                if self.accepts_costmap:
+                    loss += self.loss_function(out, targets, cmap)
+                else:
+                    loss += self.loss_function(out, targets)
+            self.log(
+                "epoch_train_loss",
+                loss / len(outputs),
+                sync_dist=True,
+                prog_bar=True,
+                on_epoch=True,
+                on_step=False,
+            )
+            return {"loss": loss}
 
         # focal loss requires > 1 channel
         if (
@@ -418,15 +456,62 @@ class Model(pytorch_lightning.LightningModule):
             and "Pixel" not in self.config["loss"]["name"]
         ):
             # select output channel
-            outputs = outputs[:, self.args_inference["OutputCh"], :, :, :]
-            outputs = torch.unsqueeze(
-                outputs, dim=1
-            )  # add back in channel dimension to match targets
+            if isinstance(outputs, list):
+                for i in range(len(outputs)):
+                    outputs[i] = torch.unsqueeze(
+                        outputs[i][:, self.args_inference["OutputCh"], :, :, :], dim=1
+                    )
+            else:
+                outputs = torch.unsqueeze(
+                    outputs[:, self.args_inference["OutputCh"], :, :, :], dim=1
+                )  # add back in channel dimension to match targets
+
+        if isinstance(
+            outputs, list
+        ):  # average loss across deep supervision heads for dynunet w/ deep supervision
+            if self.accepts_costmap:
+                cmap = batch[2]
+                cmap = torch.unsqueeze(cmap, dim=1)  # add channel dim
+                loss = self.loss_function(outputs[0], targets, cmap)
+            else:
+                loss = self.loss_function(outputs[0], targets)
+
+            for out in range(1, len(outputs)):
+                # resize label
+                x = torch.linspace(-1, 1, outputs[out].shape[-1], device=self.device)
+                y = torch.linspace(-1, 1, outputs[out].shape[-2], device=self.device)
+                z = torch.linspace(-1, 1, outputs[out].shape[-3], device=self.device)
+                meshz, meshy, meshx = torch.meshgrid((z, y, x))
+                grid = torch.stack((meshx, meshy, meshz), 3)
+                grid = torch.stack(
+                    [grid] * targets.shape[0]
+                )  # one grid for each target in batch
+                resize_target = torch.nn.functional.grid_sample(
+                    targets, grid, align_corners=True
+                )
+                if self.accepts_costmap:
+                    resize_costmap = torch.nn.functional.grid_sample(
+                        cmap, grid, align_corners=True
+                    )
+                    loss += self.loss_function(
+                        outputs[out], resize_target, resize_costmap
+                    )
+                else:
+                    loss += self.loss_function(outputs[out], resize_target)
+
+            self.log(
+                "epoch_train_loss",
+                loss / len(outputs),
+                sync_dist=True,
+                prog_bar=True,
+                on_epoch=True,
+                on_step=False,
+            )
+            return {"loss": loss}
 
         if self.accepts_costmap:
             cmap = batch[2]
             cmap = torch.unsqueeze(cmap, dim=1)  # add channel dim
-            # cmap = torch.ones(targets.shape)
             loss = self.loss_function(outputs, targets, cmap)
         else:
             if self.loss_weight is not None:
@@ -473,7 +558,7 @@ class Model(pytorch_lightning.LightningModule):
             model_name=self.model_name,
         )
 
-        if self.model_name in ["unet_xy", "unet_xy_zoom", "unet_xy_zoom_0pad"]:
+        if "unet_xy" in self.model_name:
             costmap = batch[2]
             costmap = torch.unsqueeze(costmap, dim=1)
             # costmap = torch.ones(label.shape)
@@ -513,7 +598,7 @@ class Model(pytorch_lightning.LightningModule):
         args_inference = self.args_inference
 
         sigmoid = True
-        if self.model_name in ["unet_xy", "unet_xy_zoom", "unet_xy_zoom_0pad"]:
+        if "unet_xy" in self.model_name:
             sigmoid = False  # softmax is applied to outputs during apply_on_image
 
         to_numpy = True
@@ -690,7 +775,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
         loader_config = self.loader_config
         model_config = self.model_config
 
-        if self.model_name in ["unet_xy", "unet_xy_zoom", "unet_xy_zoom_0pad"]:
+        if "unet_xy" in self.model_name:
             size_in = model_config["size_in"]
             size_out = model_config["size_out"]
             nchannel = model_config["nchannel"]
@@ -724,7 +809,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
         loader_config = self.loader_config
         model_config = self.model_config
 
-        if self.model_name in ["unet_xy", "unet_xy_zoom", "unet_xy_zoom_0pad"]:
+        if "unet_xy" in self.model_name:
             size_in = model_config["size_in"]
             size_out = model_config["size_out"]
             nchannel = model_config["nchannel"]
