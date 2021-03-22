@@ -1,6 +1,7 @@
 import numpy as np
 import random
 from torch import from_numpy
+import torch
 from aicsimageio import AICSImage
 from aicsmlsegment.utils import (
     image_normalization,
@@ -72,7 +73,16 @@ def undo_resize(img, config):
     return img.astype(np.float32)
 
 
-def load_img(filename, img_type, n_channel):
+def validate_shape(img, n_channel, filename):
+    # Legacy aicsimageio fix - image stored as zcyx instead of czyx
+    if img.shape[0] != n_channel and img.shape[1] == n_channel:
+        print(img.shape)
+        img = np.swapaxes(img, 0, 1)
+        print(filename, "RESHAPE TO:", img.shape)
+    return img
+
+
+def load_img(filename, img_type, n_channel, input_ch=None):
     """
     General function to load and rearrange the dimensions of 3D images
     input:
@@ -86,18 +96,29 @@ def load_img(filename, img_type, n_channel):
         "label": "_GT.ome.tif",
         "input": ".ome.tif",
         "costmap": "_CM.ome.tif",
+        "test": "",
+        "timelapse": "",
     }
-    reader = AICSImage(filename + extension_dict[img_type])
-    if img_type == "label" or img_type == "input":
-        img = reader.get_image_data("CZYX", S=0, T=0)
 
-        # Legacy aicsimageio fix - image stored as zcyx instead of czyx
-        if img.shape[0] != n_channel and img.shape[1] == n_channel:
-            print(img.shape)
-            img = np.swapaxes(img, 0, 1)
-            print(filename, "RESHAPE TO:", img.shape)
+    reader = AICSImage(filename + extension_dict[img_type])
+    if img_type in ["label", "input"]:
+        img = reader.get_image_data("CZYX", S=0, T=0)
+        img = validate_shape(img, n_channel, filename)
     elif img_type == "costmap":
         img = reader.get_image_data("ZYX", S=0, T=0, C=0)
+    elif img_type == "test":
+        img = reader.get_image_data("CZYX", S=0, T=0, C=input_ch).astype(float)
+        img = validate_shape(img, n_channel, filename)
+        return [img]  # return as list so we can iterate through it in test dataloader
+    elif img_type == "timelapse":
+        assert reader.shape[1] > 1, "not a timelapse, check your data"
+        imgs = []
+        for tt in range(reader.shape[1]):
+            # Assume:  dimensions = TCZYX
+            img = reader.get_image_data("CZYX", S=0, T=tt, C=input_ch).astype(float)
+            img = validate_shape(img, n_channel, filename)
+            imgs.append(img)
+        return imgs
 
     return img
 
@@ -339,7 +360,6 @@ def patchize(img, pr, patch_size):
 
                 k_start = max(0, all_coords[2][k] - 30)
                 k_end = min(x_max, all_coords[2][k + 1] + 30)
-
                 temp = np.array(
                     img[
                         :,
@@ -503,3 +523,239 @@ class TestDataset(Dataset):
 
     def __len__(self):
         return len(self.imgs)
+
+
+class TestDataset_load_at_runtime(Dataset):
+    def __init__(self, config):
+        inf_config = config["mode"]
+        model_config = config["model"]
+        try:  # monai
+            patch_size = model_config["patch_size"]
+            nchannel = model_config["in_channels"]
+        except KeyError:  # unet_xy_zoom
+            patch_size = model_config["size_in"]
+            nchannel = model_config["nchannel"]
+
+        self.save_n_batches = 1
+        self.filenames = []  # list of filenames, 1 per image patch or image
+        self.ijk = []  # list of ijk indices,
+        self.im_shape = []
+        self.imgs = []
+        self.tts = []
+
+        if inf_config["name"] == "file":
+            filenames = [inf_config["InputFile"]]
+        else:
+            from glob import glob
+
+            filenames = glob(inf_config["InputDir"] + "/*" + inf_config["DataType"])
+            filenames.sort()
+        print("Files to be processed:", filenames)
+
+        load_type = "test"
+        if inf_config["timelapse"]:
+            load_type = "timelapse"
+
+        for fn in filenames:  # only one filename unless in_config name is folder
+            imgs = load_img(fn, load_type, nchannel, config["InputCh"])
+            for tt, img in enumerate(imgs):  # only one image unless timelapse
+                img = image_normalization(img, config["Normalization"])
+                img = resize(img, config)
+
+                img_info = patchize_wrapper(
+                    config["large_image_resize"], fn, img, patch_size, tt
+                )
+                self.filenames += img_info["filenames"]
+                self.imgs += img_info["imgs"]
+                self.im_shape += img_info["im_shape"]
+                self.ijk += img_info["ijk"]
+                self.save_n_batches = img_info["save_n_batches"]
+                self.tts += img_info["tt"]
+
+        if model_config["size_in"] != model_config["size_out"]:
+            padding = [
+                (x - y) // 2
+                for x, y in zip(model_config["size_in"], model_config["size_out"])
+            ]
+
+            for i in range(len(self.imgs)):
+                xy_padded = np.pad(
+                    self.imgs[i],
+                    (
+                        (0, 0),
+                        (0, 0),
+                        (padding[1], padding[1]),
+                        (padding[2], padding[2]),
+                    ),
+                    "symmetric",
+                )
+                self.imgs[i] = np.pad(
+                    xy_padded,
+                    ((0, 0), (padding[0], padding[0]), (0, 0), (0, 0)),
+                    "constant",
+                )
+
+    def __getitem__(self, index):
+        """
+        Returns:
+            image, filename, timepoint, coordinates of patch corner,
+            number of batches to save, and shape of input image pre-patchize
+        """
+        return {
+            "img": from_numpy(self.imgs[index].astype(float)).float(),
+            "fn": self.filenames[index],
+            "tt": self.tts[index],
+            "ijk": self.ijk[index],
+            "save_n_batches": self.save_n_batches,
+            "img_shape": self.im_shape[index],
+        }
+
+    def __len__(self):
+        return len(self.imgs)
+
+
+def patchize_wrapper(pr, fn, img, patch_size, tt, timelapse):
+    if pr == [1, 1, 1]:
+        print("No patches for", fn)
+        return_dict = {
+            "fn": [fn] if timelapse else fn,
+            "img": [img] if timelapse else img,
+            "im_shape": [img.shape] if timelapse else img.shape,
+            "ijk": [-1] if timelapse else -1,  # avoid reducing list size when inserted
+            "save_n_batches": 1,
+            "tt": [tt] if timelapse else -1,
+        }
+
+    else:
+        save_n_batches = np.prod(pr)  # how many patches until aggregated image saved
+        ijk, imgs = patchize(
+            img, pr, patch_size
+        )  # make sure that filename aligns with img in get_item
+        return_dict = {
+            "fn": [fn] * save_n_batches,
+            "img": imgs,
+            "im_shape": [img.shape] * len(imgs),
+            "ijk": ijk,
+            "save_n_batches": save_n_batches,
+            "tt": [tt] * save_n_batches,
+        }
+        print("split", fn, "into", save_n_batches, "batches")
+    return return_dict
+
+
+def pad_image(image, size_in, size_out, precision):
+    padding = [(x - y) // 2 for x, y in zip(size_in, size_out)]
+    image = np.pad(
+        image,
+        ((0, 0), (0, 0), (padding[1], padding[1]), (padding[2], padding[2])),
+        "symmetric",
+    )
+    image = np.pad(
+        image,
+        ((0, 0), (padding[0], padding[0]), (0, 0), (0, 0)),
+        "constant",
+    )
+    image = from_numpy(image.astype(float)).float()
+    return image
+
+
+class RNDTestLoad(Dataset):
+    def __init__(self, config):
+        self.config = config
+        self.inf_config = config["mode"]
+        self.model_config = config["model"]
+        self.precision = config["precision"]
+        self.patchize_ratio = config["large_image_resize"]
+        self.load_type = "test"
+        self.timelapse = False
+        if self.patchize_ratio is None:
+            self.patchize_ratio = [1, 1, 1]
+
+        try:  # monai
+            self.patch_size = self.model_config["patch_size"]
+            self.nchannel = self.model_config["in_channels"]
+        except KeyError:  # unet_xy_zoom
+            self.patch_size = self.model_config["size_in"]
+            self.nchannel = self.model_config["nchannel"]
+
+        if self.inf_config["name"] == "file":
+            filenames = [self.inf_config["InputFile"]]
+            if "timelapse" in self.inf_config and self.inf_config["timelapse"] == True:
+                self.load_type = "timelapse"
+                self.timelapse = True
+        else:
+            from glob import glob
+
+            filenames = glob(
+                self.inf_config["InputDir"] + "/*" + self.inf_config["DataType"]
+            )
+            filenames.sort()
+        print("Files to be processed:", filenames)
+
+        self.image_info = {
+            "fn": filenames,
+            "ijk": [None] * len(filenames),
+            "im_shape": [None] * len(filenames),
+            "img": [None] * len(filenames),
+            "tt": [None] * len(filenames),
+        }
+        self.save_n_batches = None
+
+    def __getitem__(self, index):
+        fn = self.image_info["fn"][index]
+        if self.image_info["img"][index] is None:  # image hasn't been loaded yet
+            imgs = load_img(fn, self.load_type, self.nchannel, self.config["InputCh"])
+            # only one image unless timelapse
+            for tt, img in enumerate(imgs):
+                img = image_normalization(img, self.config["Normalization"])
+                img = resize(img, self.config)
+                # generate patch info
+                img_info = patchize_wrapper(
+                    self.patchize_ratio,
+                    fn,
+                    img,
+                    self.patch_size,
+                    tt,
+                    self.timelapse,
+                )
+                self.save_n_batches = img_info["save_n_batches"]
+                #                    timelapse     or patchize
+                children_generated = len(imgs) > 1 or self.save_n_batches > 1
+                if children_generated:
+                    # add children to queue of images, remove parent from queue
+                    return_dict = {}
+                    for key in self.image_info:
+                        if tt == 0:
+                            del self.image_info[key][index]
+                        # return first child image
+                        return_dict[key] = img_info[key][0]
+                        # add child images next in list
+                        self.image_info[key][index + tt : index + tt] = img_info[key]
+                else:
+                    return_dict = img_info
+                return_dict["save_n_batches"] = self.save_n_batches
+                return_dict["img"] = pad_image(
+                    return_dict["img"],
+                    self.model_config["size_in"],
+                    self.model_config["size_out"],
+                    self.precision,
+                )
+                return return_dict
+
+        else:
+            return {
+                "img": pad_image(
+                    self.image_info["img"][index],
+                    self.model_config["size_in"],
+                    self.model_config["size_out"],
+                    self.precision,
+                ),
+                "fn": self.image_info["fn"][index],
+                "tt": self.image_info["tt"][index],
+                "ijk": self.image_info["ijk"][index],
+                "save_n_batches": self.save_n_batches,
+                "im_shape": self.image_info["im_shape"][index],
+            }
+
+    def __len__(self):
+        return len(self.image_info["fn"]) * np.prod(self.patchize_ratio)
