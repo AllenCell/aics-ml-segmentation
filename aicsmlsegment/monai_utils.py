@@ -15,6 +15,7 @@ from aicsmlsegment.model_utils import (
 from aicsmlsegment.DataLoader3D.Universal_Loader import (
     UniversalDataset,
     TestDataset,
+    RNDTestLoad,
     minmax,
     undo_resize,
 )
@@ -234,6 +235,21 @@ class Model(pytorch_lightning.LightningModule):
             self.args_inference["size_in"] = config["model"]["size_in"]
             self.args_inference["size_out"] = config["model"]["size_out"]
             self.args_inference["nclass"] = config["model"]["nclass"]
+        elif self.model_name == "unet_xy_zoom_stridedconv":
+            from aicsmlsegment.Net3D.unet_xy_enlarge_stridedconv import (
+                UNet3D as DNN,
+            )
+            from aicsmlsegment.model_utils import weights_init
+
+            model = DNN(
+                model_config["nchannel"],
+                model_config["nclass"],
+                model_config.get("zoom_ratio", 3),
+            )
+            self.model = model.apply(weights_init)
+            self.args_inference["size_in"] = config["model"]["size_in"]
+            self.args_inference["size_out"] = config["model"]["size_out"]
+            self.args_inference["nclass"] = config["model"]["nclass"]
 
         else:  # monai model
             if self.model_name == "segresnetvae":
@@ -299,7 +315,8 @@ class Model(pytorch_lightning.LightningModule):
             self.args_inference["mode"] = config["mode"]["name"]
             self.args_inference["Threshold"] = config["Threshold"]
             if config["large_image_resize"] is not None:
-                self.aggregate_img = []
+                self.aggregate_img = {}
+                self.count_map = {}
         self.save_hyperparameters()
 
     def forward(self, x):
@@ -593,7 +610,8 @@ class Model(pytorch_lightning.LightningModule):
     def test_step(self, batch, batch_idx):
         img = batch["img"]
         fn = batch["fn"][0]
-        tt = batch["tt"]
+        tt = batch["tt"][0]
+        save_n_batches = batch["save_n_batches"].cpu().detach().numpy()[0]
 
         args_inference = self.args_inference
 
@@ -618,28 +636,26 @@ class Model(pytorch_lightning.LightningModule):
 
         if self.aggregate_img is not None:
             # initialize the aggregate img
-            if batch_idx == 0:
-                self.aggregate_img = torch.zeros(
-                    batch["img_shape"], dtype=torch.float32, device=self.device
-                )
-                self.count_map = torch.zeros(
-                    batch["img_shape"], dtype=torch.uint8, device=self.device
-                )
-
             i, j, k = (
                 batch["ijk"][0],
                 batch["ijk"][1],
                 batch["ijk"][2],
             )
-
-            self.aggregate_img[
+            if fn not in self.aggregate_img:
+                self.aggregate_img[fn] = torch.zeros(
+                    batch["im_shape"], dtype=torch.float32, device=self.device
+                )
+                self.count_map[fn] = torch.zeros(
+                    batch["im_shape"], dtype=torch.uint8, device=self.device
+                )
+            self.aggregate_img[fn][
                 :,  # preserve all channels
                 i : i + output_img.shape[2],
                 j : j + output_img.shape[3],
                 k : k + output_img.shape[4],
             ] += torch.squeeze(output_img, dim=0)
 
-            self.count_map[
+            self.count_map[fn][
                 :,  # preserve all channels
                 i : i + output_img.shape[2],
                 j : j + output_img.shape[3],
@@ -648,10 +664,10 @@ class Model(pytorch_lightning.LightningModule):
 
         # only want to perform post-processing and saving once the aggregated image
         # is completeor we're not aggregating an image
-        if (batch_idx + 1) % batch["save_n_batches"].cpu().numpy()[0] == 0:
+        if (batch_idx + 1) % save_n_batches == 0:
             # prepare aggregate img for output
             if self.aggregate_img is not None:
-                output_img = self.aggregate_img / self.count_map
+                output_img = self.aggregate_img[fn] / self.count_map[fn]
                 output_img = output_img.cpu().detach().numpy()
             if args_inference["mode"] != "folder":
                 out = minmax(output_img)
@@ -673,7 +689,7 @@ class Model(pytorch_lightning.LightningModule):
                     )
                     out = out.astype(np.uint8)
                     out[out > 0] = 255
-            if len(tt) == 0:
+            if tt == -1:
                 imsave(
                     self.config["OutputDir"]
                     + os.sep
@@ -687,7 +703,7 @@ class Model(pytorch_lightning.LightningModule):
                     + os.sep
                     + pathlib.PurePosixPath(fn).stem
                     + "_T_"
-                    + f"{tt[0]:03}"
+                    + f"{tt:03}"
                     + "_struct_segmentation.tiff",
                     out,
                 )
@@ -839,7 +855,8 @@ class DataModule(pytorch_lightning.LightningDataModule):
 
     def test_dataloader(self):
         test_set_loader = DataLoader(
-            TestDataset(self.config),
+            # TestDataset(self.config),
+            RNDTestLoad(self.config),
             batch_size=1,
             shuffle=False,
             num_workers=self.config["NumWorkers"],
