@@ -166,7 +166,7 @@ def sliding_window_inference(
         seg_prob = predictor(window_data, *args, **kwargs)
 
         # old models output a list of three predictions
-        if "unet_xy" in model_name:
+        if "unet_xy" in model_name and isinstance(seg_prob, list):
             seg_prob = seg_prob[0]
             seg_prob = torch.softmax(seg_prob, dim=1)
             seg_prob = seg_prob.view(

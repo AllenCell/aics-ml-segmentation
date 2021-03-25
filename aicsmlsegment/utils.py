@@ -101,6 +101,26 @@ MODEL_PARAMETERS = {
         "Optional": [],
         "Required": ["nchannel", "nclass", "size_in", "size_out", "zoom_ratio"],
     },
+    "unet_xy_zoom_0pad_stridedconv": {
+        "Optional": [],
+        "Required": ["nchannel", "nclass", "size_in", "size_out", "zoom_ratio"],
+    },
+    "unet_xy_zoom_0pad_nopadz_stridedconv": {
+        "Optional": [],
+        "Required": ["nchannel", "nclass", "size_in", "size_out", "zoom_ratio"],
+    },
+    "unet_xy_zoom_stridedconv": {
+        "Optional": [],
+        "Required": ["nchannel", "nclass", "size_in", "size_out", "zoom_ratio"],
+    },
+    "unet_xy_zoom_dilated": {
+        "Optional": [],
+        "Required": ["nchannel", "nclass", "size_in", "size_out", "zoom_ratio"],
+    },
+    "sdunet_xy": {
+        "Optional": [],
+        "Required": ["nchannel", "nclass", "size_in", "size_out"],
+    },
     "unet": {
         "Optional": [
             "kernel_size",
