@@ -1,7 +1,8 @@
 import pytorch_lightning
 import argparse
 from aicsmlsegment.utils import load_config, get_logger
-from aicsmlsegment.monai_utils import Model, DataModule
+from aicsmlsegment.monai_utils import Model
+from aicsmlsegment.DataLoader3D import DataModule
 from pytorch_lightning.callbacks import ModelCheckpoint
 import os
 
@@ -39,10 +40,6 @@ def main():
     if not os.path.exists(checkpoint_dir):
         os.makedirs(checkpoint_dir)
 
-    GPU = pytorch_lightning.callbacks.GPUStatsMonitor(
-        intra_step_time=True, inter_step_time=True
-    )
-    LR = pytorch_lightning.callbacks.LearningRateMonitor(logging_interval="epoch")
     # model checkpoint every n epochs
     MC = ModelCheckpoint(
         dirpath=checkpoint_dir,
@@ -50,7 +47,7 @@ def main():
         period=config["save_every_n_epoch"],
         save_top_k=-1,
     )
-    callbacks = [MC, LR, GPU]
+    callbacks = [MC]
 
     callbacks_config = config["callbacks"]
     if callbacks_config["name"] == "EarlyStopping":
@@ -86,6 +83,10 @@ def main():
         from pytorch_lightning.callbacks import LearningRateMonitor
 
         logger = pytorch_lightning.loggers.TensorBoardLogger(config["tensorboard"])
+        GPU = pytorch_lightning.callbacks.GPUStatsMonitor(
+            intra_step_time=True, inter_step_time=True
+        )
+        callbacks.append(GPU)
         callbacks.append(LearningRateMonitor(logging_interval="epoch"))
 
     else:
