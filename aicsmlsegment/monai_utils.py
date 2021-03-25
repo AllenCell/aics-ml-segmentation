@@ -1,5 +1,4 @@
 import pytorch_lightning
-from torch.utils.data import DataLoader
 from torch.optim import Adam
 import torch
 import monai.losses as MonaiLosses
@@ -13,18 +12,13 @@ from aicsmlsegment.model_utils import (
     apply_on_image,
 )
 from aicsmlsegment.DataLoader3D.Universal_Loader import (
-    UniversalDataset,
-    TestDataset,
-    RNDTestLoad,
     minmax,
     undo_resize,
 )
 from aicsmlsegment.utils import compute_iou
 
 from monai.metrics import DiceMetric
-import random
 import numpy as np
-from glob import glob
 from skimage.io import imsave
 from skimage.morphology import remove_small_objects
 import os
@@ -113,7 +107,9 @@ def get_loss_criterion(config: Dict):
     elif name == "Aux":
         return (
             CustomLosses.MultiAuxillaryElementNLLLoss(
-                3, config["loss"]["loss_weight"], config["model"]["nclass"]
+                len(config["model"]["nclass"]),
+                config["loss"]["loss_weight"],
+                config["model"]["nclass"],
             ),
             True,
             None,
@@ -183,73 +179,29 @@ class Model(pytorch_lightning.LightningModule):
 
         self.model_name = config["model"]["name"]
         self.model_config = model_config
-        if self.model_name == "unet_xy":
-            from aicsmlsegment.Net3D.unet_xy import UNet3D as DNN
-            from aicsmlsegment.model_utils import weights_init
 
-            model = DNN(model_config["nchannel"], model_config["nclass"])
-            self.model = model.apply(weights_init)
-            self.args_inference["size_in"] = config["model"]["size_in"]
-            self.args_inference["size_out"] = config["model"]["size_out"]
-            self.args_inference["nclass"] = config["model"]["nclass"]
+        if "unet_xy" in self.model_name:
+            import importlib
+            from aicsmlsegment.model_utils import weights_init as weights_init
 
-        elif self.model_name == "unet_xy_zoom_0pad":
-            from aicsmlsegment.Net3D.unet_xy_enlarge_0pad import UNet3D as DNN
-            from aicsmlsegment.model_utils import weights_init
+            module = importlib.import_module("aicsmlsegment.Net3D." + self.model_name)
+            init_args = {
+                "in_channel": model_config["nchannel"],
+                "n_classes": model_config["nclass"],
+                "test_mode": not train,
+            }
+            if self.model_name == "sdunet":
+                init_args["loss"] = config["loss"]["name"]
 
-            model = DNN(
-                model_config["nchannel"],
-                model_config["nclass"],
-                model_config.get("zoom_ratio", 3),
-            )
-            self.model = model.apply(weights_init)
-            self.args_inference["size_in"] = config["model"]["size_in"]
-            self.args_inference["size_out"] = config["model"]["size_out"]
-            self.args_inference["nclass"] = config["model"]["nclass"]
-        elif self.model_name == "unet_xy_zoom":
-            from aicsmlsegment.Net3D.unet_xy_enlarge import UNet3D as DNN
-            from aicsmlsegment.model_utils import weights_init
+            if "zoom" in self.model_name:
+                init_args["down_ratio"] = model_config.get("zoom_ratio", 3)
 
-            model = DNN(
-                model_config["nchannel"],
-                model_config["nclass"],
-                model_config.get("zoom_ratio", 3),
-            )
-            self.model = model.apply(weights_init)
-            self.args_inference["size_in"] = config["model"]["size_in"]
-            self.args_inference["size_out"] = config["model"]["size_out"]
-            self.args_inference["nclass"] = config["model"]["nclass"]
-            ###RND
-        elif self.model_name == "unet_xy_zoom_0pad_stridedconv":
-            from aicsmlsegment.Net3D.unet_xy_enlarge_0pad_stridedconv import (
-                UNet3D as DNN,
-            )
-            from aicsmlsegment.model_utils import weights_init
+            model = getattr(module, "UNet3D")
+            self.model = model(**init_args).apply(weights_init)
 
-            model = DNN(
-                model_config["nchannel"],
-                model_config["nclass"],
-                model_config.get("zoom_ratio", 3),
-            )
-            self.model = model.apply(weights_init)
-            self.args_inference["size_in"] = config["model"]["size_in"]
-            self.args_inference["size_out"] = config["model"]["size_out"]
-            self.args_inference["nclass"] = config["model"]["nclass"]
-        elif self.model_name == "unet_xy_zoom_stridedconv":
-            from aicsmlsegment.Net3D.unet_xy_enlarge_stridedconv import (
-                UNet3D as DNN,
-            )
-            from aicsmlsegment.model_utils import weights_init
-
-            model = DNN(
-                model_config["nchannel"],
-                model_config["nclass"],
-                model_config.get("zoom_ratio", 3),
-            )
-            self.model = model.apply(weights_init)
-            self.args_inference["size_in"] = config["model"]["size_in"]
-            self.args_inference["size_out"] = config["model"]["size_out"]
-            self.args_inference["nclass"] = config["model"]["nclass"]
+            self.args_inference["size_in"] = model_config["size_in"]
+            self.args_inference["size_out"] = model_config["size_out"]
+            self.args_inference["nclass"] = model_config["nclass"]
 
         else:  # monai model
             if self.model_name == "segresnetvae":
@@ -270,13 +222,13 @@ class Model(pytorch_lightning.LightningModule):
                 # deal with monai name scheme - module name != class name for networks
                 net_name = [attr for attr in dir(module) if "Net" in attr][0]
                 model = getattr(module, net_name)
+            # monai model assumes same size for input and output
+            self.args_inference["size_in"] = model_config["patch_size"]
+            self.args_inference["size_out"] = model_config["patch_size"]
 
             del model_config["patch_size"]
 
             self.model = model(**model_config)
-            # monai model assumes same size for input and output
-            self.args_inference["size_in"] = config["model"]["patch_size"]
-            self.args_inference["size_out"] = config["model"]["patch_size"]
 
         self.config = config
         self.aggregate_img = None
@@ -423,7 +375,9 @@ class Model(pytorch_lightning.LightningModule):
         targets = batch[1]
         outputs = self(inputs)
 
-        if "unet_xy" in self.model_name:  # old segmenter
+        if ("unet_xy" in self.model_name and "sdu" not in self.model_name) or (
+            "sdu" in self.model_name and self.config["loss"]["name"] == "Aux"
+        ):  # old segmenter
             cmap = batch[2]
             loss = self.loss_function(outputs, targets, cmap)
             self.log(
@@ -483,8 +437,8 @@ class Model(pytorch_lightning.LightningModule):
                     outputs[:, self.args_inference["OutputCh"], :, :, :], dim=1
                 )  # add back in channel dimension to match targets
 
-        if isinstance(
-            outputs, list
+        if (
+            isinstance(outputs, list) and self.model_name == "dynunet"
         ):  # average loss across deep supervision heads for dynunet w/ deep supervision
             if self.accepts_costmap:
                 cmap = batch[2]
@@ -708,158 +662,3 @@ class Model(pytorch_lightning.LightningModule):
                     out,
                 )
             # self.log("", 0, on_step=False, on_epoch=False)
-
-
-class DataModule(pytorch_lightning.LightningDataModule):
-    def __init__(self, config, train=True):
-        super().__init__()
-        self.config = config
-        self.model_name = config["model"]["name"]
-
-        if train:
-            self.loader_config = config["loader"]
-            self.model_config = config["model"]
-
-            name = config["loader"]["name"]
-            if name not in ["default", "focus"]:
-                print("other loaders are under construction")
-                quit()
-            if name == "focus":
-                self.check_crop = True
-            else:
-                self.check_crop = False
-            self.transforms = []
-            if "Transforms" in self.loader_config:
-                self.transforms = self.loader_config["Transforms"]
-
-            (
-                _,
-                self.accepts_costmap,
-                _,
-            ) = get_loss_criterion(config)
-
-    def prepare_data(self):
-        pass
-
-    def setup(self, stage):
-        if stage == "fit":  # no setup is required for testing
-            # load settings #
-            config = self.config
-
-            # get validation and training filenames from input dir from config
-            validation_config = config["validation"]
-            loader_config = config["loader"]
-            if validation_config["metric"] is not None:
-                print("Preparing train/validation split...", end=" ")
-                filenames = glob(loader_config["datafolder"] + "/*_GT.ome.tif")
-                filenames.sort()
-                total_num = len(filenames)
-                LeaveOut = validation_config["leaveout"]
-                if len(LeaveOut) == 1:
-                    if LeaveOut[0] > 0 and LeaveOut[0] < 1:
-                        num_train = int(np.floor((1 - LeaveOut[0]) * total_num))
-                        shuffled_idx = np.arange(total_num)
-                        random.shuffle(shuffled_idx)
-                        train_idx = shuffled_idx[:num_train]
-                        valid_idx = shuffled_idx[num_train:]
-                    else:
-                        valid_idx = [int(LeaveOut[0])]
-                        train_idx = list(
-                            set(range(total_num)) - set(map(int, LeaveOut))
-                        )
-                elif LeaveOut:
-                    valid_idx = list(map(int, LeaveOut))
-                    train_idx = list(set(range(total_num)) - set(valid_idx))
-                valid_filenames = []
-                train_filenames = []
-                # remove file extensions from filenames
-                for fi, fn in enumerate(valid_idx):
-                    valid_filenames.append(filenames[fn][:-11])
-                for fi, fn in enumerate(train_idx):
-                    train_filenames.append(filenames[fn][:-11])
-
-                self.valid_filenames = valid_filenames
-                self.train_filenames = train_filenames
-                print("Done.")
-
-            else:
-                print("need validation in config file")
-                quit()
-
-    def train_dataloader(self):
-        print("Initializing train dataloader: ", end=" ")
-        loader_config = self.loader_config
-        model_config = self.model_config
-
-        if "unet_xy" in self.model_name:
-            size_in = model_config["size_in"]
-            size_out = model_config["size_out"]
-            nchannel = model_config["nchannel"]
-
-        else:
-            size_in = model_config["patch_size"]
-            size_out = size_in
-            nchannel = model_config["in_channels"]
-
-        train_set_loader = DataLoader(
-            UniversalDataset(
-                self.train_filenames,
-                loader_config["PatchPerBuffer"],
-                size_in,
-                size_out,
-                nchannel,
-                use_costmap=self.accepts_costmap,
-                transforms=self.transforms,
-                patchize=True,
-                check_crop=self.check_crop,
-            ),
-            batch_size=loader_config["batch_size"],
-            shuffle=True,
-            num_workers=loader_config["NumWorkers"],
-            pin_memory=True,
-        )
-        return train_set_loader
-
-    def val_dataloader(self):
-        print("Initializing validation dataloader: ", end=" ")
-        loader_config = self.loader_config
-        model_config = self.model_config
-
-        if "unet_xy" in self.model_name:
-            size_in = model_config["size_in"]
-            size_out = model_config["size_out"]
-            nchannel = model_config["nchannel"]
-
-        else:
-            size_in = model_config["patch_size"]
-            size_out = size_in
-            nchannel = model_config["in_channels"]
-
-        val_set_loader = DataLoader(
-            UniversalDataset(
-                self.valid_filenames,
-                loader_config["PatchPerBuffer"],
-                size_in,
-                size_out,
-                nchannel,
-                transforms=[],  # no transforms for validation data
-                use_costmap=self.accepts_costmap,
-                patchize=False,  # validate on entire image
-            ),
-            batch_size=loader_config["batch_size"],
-            shuffle=False,
-            num_workers=loader_config["NumWorkers"],
-            pin_memory=True,
-        )
-        return val_set_loader
-
-    def test_dataloader(self):
-        test_set_loader = DataLoader(
-            # TestDataset(self.config),
-            RNDTestLoad(self.config),
-            batch_size=1,
-            shuffle=False,
-            num_workers=self.config["NumWorkers"],
-            pin_memory=True,
-        )
-        return test_set_loader
