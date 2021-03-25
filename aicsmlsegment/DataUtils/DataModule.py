@@ -1,4 +1,4 @@
-from aicsmlsegment.DataLoader3D.Universal_Loader import (
+from aicsmlsegment.DataUtils.Universal_Loader import (
     UniversalDataset,
     TestDataset,
     RNDTestLoad,
@@ -7,7 +7,7 @@ import random
 from glob import glob
 from torch.utils.data import DataLoader
 import pytorch_lightning
-from aicsmlsegment.monai_utils import get_loss_criterion
+from aicsmlsegment.Model import get_loss_criterion
 import numpy as np
 
 

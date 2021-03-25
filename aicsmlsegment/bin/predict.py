@@ -4,8 +4,8 @@ import argparse
 from aicsmlsegment.utils import (
     load_config,
 )
-from aicsmlsegment.monai_utils import Model
-from aicsmlsegment.DataLoader3D import DataModule
+from aicsmlsegment.Model import Model
+from aicsmlsegment.DataUtils import DataModule
 import pytorch_lightning
 import os
 

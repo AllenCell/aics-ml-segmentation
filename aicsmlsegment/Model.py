@@ -11,7 +11,7 @@ from aicsmlsegment.model_utils import (
     model_inference,
     apply_on_image,
 )
-from aicsmlsegment.DataLoader3D.Universal_Loader import (
+from aicsmlsegment.DataUtils.Universal_Loader import (
     minmax,
     undo_resize,
 )
@@ -184,7 +184,9 @@ class Model(pytorch_lightning.LightningModule):
             import importlib
             from aicsmlsegment.model_utils import weights_init as weights_init
 
-            module = importlib.import_module("aicsmlsegment.Net3D." + self.model_name)
+            module = importlib.import_module(
+                "aicsmlsegment.NetworkArchitecture." + self.model_name
+            )
             init_args = {
                 "in_channel": model_config["nchannel"],
                 "n_classes": model_config["nclass"],
@@ -209,9 +211,9 @@ class Model(pytorch_lightning.LightningModule):
 
                 model_config["input_image_size"] = model_config["patch_size"]
             elif self.model_name == "extended_vnet":
-                from aicsmlsegment.Net3D.vnet import VNet as model
+                from aicsmlsegment.NetworkArchitecture.vnet import VNet as model
             elif self.model_name == "extended_dynunet":
-                from aicsmlsegment.Net3D.dynunet import DynUNet as model
+                from aicsmlsegment.NetworkArchitecture.dynunet import DynUNet as model
 
             else:
                 import importlib
@@ -661,4 +663,3 @@ class Model(pytorch_lightning.LightningModule):
                     + "_struct_segmentation.tiff",
                     out,
                 )
-            # self.log("", 0, on_step=False, on_epoch=False)
