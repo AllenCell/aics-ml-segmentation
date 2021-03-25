@@ -2,7 +2,7 @@ import pytorch_lightning
 import argparse
 from aicsmlsegment.utils import load_config, get_logger
 from aicsmlsegment.Model import Model
-from aicsmlsegment.DataUtils import DataModule
+from aicsmlsegment.DataUtils.DataMod import DataModule
 from pytorch_lightning.callbacks import ModelCheckpoint
 import os
 

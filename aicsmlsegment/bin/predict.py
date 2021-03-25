@@ -5,7 +5,7 @@ from aicsmlsegment.utils import (
     load_config,
 )
 from aicsmlsegment.Model import Model
-from aicsmlsegment.DataUtils import DataModule
+from aicsmlsegment.DataUtils.DataMod import DataModule
 import pytorch_lightning
 import os
 
