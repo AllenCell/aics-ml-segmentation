@@ -616,7 +616,6 @@ class TestDataset_load_at_runtime(Dataset):
 
 def patchize_wrapper(pr, fn, img, patch_size, tt, timelapse):
     if pr == [1, 1, 1]:
-        print("No patches for", fn)
         return_dict = {
             "fn": [fn] if timelapse else fn,
             "img": [img] if timelapse else img,
@@ -639,7 +638,6 @@ def patchize_wrapper(pr, fn, img, patch_size, tt, timelapse):
             "save_n_batches": save_n_batches,
             "tt": [tt] * save_n_batches,
         }
-        print("split", fn, "into", save_n_batches, "batches")
     return return_dict
 
 
