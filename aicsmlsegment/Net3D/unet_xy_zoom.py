@@ -8,9 +8,12 @@ class UNet3D(nn.Module):
     unet_xy_zoom, see Figure 20 in https://www.biorxiv.org/content/10.1101/491035v2
     """
 
-    def __init__(self, in_channel, n_classes, down_ratio, batchnorm_flag=True):
+    def __init__(
+        self, in_channel, n_classes, down_ratio, batchnorm_flag=True, test_mode=True
+    ):
         self.in_channel = in_channel
         self.n_classes = n_classes
+        self.test_mode = test_mode
         super(UNet3D, self).__init__()
 
         k = down_ratio
@@ -254,6 +257,9 @@ class UNet3D(nn.Module):
         ).contiguous()  # move the class channel to the last dimension
         p0_final = p0_final.view(p0_final.numel() // self.numClass, self.numClass)
         p0_final = self.softmax(p0_final, dim=1)
+
+        if self.test_mode:
+            return [p0_final]
 
         p1a = F.pad(
             self.predict1a(self.conv1a(self.up1a(u1))),

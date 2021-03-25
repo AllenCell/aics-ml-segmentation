@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 class UNet3D(nn.Module):
-    def __init__(self, in_channel, n_classes, batchnorm_flag=True):
+    def __init__(self, in_channel, n_classes, test_mode, batchnorm_flag=True):
         self.in_channel = in_channel
         self.n_classes = n_classes
         super(UNet3D, self).__init__()
