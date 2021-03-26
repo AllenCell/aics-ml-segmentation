@@ -77,6 +77,7 @@ DEFAULT_CONFIG = {
     "large_image_resize": None,
     "callbacks": {"name": None},
     "precision": 32,
+    "large_image_resize": [1, 1, 1],
 }
 
 MODEL_PARAMETERS = {

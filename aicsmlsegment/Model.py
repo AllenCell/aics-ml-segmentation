@@ -180,7 +180,7 @@ class Model(pytorch_lightning.LightningModule):
         self.model_name = config["model"]["name"]
         self.model_config = model_config
 
-        if "unet_xy" in self.model_name:
+        if "unet_xy" in self.model_name:  # custom model
             import importlib
             from aicsmlsegment.model_utils import weights_init as weights_init
 
@@ -192,7 +192,7 @@ class Model(pytorch_lightning.LightningModule):
                 "n_classes": model_config["nclass"],
                 "test_mode": not train,
             }
-            if self.model_name == "sdunet":
+            if self.model_name == "sdunet_xy":
                 init_args["loss"] = config["loss"]["name"]
 
             if "zoom" in self.model_name:
@@ -268,7 +268,7 @@ class Model(pytorch_lightning.LightningModule):
             self.args_inference["inference_batch_size"] = config["batch_size"]
             self.args_inference["mode"] = config["mode"]["name"]
             self.args_inference["Threshold"] = config["Threshold"]
-            if config["large_image_resize"] is not None:
+            if config["large_image_resize"] != [1, 1, 1]:
                 self.aggregate_img = {}
                 self.count_map = {}
         self.save_hyperparameters()
@@ -371,6 +371,9 @@ class Model(pytorch_lightning.LightningModule):
         else:
             print("no scheduler is used")
             return optims
+
+    def upsample(desired_shape, input):
+        return input
 
     def training_step(self, batch, batch_idx):
         inputs = batch[0]
