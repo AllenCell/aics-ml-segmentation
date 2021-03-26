@@ -2,6 +2,7 @@ import numpy as np
 import random
 from torch import from_numpy
 import torch
+import time
 from aicsimageio import AICSImage
 from aicsmlsegment.utils import (
     image_normalization,
@@ -82,7 +83,7 @@ def validate_shape(img, n_channel, filename):
     return img
 
 
-def load_img(filename, img_type, n_channel, input_ch=None):
+def load_img(filename, img_type, n_channel=1, input_ch=None, shape_only=False):
     """
     General function to load and rearrange the dimensions of 3D images
     input:
@@ -101,6 +102,8 @@ def load_img(filename, img_type, n_channel, input_ch=None):
     }
 
     reader = AICSImage(filename + extension_dict[img_type])
+    if shape_only:
+        return reader.shape
     if img_type in ["label", "input"]:
         img = reader.get_image_data("CZYX", S=0, T=0)
         img = validate_shape(img, n_channel, filename)
@@ -636,7 +639,7 @@ def patchize_wrapper(pr, fn, img, patch_size, tt, timelapse):
             "im_shape": [img.shape] * len(imgs),
             "ijk": ijk,
             "save_n_batches": save_n_batches,
-            "tt": [tt] * save_n_batches,
+            "tt": [tt] * save_n_batches if timelapse else [-1] * save_n_batches,
         }
     return return_dict
 
@@ -657,17 +660,28 @@ def pad_image(image, size_in, size_out, precision):
     return image
 
 
+def get_timepoints(filenames):
+    timepoints = [load_img(fn, "test", shape_only=True)[1] for fn in filenames]
+    return timepoints
+
+
 class RNDTestLoad(Dataset):
     def __init__(self, config):
+        # import multiprocessing as mp
+
+        # manager = mp.Manager()
+
+        # self.context = mp.get_context()
+        # print(self.context)
+        # print(mp.current_process(), mp.parent_process())
         self.config = config
         self.inf_config = config["mode"]
         self.model_config = config["model"]
         self.precision = config["precision"]
         self.patchize_ratio = config["large_image_resize"]
+        self.patches_per_image = np.prod(self.patchize_ratio)
         self.load_type = "test"
         self.timelapse = False
-        if self.patchize_ratio is None:
-            self.patchize_ratio = [1, 1, 1]
 
         try:  # monai
             self.patch_size = self.model_config["patch_size"]
@@ -678,7 +692,7 @@ class RNDTestLoad(Dataset):
 
         if self.inf_config["name"] == "file":
             filenames = [self.inf_config["InputFile"]]
-            if "timelapse" in self.inf_config and self.inf_config["timelapse"] == True:
+            if "timelapse" in self.inf_config and self.inf_config["timelapse"]:
                 self.load_type = "timelapse"
                 self.timelapse = True
         else:
@@ -689,19 +703,59 @@ class RNDTestLoad(Dataset):
             )
             filenames.sort()
         print("Files to be processed:", filenames)
+        tp_per_image = get_timepoints(filenames)
+
+        children_per_image = np.array(tp_per_image) * self.patches_per_image
+        parent_indices = list(np.cumsum(children_per_image))
+        self.total_n_images = parent_indices.pop(-1)
+        parent_indices = [0] + parent_indices
+
+        # self.image_info = manager.dict()
+        # self.image_info["is_parent"] = [False] * self.total_n_images
+
+        # for key in ["fn", "ijk", "im_shape", "img", "tt"]:
+        # self.image_info[key] = [None] * self.total_n_images
 
         self.image_info = {
-            "fn": filenames,
-            "ijk": [None] * len(filenames),
-            "im_shape": [None] * len(filenames),
-            "img": [None] * len(filenames),
-            "tt": [None] * len(filenames),
+            "fn": [None] * self.total_n_images,
+            "ijk": [None] * self.total_n_images,
+            "im_shape": [None] * self.total_n_images,
+            "img": [None] * self.total_n_images,
+            "tt": [None] * self.total_n_images,
+            "is_parent": [False] * self.total_n_images,
         }
+
+        for idx, fn in zip(parent_indices, filenames):
+            self.image_info["is_parent"][idx] = True
+            self.image_info["fn"][idx] = fn
+
+        # print(self.image_info["is_parent"])
         self.save_n_batches = None
 
+    def clear_info(self, index):
+        # don't have to keep large image info after image has been returned
+        for key in self.image_info:
+            if key not in ["fn", "is_parent"]:
+                self.image_info[key][index] = None
+
     def __getitem__(self, index):
+        # print([fn[-20:] if fn is not None else fn for fn in self.image_info["fn"]])
         fn = self.image_info["fn"][index]
         if self.image_info["img"][index] is None:  # image hasn't been loaded yet
+            # # wait for another worker to produce child info
+            # if not self.image_info["is_parent"][index]:
+            #     timeout = 60 * 1  # 20  minutes for large image normalization
+            #     print(index, end=" ")
+            #     end_time = time.time() + timeout
+            #     print("waiting....")
+            #     while self.image_info["img"][index] is None and time.time() < end_time:
+            #         time.sleep(1)
+            #     if time.time() > end_time:
+            #         print(index, "TIMED OUT")
+            #     else:
+            #         print(index, "OTHER WORKER LOADED IMG")
+            #         print(self.image_info["fn"])
+
             imgs = load_img(fn, self.load_type, self.nchannel, self.config["InputCh"])
             # only one image unless timelapse
             for tt, img in enumerate(imgs):
@@ -718,17 +772,21 @@ class RNDTestLoad(Dataset):
                 )
                 self.save_n_batches = img_info["save_n_batches"]
                 #                    timelapse     or patchize
+
                 children_generated = len(imgs) > 1 or self.save_n_batches > 1
                 if children_generated:
                     # add children to queue of images, remove parent from queue
                     return_dict = {}
                     for key in self.image_info:
-                        if tt == 0:
-                            del self.image_info[key][index]
+                        if key == "is_parent":
+                            continue
                         # return first child image
                         return_dict[key] = img_info[key][0]
                         # add child images next in list
-                        self.image_info[key][index + tt : index + tt] = img_info[key]
+                        start_index = index + tt * self.patches_per_image
+                        self.image_info[key][
+                            start_index : start_index + len(img_info[key])
+                        ] = img_info[key]
                 else:
                     return_dict = img_info
                 return_dict["save_n_batches"] = self.save_n_batches
@@ -738,10 +796,13 @@ class RNDTestLoad(Dataset):
                     self.model_config["size_out"],
                     self.precision,
                 )
+                # print("Returning parent at", index)
+                self.clear_info(index)
                 return return_dict
 
         else:
-            return {
+            # print("Returning child at", index)
+            return_dict = {
                 "img": pad_image(
                     self.image_info["img"][index],
                     self.model_config["size_in"],
@@ -754,6 +815,8 @@ class RNDTestLoad(Dataset):
                 "save_n_batches": self.save_n_batches,
                 "im_shape": self.image_info["im_shape"][index],
             }
+            self.clear_info(index)
+            return return_dict
 
     def __len__(self):
-        return len(self.image_info["fn"]) * np.prod(self.patchize_ratio)
+        return self.total_n_images
