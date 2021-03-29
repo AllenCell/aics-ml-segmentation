@@ -14,6 +14,7 @@ from aicsmlsegment.model_utils import (
 from aicsmlsegment.DataUtils.Universal_Loader import (
     minmax,
     undo_resize,
+    UniversalDataset,
 )
 from aicsmlsegment.utils import compute_iou
 
@@ -23,6 +24,7 @@ from skimage.io import imsave
 from skimage.morphology import remove_small_objects
 import os
 import pathlib
+from torch.utils.data import DataLoader
 
 SUPPORTED_LOSSES = [
     "Dice",
@@ -47,6 +49,8 @@ SUPPORTED_METRICS = [
     "default",
     "Dice",
 ]
+
+DATASET_PARAMS = None
 
 
 def get_loss_criterion(config: Dict):
@@ -239,6 +243,7 @@ class Model(pytorch_lightning.LightningModule):
             self.datapath = loader_config["datafolder"]
             self.nworkers = loader_config["NumWorkers"]
             self.batchsize = loader_config["batch_size"]
+            self.epoch_shuffle = loader_config["epoch_shuffle"]
 
             validation_config = config["validation"]
             self.leaveout = validation_config["leaveout"]
@@ -256,7 +261,6 @@ class Model(pytorch_lightning.LightningModule):
                 self.loss_weight,
             ) = get_loss_criterion(config)
             self.metric = get_metric(config)
-
             self.scheduler_params = config["scheduler"]
 
         else:
@@ -374,6 +378,19 @@ class Model(pytorch_lightning.LightningModule):
 
     def upsample(desired_shape, input):
         return input
+
+    def on_train_epoch_start(self):
+        global DATASET_PARAMS
+        if self.current_epoch == 0:
+            DATASET_PARAMS = self.train_dataloader().dataset.get_params()
+        if self.current_epoch > 0 and self.current_epoch % self.epoch_shuffle == 0:
+            self.train_dataloader = DataLoader(
+                UniversalDataset(**DATASET_PARAMS),
+                batch_size=self.config["loader"]["batch_size"],
+                shuffle=True,
+                num_workers=self.config["loader"]["NumWorkers"],
+                pin_memory=True,
+            )
 
     def training_step(self, batch, batch_idx):
         inputs = batch[0]
@@ -537,7 +554,6 @@ class Model(pytorch_lightning.LightningModule):
         if "unet_xy" in self.model_name:
             costmap = batch[2]
             costmap = torch.unsqueeze(costmap, dim=1)
-            # costmap = torch.ones(label.shape)
             val_loss = compute_iou(outputs > 0.5, label, costmap)
             self.log("val_iou", val_loss, sync_dist=True, on_epoch=True, prog_bar=True)
             return

@@ -76,10 +76,12 @@ def undo_resize(img, config):
 
 def validate_shape(img, n_channel, filename):
     # Legacy aicsimageio fix - image stored as zcyx instead of czyx
+    # img = np.transpose(img, (0, 2, 1, 3, 4))
+    # img = np.squeeze(img, 0)
     if img.shape[0] != n_channel and img.shape[1] == n_channel:
-        print(img.shape)
+        print("Bad AICSImage Metadata in", filename, img.shape, end=" ")
         img = np.swapaxes(img, 0, 1)
-        print(filename, "RESHAPE TO:", img.shape)
+        print("RESHAPE TO:", img.shape)
     return img
 
 
@@ -100,7 +102,6 @@ def load_img(filename, img_type, n_channel=1, input_ch=None, shape_only=False):
         "test": "",
         "timelapse": "",
     }
-
     reader = AICSImage(filename + extension_dict[img_type])
     if shape_only:
         return reader.shape
@@ -108,7 +109,9 @@ def load_img(filename, img_type, n_channel=1, input_ch=None, shape_only=False):
         img = reader.get_image_data("CZYX", S=0, T=0)
         img = validate_shape(img, n_channel, filename)
     elif img_type == "costmap":
-        img = reader.get_image_data("ZYX", S=0, T=0, C=0)
+        img = reader.get_image_data("CZYX", S=0, T=0)
+        img = validate_shape(img, n_channel, filename)
+        img = np.squeeze(img, 0)  # remove channel dimension
     elif img_type == "test":
         img = reader.get_image_data("CZYX", S=0, T=0, C=input_ch).astype(float)
         img = validate_shape(img, n_channel, filename)
@@ -156,11 +159,22 @@ class UniversalDataset(Dataset):
             patchize: whether to divide image into patches
             check_crop: whether to check
         """
-        print("Generating samples...", end=" ")
         self.img = []
         self.gt = []
         self.cmap = []
         self.transforms = transforms
+
+        self.parameters = {
+            "filenames": filenames,
+            "num_patch": num_patch,
+            "size_in": size_in,
+            "size_out": size_out,
+            "n_channel": n_channel,
+            "use_costmap": use_costmap,
+            "transforms": transforms,
+            "patchize": patchize,
+            "check_crop": check_crop,
+        }
         num_data = len(filenames)
         shuffle(filenames)
         num_patch_per_img = np.zeros((num_data,), dtype=int)
@@ -268,6 +282,21 @@ class UniversalDataset(Dataset):
                                     print("Failed to generate valid crops")
                                     break
                                 continue
+                            # if (
+                            #     0.1
+                            #     < np.mean(
+                            #         label[
+                            #             :,
+                            #             pz : pz + size_out[0],
+                            #             py : py + size_out[1],
+                            #             px : px + size_out[2],
+                            #         ]
+                            #     )
+                            #     < 0.7
+                            # ):
+                            #     print("Not ENOUGH GT, Skipping crop")
+                            #     continue
+
                         # confirmed good crop
                     (self.img).append(
                         raw[
@@ -295,7 +324,6 @@ class UniversalDataset(Dataset):
                 (self.img).append(raw)
                 (self.gt).append(label)
                 (self.cmap).append(costmap)
-        print("Done.")
 
     def __getitem__(self, index):
         # converting to tensor in get item prevents conversion to double tensor
@@ -311,6 +339,9 @@ class UniversalDataset(Dataset):
 
     def __len__(self):
         return len(self.img)
+
+    def get_params(self):
+        return self.parameters
 
 
 def patchize(img, pr, patch_size):
@@ -644,7 +675,7 @@ def patchize_wrapper(pr, fn, img, patch_size, tt, timelapse):
     return return_dict
 
 
-def pad_image(image, size_in, size_out, precision):
+def pad_image(image, size_in, size_out):
     padding = [(x - y) // 2 for x, y in zip(size_in, size_out)]
     image = np.pad(
         image,
@@ -684,10 +715,13 @@ class RNDTestLoad(Dataset):
         self.timelapse = False
 
         try:  # monai
-            self.patch_size = self.model_config["patch_size"]
+            self.size_in = self.model_config["patch_size"]
+            self.size_out = self.model_config["patch_size"]
             self.nchannel = self.model_config["in_channels"]
         except KeyError:  # unet_xy_zoom
-            self.patch_size = self.model_config["size_in"]
+            self.size_in = self.model_config["size_in"]
+            self.size_out = self.model_config["size_out"]
+
             self.nchannel = self.model_config["nchannel"]
 
         if self.inf_config["name"] == "file":
@@ -704,6 +738,7 @@ class RNDTestLoad(Dataset):
             filenames.sort()
         print("Files to be processed:", filenames)
         tp_per_image = get_timepoints(filenames)
+        tp_per_image = [1]
 
         children_per_image = np.array(tp_per_image) * self.patches_per_image
         parent_indices = list(np.cumsum(children_per_image))
@@ -766,7 +801,7 @@ class RNDTestLoad(Dataset):
                     self.patchize_ratio,
                     fn,
                     img,
-                    self.patch_size,
+                    self.size_in,
                     tt,
                     self.timelapse,
                 )
@@ -791,10 +826,7 @@ class RNDTestLoad(Dataset):
                     return_dict = img_info
                 return_dict["save_n_batches"] = self.save_n_batches
                 return_dict["img"] = pad_image(
-                    return_dict["img"],
-                    self.model_config["size_in"],
-                    self.model_config["size_out"],
-                    self.precision,
+                    return_dict["img"], self.size_in, self.size_out
                 )
                 # print("Returning parent at", index)
                 self.clear_info(index)
@@ -804,10 +836,7 @@ class RNDTestLoad(Dataset):
             # print("Returning child at", index)
             return_dict = {
                 "img": pad_image(
-                    self.image_info["img"][index],
-                    self.model_config["size_in"],
-                    self.model_config["size_out"],
-                    self.precision,
+                    self.image_info["img"][index], self.size_in, self.size_out
                 ),
                 "fn": self.image_info["fn"][index],
                 "tt": self.image_info["tt"][index],
