@@ -76,12 +76,8 @@ def undo_resize(img, config):
 
 def validate_shape(img, n_channel, filename):
     # Legacy aicsimageio fix - image stored as zcyx instead of czyx
-    # img = np.transpose(img, (0, 2, 1, 3, 4))
-    # img = np.squeeze(img, 0)
     if img.shape[0] != n_channel and img.shape[1] == n_channel:
-        print("Bad AICSImage Metadata in", filename, img.shape, end=" ")
         img = np.swapaxes(img, 0, 1)
-        print("RESHAPE TO:", img.shape)
     return img
 
 
@@ -113,8 +109,9 @@ def load_img(filename, img_type, n_channel=1, input_ch=None, shape_only=False):
         img = validate_shape(img, n_channel, filename)
         img = np.squeeze(img, 0)  # remove channel dimension
     elif img_type == "test":
-        img = reader.get_image_data("CZYX", S=0, T=0, C=input_ch).astype(float)
+        img = reader.get_image_data("CZYX", S=0, T=0).astype(float)
         img = validate_shape(img, n_channel, filename)
+        img = img[input_ch, :, :, :]
         return [img]  # return as list so we can iterate through it in test dataloader
     elif img_type == "timelapse":
         assert reader.shape[1] > 1, "not a timelapse, check your data"
@@ -698,13 +695,6 @@ def get_timepoints(filenames):
 
 class RNDTestLoad(Dataset):
     def __init__(self, config):
-        # import multiprocessing as mp
-
-        # manager = mp.Manager()
-
-        # self.context = mp.get_context()
-        # print(self.context)
-        # print(mp.current_process(), mp.parent_process())
         self.config = config
         self.inf_config = config["mode"]
         self.model_config = config["model"]
@@ -738,18 +728,11 @@ class RNDTestLoad(Dataset):
             filenames.sort()
         print("Files to be processed:", filenames)
         tp_per_image = get_timepoints(filenames)
-        tp_per_image = [1]
 
         children_per_image = np.array(tp_per_image) * self.patches_per_image
         parent_indices = list(np.cumsum(children_per_image))
         self.total_n_images = parent_indices.pop(-1)
         parent_indices = [0] + parent_indices
-
-        # self.image_info = manager.dict()
-        # self.image_info["is_parent"] = [False] * self.total_n_images
-
-        # for key in ["fn", "ijk", "im_shape", "img", "tt"]:
-        # self.image_info[key] = [None] * self.total_n_images
 
         self.image_info = {
             "fn": [None] * self.total_n_images,
