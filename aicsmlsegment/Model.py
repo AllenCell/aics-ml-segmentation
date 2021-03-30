@@ -50,8 +50,6 @@ SUPPORTED_METRICS = [
     "Dice",
 ]
 
-DATASET_PARAMS = None
-
 
 def get_loss_criterion(config: Dict):
     """
@@ -380,12 +378,11 @@ class Model(pytorch_lightning.LightningModule):
         return input
 
     def on_train_epoch_start(self):
-        global DATASET_PARAMS
         if self.current_epoch == 0:
-            DATASET_PARAMS = self.train_dataloader().dataset.get_params()
+            self.dataset_params = self.train_dataloader().dataset.get_params()
         if self.current_epoch > 0 and self.current_epoch % self.epoch_shuffle == 0:
             self.train_dataloader = DataLoader(
-                UniversalDataset(**DATASET_PARAMS),
+                UniversalDataset(**self.dataset_params),
                 batch_size=self.config["loader"]["batch_size"],
                 shuffle=True,
                 num_workers=self.config["loader"]["NumWorkers"],
