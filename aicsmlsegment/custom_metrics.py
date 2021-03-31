@@ -6,6 +6,42 @@ from aicsmlsegment.custom_loss import (
     expand_as_one_hot,
 )
 
+SUPPORTED_METRICS = [
+    "default",
+    "Dice",
+]
+
+
+def get_metric(config):
+    """
+    Returns the metric function based on provided configuration
+
+    Parameters
+    ----------
+    config: Dict
+        a top level configuration object containing the 'validation' key
+
+    Return:
+    -------------
+    an instance of the validation metric function
+    """
+    validation_config = config["validation"]
+    metric = validation_config["metric"]
+
+    # validate the name of selected metric
+    assert (
+        metric in SUPPORTED_METRICS
+    ), f"Invalid metric: {metric}. Supported metrics are: {SUPPORTED_METRICS}"
+
+    if metric == "Dice":
+        from monai.metrics import DiceMetric
+
+        return DiceMetric
+    elif metric == "default" or metric == "IOU":
+        return MeanIoU()
+    elif metric == "AveragePrecision":
+        return AveragePrecision()
+
 
 class DiceCoefficient:
     """Computes Dice Coefficient.
