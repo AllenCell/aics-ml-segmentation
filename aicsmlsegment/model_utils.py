@@ -104,6 +104,7 @@ def model_inference(
     to_numpy=False,
     extract_output_ch=True,
     sigmoid=False,
+    softmax=False,
 ):
     """
     perform model inference and extract output channel
@@ -125,6 +126,8 @@ def model_inference(
             mode="gaussian",
             model_name=model_name,
         )
+    if softmax:
+        result = torch.nn.Softmax()(result)
 
     if extract_output_ch:
         # old models
