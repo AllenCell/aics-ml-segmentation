@@ -162,7 +162,6 @@ class UniversalDataset(Dataset):
         self.gt = []
         self.cmap = []
         self.transforms = transforms
-
         self.parameters = {
             "filenames": filenames,
             "num_patch": num_patch,
@@ -176,7 +175,10 @@ class UniversalDataset(Dataset):
         }
         if init_only:
             num_patch = 1
-        print("init new train dataloader", transforms, num_patch)
+        print()
+        print("init new train dataloader", transforms, patchize, num_patch)
+        print(filenames)
+        print()
         num_data = len(filenames)
         shuffle(filenames)
         num_patch_per_img = np.zeros((num_data,), dtype=int)

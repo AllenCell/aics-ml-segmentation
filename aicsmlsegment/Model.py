@@ -226,6 +226,13 @@ class Model(pytorch_lightning.LightningModule):
     def on_train_epoch_start(self):
         if self.current_epoch == 0 and self.dataset_params is None:
             self.dataset_params = self.train_dataloader().dataset.get_params()
+            self.train_dataloader = DataLoader(
+                UniversalDataset(**self.dataset_params),
+                batch_size=self.config["loader"]["batch_size"],
+                shuffle=True,
+                num_workers=self.config["loader"]["NumWorkers"],
+                pin_memory=True,
+            )
         elif self.current_epoch > 0 and self.current_epoch % self.epoch_shuffle == 0:
             self.train_dataloader = DataLoader(
                 UniversalDataset(**self.dataset_params),

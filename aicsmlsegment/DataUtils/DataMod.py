@@ -107,7 +107,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
                 transforms=self.transforms,
                 patchize=True,
                 check_crop=self.check_crop,
-                init_only=True,
+                init_only=True,  # first call of train_dataloader is just to get dataset params
             ),
             batch_size=loader_config["batch_size"],
             shuffle=True,
@@ -119,7 +119,6 @@ class DataModule(pytorch_lightning.LightningDataModule):
     def val_dataloader(self):
         loader_config = self.loader_config
         model_config = self.model_config
-
         if "unet_xy" in self.model_name:
             size_in = model_config["size_in"]
             size_out = model_config["size_out"]
