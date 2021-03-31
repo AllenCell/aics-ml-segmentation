@@ -3,23 +3,189 @@ import torch.nn as nn
 import torch.functional as F
 import torch
 import numpy as np
+from typing import Dict
 
-import monai.losses as MonaiLosses
+SUPPORTED_LOSSES = {
+    # MONAI
+    "Dice": {
+        "source": "monai.losses",
+        "args": ["softmax", "include_background"],
+        "wrapper_args": {"n_label_ch": 2, "accepts_costmap": False},
+        "compatibility": ["monai"],
+    },
+    "GeneralizedDice": {
+        "source": "monai.losses",
+        "args": ["softmax", "include_background"],
+        "wrapper_args": {"n_label_ch": 2, "accepts_costmap": False},
+        "compatibility": ["monai"],
+    },
+    "Focal": {
+        "source": "monai.losses",
+        "args": [],
+        "wrapper_args": {"n_label_ch": 2, "accepts_costmap": False},
+        "compatibility": ["monai"],
+    },
+    "MaskedDice": {
+        "source": "monai.losses",
+        "args": ["softmax", "include_background"],
+        "wrapper_args": {
+            "n_label_ch": 2,
+            "accepts_costmap": True,
+            "cmap_unsqueeze": True,
+        },
+        "compatibility": ["monai"],
+    },
+    # TORCH
+    "MSE": {
+        "source": "torch.nn",
+        "args": [],
+        "wrapper_args": {"n_label_ch": 2, "accepts_costmap": False},
+        "compatibility": ["monai"],
+    },
+    "CrossEntropy": {
+        "source": "torch.nn",
+        "args": [],
+        "wrapper_args": {
+            "n_label_ch": 1,
+            "accepts_costmap": False,
+            "to_long": True,
+            "label_squeeze": True,
+        },
+        "compatibility": ["monai"],
+    },
+    # CUSTOM
+    "MultiAuxillaryElementNLL": {
+        "source": "aicsmlsegment.custom_loss",
+        "args": ["num_task", "weight", "num_class"],
+        "wrapper_args": {
+            "n_label_ch": 1,
+            "accepts_costmap": True,
+            "cmap_unsqueeze": True,
+        },
+        "compatibility": ["custom"],
+    },
+    "PixelWiseCrossEntropy": {
+        "source": "aicsmlsegment.custom_loss",
+        "args": [],
+        "costmap": True,
+        "wrapper_args": {"n_label_ch": 2, "accepts_costmap": True},
+        "compatibility": ["custom"],
+    },
+    "ElementAngularMSE": {
+        "source": "aicsmlsegment.custom_loss",
+        "args": [],
+        "wrapper_args": {"n_label_ch": 2, "accepts_costmap": True},
+        "compatibility": ["monai"],
+    },
+    "MaskedMSE": {
+        "source": "aicsmlsegment.custom_loss",
+        "args": [],
+        "wrapper_args": {"n_label_ch": 2, "accepts_costmap": True},
+        "compatibility": ["monai"],
+    },
+}
 
 
-class MaskedDiceLoss(torch.nn.Module):
-    def __init__(self):
-        super(MaskedDiceLoss, self).__init__()
-        self.loss = MonaiLosses.MaskedDiceLoss(sigmoid=True)
+def get_loss_criterion(config: Dict):
+    """
+    Returns the loss function based on provided configuration
 
-    def forward(self, input, target, cmap):
-        loss = 0
-        for i in range(input.shape[-3]):  # go through z
-            loss = self.loss(
-                input[:, :, i, :, :], target[:, :, i, :, :], cmap[:, :, i, :, :]
-            )
-        # average loss across z dimensions
-        return loss / input.shape[-3]
+    Parameters
+    ----------
+    config: Dict
+        a top level configuration object containing the 'loss' key
+
+    Return:
+    -------------
+    an instance of the loss function and whether it accepts a costmap and loss weights
+    """
+    import importlib
+
+    name = config["loss"]["name"]
+    # backwards compatibility
+    if name == "Aux":
+        name = "MultiAuxillaryElementNLL"
+
+    loss_names = [name]
+    if "+" in name:
+        loss_names = name.split("+")
+    losses = []
+    costmap = []
+    for ln in loss_names:
+        assert (
+            ln in SUPPORTED_LOSSES
+        ), f'Invalid loss: {ln}. Supported losses: {[key for key in SUPPORTED_LOSSES]} or combinations as "l1+l2"'
+        loss_info = SUPPORTED_LOSSES[ln]
+        assert (
+            config["model_type"] in loss_info["compatibility"]
+        ), f"{config['model']['name']} is not compatible with {ln} loss"
+
+        init_args = loss_info["args"]
+
+        module = importlib.import_module(loss_info["source"])
+        module = getattr(module, ln + "Loss")
+        args = {}
+        if "softmax" in init_args:
+            args["softmax"] = True
+        if "num_task" in init_args:
+            args["num_task"] = len(config["model"]["nclass"])
+        if "weight" in init_args:
+            args["weight"] = config["loss"]["loss_weight"]
+        if "num_class" in init_args:
+            args["num_class"] = config["model"]["nclass"]
+        if "include_background" in init_args:
+            args["include_background"] = False
+        loss = module(**args)
+        wrapped_loss = LossWrapper(loss, **loss_info["wrapper_args"])
+        losses.append(wrapped_loss)
+        costmap.append(loss_info["wrapper_args"]["accepts_costmap"])
+
+    if len(losses) == 2:
+        from aicsmlsegment.custom_loss import CombinedLoss
+
+        return CombinedLoss(*losses), np.any(costmap)
+
+    else:
+        return losses[0], np.any(costmap)
+
+
+class LossWrapper(torch.nn.Module):
+    def __init__(
+        self,
+        loss,
+        n_label_ch,
+        accepts_costmap,
+        to_long=False,
+        cmap_unsqueeze=False,
+        label_squeeze=False,
+    ):
+        super(LossWrapper, self).__init__()
+
+        self.loss = loss
+        self.n_label_ch = n_label_ch
+        self.cmap_unsqueeze = cmap_unsqueeze
+        self.label_squeeze = label_squeeze
+        self.accepts_costmap = accepts_costmap
+        self.to_long = to_long
+
+    def forward(self, input, target, cmap=None):
+        if self.n_label_ch == 2:
+            target = torch.squeeze(torch.stack([target, target], dim=1), dim=2)
+        if self.cmap_unsqueeze:
+            cmap = torch.unsqueeze(cmap, dim=1)
+        if self.to_long:
+            target = target.long()
+        if self.label_squeeze:
+            target = torch.squeeze(target, dim=1)
+        # THIS HAPPENS ON LAST OUTPUT OF extended_dynunet, not sure why
+        if type(input) == tuple:
+            input = input[0]
+
+        if self.accepts_costmap and cmap is not None:
+            loss = self.loss(input, target, cmap)
+        else:
+            loss = self.loss(input, target)
+        return loss
 
 
 class CombinedLoss(torch.nn.Module):
@@ -36,57 +202,6 @@ class CombinedLoss(torch.nn.Module):
             loss1_result = self.loss1(input, target)
             loss2_result = self.loss2(input, target)
         return loss1_result + loss2_result
-
-
-class MaskedDiceCELoss(torch.nn.Module):
-    def __init__(self, OutputCh):
-        super(MaskedDiceCELoss, self).__init__()
-        self.OutputCh = OutputCh
-
-    def forward(self, input, target, cmap):
-        masked_dice_loss = MaskedDiceLoss()
-        masked_ce = PixelWiseCrossEntropyLoss()
-
-        ce_res = masked_ce(input, target, cmap)
-        input = torch.unsqueeze(input[:, self.OutputCh, :, :, :], dim=1)
-        dice_res = masked_dice_loss(input, target, cmap)
-        return dice_res + ce_res
-
-
-class DiceFocalLoss(torch.nn.Module):
-    def __init__(self, OutputCh):
-        super(DiceFocalLoss, self).__init__()
-        self.OutputCh = OutputCh
-
-    def forward(self, input, target):
-        focal_loss = MonaiLosses.FocalLoss()
-        dice_loss = MonaiLosses.DiceLoss(sigmoid=True)
-
-        f_res = focal_loss(input, target)
-        input = input[:, self.OutputCh, :, :, :]
-        input = torch.unsqueeze(input, dim=1)
-
-        d_res = dice_loss(input, target)
-
-        return d_res + f_res
-
-
-class GeneralizedDiceFocalLoss(torch.nn.Module):
-    def __init__(self, OutputCh):
-        super(GeneralizedDiceFocalLoss, self).__init__()
-        self.OutputCh = OutputCh
-
-    def forward(self, input, target):
-        focal_loss = MonaiLosses.FocalLoss()
-        g_dice_loss = MonaiLosses.GeneralizedDiceLoss(sigmoid=True)
-
-        f_res = focal_loss(input, target)
-        input = input[:, self.OutputCh, :, :, :]
-        input = torch.unsqueeze(input, dim=1)
-
-        d_res = g_dice_loss(input, target)
-
-        return d_res + f_res
 
 
 class ElementNLLLoss(torch.nn.Module):
@@ -391,6 +506,7 @@ class PixelWiseCrossEntropyLoss(nn.Module):
         self.log_softmax = nn.LogSoftmax(dim=1)
 
     def forward(self, input, target, weights):
+        print(weights.size())
         assert target.size() == weights.size()
         # normalize the input
         log_probabilities = self.log_softmax(input)

@@ -74,7 +74,6 @@ DEFAULT_CONFIG = {
     "gpus": GPUS,
     "dist_backend": "ddp" if GPUS > 1 else None,
     "tensorboard": None,
-    "large_image_resize": None,
     "callbacks": {"name": None},
     "precision": 32,
     "large_image_resize": [1, 1, 1],
@@ -281,18 +280,19 @@ def validate_config(config, train):
 
     model_config = get_model_configurations(config)
 
-    print("CONFIGURATION:")
-    print(config)
-    print()
-    print("MODEL CONFIGURATION:")
-    print(model_config)
-    print()
+    # print("CONFIGURATION:")
+    # print(config)
+    # print()
+    # print("MODEL CONFIGURATION:")
+    # print(model_config)
+    # print()
 
     return config, model_config
 
 
 def load_config(config_file, train):
     config = yaml.load(open(config_file, "r"), Loader=yaml.FullLoader)
+    print(config)
     config, model_config = validate_config(config, train)
     return config, model_config
 
@@ -504,6 +504,10 @@ def compute_iou(prediction, gt, cmap):
         gt = gt.cpu().detach().numpy()
     if type(cmap) == torch.Tensor:
         cmap = cmap.cpu().detach().numpy()
+    if prediction.shape[1] == 2:  # take foreground channel
+        prediction = np.expand_dims(prediction[:, 1, :, :, :], axis=1)
+    if np.sum(cmap.shape) == 3:  # cost function doesn't take cmap
+        cmap = np.ones_like(prediction)
 
     area_i = np.logical_and(prediction, gt)
     area_i[cmap == 0] = False

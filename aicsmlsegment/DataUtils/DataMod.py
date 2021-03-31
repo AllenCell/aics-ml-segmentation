@@ -1,6 +1,5 @@
 from aicsmlsegment.DataUtils.Universal_Loader import (
     UniversalDataset,
-    TestDataset,
     RNDTestLoad,
 )
 import random
@@ -33,11 +32,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
             if "Transforms" in self.loader_config:
                 self.transforms = self.loader_config["Transforms"]
 
-            (
-                _,
-                self.accepts_costmap,
-                _,
-            ) = get_loss_criterion(config)
+            _, self.accepts_costmap = get_loss_criterion(config)
 
     def prepare_data(self):
         pass
@@ -88,7 +83,6 @@ class DataModule(pytorch_lightning.LightningDataModule):
                 quit()
 
     def train_dataloader(self):
-        print("Initializing train dataloader: ", end=" ")
         loader_config = self.loader_config
         model_config = self.model_config
 
@@ -113,6 +107,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
                 transforms=self.transforms,
                 patchize=True,
                 check_crop=self.check_crop,
+                init_only=True,
             ),
             batch_size=loader_config["batch_size"],
             shuffle=True,
@@ -122,7 +117,6 @@ class DataModule(pytorch_lightning.LightningDataModule):
         return train_set_loader
 
     def val_dataloader(self):
-        print("Initializing validation dataloader: ", end=" ")
         loader_config = self.loader_config
         model_config = self.model_config
 
@@ -156,7 +150,6 @@ class DataModule(pytorch_lightning.LightningDataModule):
 
     def test_dataloader(self):
         test_set_loader = DataLoader(
-            # TestDataset(self.config),
             RNDTestLoad(self.config),
             batch_size=1,
             shuffle=False,

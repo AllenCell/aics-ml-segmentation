@@ -144,6 +144,7 @@ class UniversalDataset(Dataset):
         transforms=[],
         patchize: bool = True,
         check_crop: bool = False,
+        init_only: bool = False,
     ):
         """
         input:
@@ -156,6 +157,7 @@ class UniversalDataset(Dataset):
             patchize: whether to divide image into patches
             check_crop: whether to check
         """
+
         self.img = []
         self.gt = []
         self.cmap = []
@@ -172,6 +174,9 @@ class UniversalDataset(Dataset):
             "patchize": patchize,
             "check_crop": check_crop,
         }
+        if init_only:
+            num_patch = 1
+        print("init new train dataloader", transforms, num_patch)
         num_data = len(filenames)
         shuffle(filenames)
         num_patch_per_img = np.zeros((num_data,), dtype=int)

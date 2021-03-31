@@ -1,12 +1,8 @@
 import pytorch_lightning
 from torch.optim import Adam
 import torch
-import monai.losses as MonaiLosses
-from typing import Dict
-
-
-import aicsmlsegment.custom_loss as CustomLosses
-import aicsmlsegment.custom_metrics as CustomMetrics
+from aicsmlsegment.custom_metrics import get_metric
+from aicsmlsegment.custom_loss import get_loss_criterion
 from aicsmlsegment.model_utils import (
     model_inference,
     apply_on_image,
@@ -18,159 +14,12 @@ from aicsmlsegment.DataUtils.Universal_Loader import (
 )
 from aicsmlsegment.utils import compute_iou
 
-from monai.metrics import DiceMetric
 import numpy as np
 from skimage.io import imsave
 from skimage.morphology import remove_small_objects
 import os
 import pathlib
 from torch.utils.data import DataLoader
-
-SUPPORTED_LOSSES = [
-    "Dice",
-    "GeneralizedDice",
-    "Dice+CrossEntropy",
-    "GeneralizedDice+CrossEntropy",
-    "CrossEntropy",
-    "Dice+FocalLoss",
-    "GeneralizedDice+FocalLoss",
-    "Aux",
-    "MaskedDiceLoss",
-    "PixelWiseCrossEntropyLoss",
-    "MaskedDice+MaskedPixelwiseCrossEntropy",
-    "ElementAngularMSELoss",
-    "MaskedMSELoss",
-    "MaskedDice+MaskedMSELoss",
-    "MSELoss",
-]
-
-
-SUPPORTED_METRICS = [
-    "default",
-    "Dice",
-]
-
-
-def get_loss_criterion(config: Dict):
-    """
-    Returns the loss function based on provided configuration
-
-    Parameters
-    ----------
-    config: Dict
-        a top level configuration object containing the 'loss' key
-
-    Return:
-    -------------
-    an instance of the loss function and whether it accepts a costmap and loss weights
-    """
-    name = config["loss"]["name"]
-
-    # validate the name of the selected loss function
-    assert (
-        name in SUPPORTED_LOSSES
-    ), f"Invalid loss: {name}. Supported losses: {SUPPORTED_LOSSES}"
-
-    if name == "Dice":
-        return MonaiLosses.DiceLoss(sigmoid=True), False, None
-    elif name == "GeneralizedDice":
-        return MonaiLosses.GeneralizedDiceLoss(sigmoid=True), False, None
-    elif name == "Dice+CrossEntropy":
-        return (
-            CustomLosses.CombinedLoss(
-                MonaiLosses.DiceLoss(sigmoid=True), torch.nn.BCEWithLogitsLoss()
-            ),
-            False,
-            None,
-        )
-    elif name == "GeneralizedDice+CrossEntropy":
-        return (
-            CustomLosses.CombinedLoss(
-                MonaiLosses.GeneralizedDiceLoss(sigmoid=True),
-                torch.nn.BCEWithLogitsLoss(),
-            ),
-            False,
-            None,
-        )
-    elif name == "CrossEntropy":
-        return (torch.nn.BCEWithLogitsLoss(), False, None)
-    elif name == "Dice+FocalLoss":
-        return (
-            CustomLosses.DiceFocalLoss(config["validation"]["OutputCh"]),
-            False,
-            None,
-        )
-    elif name == "GeneralizedDice+FocalLoss":
-        return (
-            CustomLosses.GeneralizedDiceFocalLoss(config["validation"]["OutputCh"]),
-            False,
-            None,
-        )
-    elif name == "Aux":
-        return (
-            CustomLosses.MultiAuxillaryElementNLLLoss(
-                len(config["model"]["nclass"]),
-                config["loss"]["loss_weight"],
-                config["model"]["nclass"],
-            ),
-            True,
-            None,
-        )
-    elif name == "MaskedDiceLoss":
-        return MonaiLosses.MaskedDiceLoss(sigmoid=True), True, None
-    elif name == "PixelWiseCrossEntropyLoss":
-        return CustomLosses.PixelWiseCrossEntropyLoss(), True, None
-    elif name == "MaskedDice+MaskedPixelwiseCrossEntropy":
-        return (
-            CustomLosses.MaskedDiceCELoss(config["validation"]["OutputCh"]),
-            True,
-            None,
-        )
-    elif name == "ElementAngularMSELoss":
-        return CustomLosses.ElementAngularMSELoss(), True, None
-    elif name == "MaskedMSELoss":
-        return CustomLosses.MaskedMSELoss(), True, None
-    elif name == "MaskedDice+MaskedMSELoss":
-        return (
-            (
-                CustomLosses.CombinedLoss(
-                    CustomLosses.MaskedMSELoss(), CustomLosses.MaskedDiceLoss()
-                ),
-                True,
-                None,
-            ),
-        )
-    elif name == "MSELoss":
-        return torch.nn.MSELoss(), False, None
-
-
-def get_metric(config):
-    """
-    Returns the metric function based on provided configuration
-
-    Parameters
-    ----------
-    config: Dict
-        a top level configuration object containing the 'validation' key
-
-    Return:
-    -------------
-    an instance of the validation metric function
-    """
-    validation_config = config["validation"]
-    metric = validation_config["metric"]
-
-    # validate the name of selected metric
-    assert (
-        metric in SUPPORTED_METRICS
-    ), f"Invalid metric: {metric}. Supported metrics are: {SUPPORTED_METRICS}"
-
-    if metric == "Dice":
-        return DiceMetric
-    elif metric == "default" or metric == "IOU":
-        return CustomMetrics.MeanIoU()
-    elif metric == "AveragePrecision":
-        return CustomMetrics.AveragePrecision()
 
 
 class Model(pytorch_lightning.LightningModule):
@@ -186,6 +35,7 @@ class Model(pytorch_lightning.LightningModule):
             import importlib
             from aicsmlsegment.model_utils import weights_init as weights_init
 
+            config["model_type"] = "custom"
             module = importlib.import_module(
                 "aicsmlsegment.NetworkArchitecture." + self.model_name
             )
@@ -229,10 +79,9 @@ class Model(pytorch_lightning.LightningModule):
             # monai model assumes same size for input and output
             self.args_inference["size_in"] = model_config["patch_size"]
             self.args_inference["size_out"] = model_config["patch_size"]
-
             del model_config["patch_size"]
-
             self.model = model(**model_config)
+            config["model_type"] = "monai"
 
         self.config = config
         self.aggregate_img = None
@@ -256,10 +105,10 @@ class Model(pytorch_lightning.LightningModule):
             (
                 self.loss_function,
                 self.accepts_costmap,
-                self.loss_weight,
             ) = get_loss_criterion(config)
             self.metric = get_metric(config)
             self.scheduler_params = config["scheduler"]
+            self.dataset_params = None
 
         else:
             if config["RuntimeAug"] <= 0:
@@ -374,13 +223,10 @@ class Model(pytorch_lightning.LightningModule):
             print("no scheduler is used")
             return optims
 
-    def upsample(desired_shape, input):
-        return input
-
     def on_train_epoch_start(self):
-        if self.current_epoch == 0:
+        if self.current_epoch == 0 and self.dataset_params is None:
             self.dataset_params = self.train_dataloader().dataset.get_params()
-        if self.current_epoch > 0 and self.current_epoch % self.epoch_shuffle == 0:
+        elif self.current_epoch > 0 and self.current_epoch % self.epoch_shuffle == 0:
             self.train_dataloader = DataLoader(
                 UniversalDataset(**self.dataset_params),
                 batch_size=self.config["loader"]["batch_size"],
@@ -389,130 +235,16 @@ class Model(pytorch_lightning.LightningModule):
                 pin_memory=True,
             )
 
-    def training_step(self, batch, batch_idx):
-        inputs = batch[0]
-        targets = batch[1]
-        outputs = self(inputs)
+    def get_upsample_grid(self, desired_shape, n_targets):
+        x = torch.linspace(-1, 1, desired_shape[-1], device=self.device)
+        y = torch.linspace(-1, 1, desired_shape[-2], device=self.device)
+        z = torch.linspace(-1, 1, desired_shape[-3], device=self.device)
+        meshz, meshy, meshx = torch.meshgrid((z, y, x))
+        grid = torch.stack((meshx, meshy, meshz), 3)
+        grid = torch.stack([grid] * n_targets)  # one grid for each target in batch
+        return grid
 
-        if ("unet_xy" in self.model_name and "sdu" not in self.model_name) or (
-            "sdu" in self.model_name and self.config["loss"]["name"] == "Aux"
-        ):  # old segmenter
-            cmap = batch[2]
-            loss = self.loss_function(outputs, targets, cmap)
-            self.log(
-                "epoch_train_loss",
-                loss,
-                sync_dist=True,
-                prog_bar=True,
-                on_epoch=True,
-                on_step=False,
-            )
-            return {"loss": loss}
-        if self.model_name == "segresnetvae":
-            # segresnetvae forward returns an additional vae loss term
-            outputs, vae_loss = outputs
-
-        if (
-            self.model_name == "extended_dynunet"
-            and self.model_config["deep_supervision"]
-        ):  # output is a stacked tensor all of same shape instead of a list
-            outputs = torch.unbind(outputs, dim=1)
-
-            if self.accepts_costmap:
-                cmap = batch[2]
-                cmap = torch.unsqueeze(cmap, dim=1)  # add channel dim
-            loss = torch.zeros(1, device=self.device)
-            for out in outputs:
-                out = torch.unsqueeze(
-                    out[:, self.args_inference["OutputCh"], :, :, :], dim=1
-                )
-                if self.accepts_costmap:
-                    loss += self.loss_function(out, targets, cmap)
-                else:
-                    loss += self.loss_function(out, targets)
-            self.log(
-                "epoch_train_loss",
-                loss / len(outputs),
-                sync_dist=True,
-                prog_bar=True,
-                on_epoch=True,
-                on_step=False,
-            )
-            return {"loss": loss}
-
-        # focal loss requires > 1 channel
-        if (
-            "Focal" not in self.config["loss"]["name"]
-            and "Pixel" not in self.config["loss"]["name"]
-        ):
-            # select output channel
-            if isinstance(outputs, list):
-                for i in range(len(outputs)):
-                    outputs[i] = torch.unsqueeze(
-                        outputs[i][:, self.args_inference["OutputCh"], :, :, :], dim=1
-                    )
-            else:
-                outputs = torch.unsqueeze(
-                    outputs[:, self.args_inference["OutputCh"], :, :, :], dim=1
-                )  # add back in channel dimension to match targets
-
-        if (
-            isinstance(outputs, list) and self.model_name == "dynunet"
-        ):  # average loss across deep supervision heads for dynunet w/ deep supervision
-            if self.accepts_costmap:
-                cmap = batch[2]
-                cmap = torch.unsqueeze(cmap, dim=1)  # add channel dim
-                loss = self.loss_function(outputs[0], targets, cmap)
-            else:
-                loss = self.loss_function(outputs[0], targets)
-
-            for out in range(1, len(outputs)):
-                # resize label
-                x = torch.linspace(-1, 1, outputs[out].shape[-1], device=self.device)
-                y = torch.linspace(-1, 1, outputs[out].shape[-2], device=self.device)
-                z = torch.linspace(-1, 1, outputs[out].shape[-3], device=self.device)
-                meshz, meshy, meshx = torch.meshgrid((z, y, x))
-                grid = torch.stack((meshx, meshy, meshz), 3)
-                grid = torch.stack(
-                    [grid] * targets.shape[0]
-                )  # one grid for each target in batch
-                resize_target = torch.nn.functional.grid_sample(
-                    targets, grid, align_corners=True
-                )
-                if self.accepts_costmap:
-                    resize_costmap = torch.nn.functional.grid_sample(
-                        cmap, grid, align_corners=True
-                    )
-                    loss += self.loss_function(
-                        outputs[out], resize_target, resize_costmap
-                    )
-                else:
-                    loss += self.loss_function(outputs[out], resize_target)
-
-            self.log(
-                "epoch_train_loss",
-                loss / len(outputs),
-                sync_dist=True,
-                prog_bar=True,
-                on_epoch=True,
-                on_step=False,
-            )
-            return {"loss": loss}
-
-        if self.accepts_costmap:
-            cmap = batch[2]
-            cmap = torch.unsqueeze(cmap, dim=1)  # add channel dim
-            loss = self.loss_function(outputs, targets, cmap)
-        else:
-            if self.loss_weight is not None:
-                loss = self.loss_function(outputs, targets, self.loss_weight)
-            else:
-                loss = self.loss_function(outputs, targets)
-        # metric = self.metric(outputs, targets)
-
-        if self.model_name == "segresnetvae":
-            loss += 0.1 * vae_loss  # from https://arxiv.org/pdf/1810.11654.pdf
-
+    def log_and_return_loss(self, loss):
         self.log(
             "epoch_train_loss",
             loss,
@@ -521,22 +253,61 @@ class Model(pytorch_lightning.LightningModule):
             on_epoch=True,
             on_step=False,
         )
-
         return {"loss": loss}
+
+    def training_step(self, batch, batch_idx):
+        inputs = batch[0]
+        targets = batch[1]
+        cmap = batch[2]
+        outputs = self(inputs)
+
+        vae_loss = 0
+        if self.model_name == "segresnetvae":
+            # segresnetvae forward returns an additional vae loss term
+            outputs, vae_loss = outputs
+        if (
+            self.model_name == "extended_dynunet"
+            and self.model_config["deep_supervision"]
+        ):  # output is a stacked tensor all of same shape instead of a list
+            outputs = torch.unbind(outputs, dim=1)
+            loss = torch.zeros(1, device=self.device)
+            for out in outputs:
+                loss += self.loss_function(out, targets, cmap)
+            loss /= len(outputs)
+
+        if (
+            isinstance(outputs, list) and self.model_name == "dynunet"
+        ):  # average loss across deep supervision heads for dynunet w/ deep supervision
+            loss = self.loss_function(outputs[0], targets, cmap)
+            for out in range(1, len(outputs)):  # resize label and costmap
+                grid = self.get_upsample_grid(outputs[out].shape, targets.shape[0])
+                resize_target = torch.nn.functional.grid_sample(
+                    targets, grid, align_corners=True
+                )
+                if self.accepts_costmap:
+                    resize_costmap = torch.nn.functional.grid_sample(
+                        torch.unsqueeze(cmap, dim=1), grid, align_corners=True
+                    )
+                    resize_costmap = torch.squeeze(resize_costmap, dim=1)
+                else:
+                    resize_costmap = cmap
+                loss += self.loss_function(outputs[out], resize_target, resize_costmap)
+            loss /= len(outputs)
+        else:
+            # from https://arxiv.org/pdf/1810.11654.pdf, vae_loss > 0 if model = segresnetvae
+            loss = self.loss_function(outputs, targets, cmap) + 0.1 * vae_loss
+        return self.log_and_return_loss(loss)
 
     def validation_step(self, batch, batch_idx):
         input_img = batch[0]
         label = batch[1]
+        costmap = batch[2]
 
-        extract = True
-        squeeze = False
-        # focal loss needs >1 channel in predictions
-        if (
-            "Focal" in self.config["loss"]["name"]
-            or "Pixel" in self.config["loss"]["name"]
-        ):
-            extract = False
-            squeeze = True
+        extract = False
+        squeeze = True
+        if "unet_xy" in self.model_name:
+            extract = True
+            squeeze = False
 
         outputs, vae_loss = model_inference(
             self.model,
@@ -548,32 +319,22 @@ class Model(pytorch_lightning.LightningModule):
             model_name=self.model_name,
         )
 
-        if "unet_xy" in self.model_name:
-            costmap = batch[2]
-            costmap = torch.unsqueeze(costmap, dim=1)
-            val_loss = compute_iou(outputs > 0.5, label, costmap)
-            self.log("val_iou", val_loss, sync_dist=True, on_epoch=True, prog_bar=True)
-            return
+        # from https://arxiv.org/pdf/1810.11654.pdf
+        if "unet_xy" not in self.model_name:
+            val_loss = self.loss_function(outputs, label, costmap) + 0.1 * vae_loss
+            self.log(
+                "val_loss",
+                val_loss,
+                sync_dist=True,
+                on_epoch=True,
+                prog_bar=True,
+            )
 
-        if self.accepts_costmap:
-            costmap = batch[2]
-            if self.config["loss"]["name"] != "ElementAngularMSELoss":
-                costmap = torch.unsqueeze(costmap, dim=1)  # add channel
-            val_loss = self.loss_function(outputs, label, costmap)
-        else:
-            val_loss = self.loss_function(outputs, label)
-
-        self.log(
-            "val_iou",
-            compute_iou(outputs > 0.5, label, torch.ones(outputs.shape)),
-            sync_dist=True,
-            on_epoch=True,
-            prog_bar=True,
-        )
+        val_metric = compute_iou(outputs > 0.5, label, torch.unsqueeze(costmap, dim=1))
         # sync_dist on_epoch=True ensures that results will be averaged across gpus
         self.log(
-            "val_loss",
-            val_loss + 0.1 * vae_loss,  # from https://arxiv.org/pdf/1810.11654.pdf
+            "val_iou",
+            val_metric,
             sync_dist=True,
             on_epoch=True,
             prog_bar=True,
