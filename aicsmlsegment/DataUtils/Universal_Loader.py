@@ -1,8 +1,6 @@
 import numpy as np
 import random
 from torch import from_numpy
-import torch
-import time
 from aicsimageio import AICSImage
 from aicsmlsegment.utils import (
     image_normalization,
@@ -175,10 +173,6 @@ class UniversalDataset(Dataset):
         }
         if init_only:
             num_patch = 1
-        print()
-        print("init new train dataloader", transforms, patchize, num_patch)
-        print(filenames)
-        print()
         num_data = len(filenames)
         shuffle(filenames)
         num_patch_per_img = np.zeros((num_data,), dtype=int)
@@ -411,247 +405,6 @@ def patchize(img, pr, patch_size):
     return ijk, imgs
 
 
-class TestDataset(Dataset):
-    def __init__(self, config):
-        inf_config = config["mode"]
-        self.mode = inf_config
-        try:  # monai
-            self.patch_size = config["model"]["patch_size"]
-        except KeyError:  # unet_xy_zoom
-            self.patch_size = config["model"]["size_in"]
-        self.save_n_batches = 1
-
-        self.filenames = []
-        self.ijk = []
-        self.im_shape = []
-        self.imgs = []
-        self.tts = []
-
-        if inf_config["name"] == "file":
-            fn = inf_config["InputFile"]
-            data_reader = AICSImage(fn)
-            if inf_config["timelapse"]:
-                assert data_reader.shape[1] > 1, "not a timelapse, check your data"
-
-                for tt in range(data_reader.shape[1]):
-                    # Assume:  dimensions = TCZYX
-                    img = data_reader.get_image_data(
-                        "CZYX", S=0, T=tt, C=config["InputCh"]
-                    ).astype(float)
-                    img = image_normalization(img, config["Normalization"])
-                    img = resize(img, config)
-                    self.imgs.append(img)
-                    self.tts.append(tt)
-                    self.filenames.append(fn)
-                    self.im_shape.append(img.shape)
-
-            else:
-                img = data_reader.get_image_data(
-                    "CZYX", S=0, T=0, C=config["InputCh"]
-                ).astype(float)
-
-                img = image_normalization(img, config["Normalization"])
-                img = resize(img, config)
-                pr = config["large_image_resize"]
-
-                if pr is None or pr == [1, 1, 1]:
-                    self.filenames.append(fn)
-                    self.imgs.append(img)
-                    self.im_shape.append(img.shape)
-                else:
-                    # how many patches until aggregated image saved
-                    self.save_n_batches = np.prod(pr)
-                    # make sure that filename aligns with img in get_item
-                    self.filenames += [fn] * self.save_n_batches
-                    ijk, imgs = patchize(img, pr, self.patch_size)
-                    self.ijk += ijk
-                    self.imgs += imgs
-                    self.im_shape += [img.shape] * len(imgs)
-
-        elif inf_config["name"] == "folder":
-            from glob import glob
-
-            filenames = glob(inf_config["InputDir"] + "/*" + inf_config["DataType"])
-            filenames.sort()
-            print("files to be processed:")
-            print(filenames)
-
-            for _, fn in enumerate(filenames):
-                # load data
-                data_reader = AICSImage(fn)
-                img = data_reader.get_image_data(
-                    "CZYX", S=0, T=0, C=config["InputCh"]
-                ).astype(float)
-
-                img = resize(img, config, min_max=False)
-                img = image_normalization(img, config["Normalization"])
-
-                pr = config["large_image_resize"]
-                if pr is None or pr == [1, 1, 1]:
-                    self.filenames.append(fn)
-                    self.imgs.append(img)
-                    self.im_shape.append(img.shape)
-                else:
-                    # how many patches until aggregated image saved
-                    self.save_n_batches = np.prod(pr)
-                    # make sure that filename aligns with img in get_item
-                    self.filenames += [fn] * self.save_n_batches
-                    ijk, imgs = patchize(img, pr, self.patch_size)
-                    self.ijk += ijk
-                    self.imgs += imgs
-                    self.im_shape += [img.shape] * len(imgs)
-
-        if config["model"]["size_in"] != config["model"]["size_out"]:
-            padding = [
-                (x - y) // 2
-                for x, y in zip(config["model"]["size_in"], config["model"]["size_out"])
-            ]
-
-            for i in range(len(self.imgs)):
-                xy_padded = np.pad(
-                    self.imgs[i],
-                    (
-                        (0, 0),
-                        (0, 0),
-                        (padding[1], padding[1]),
-                        (padding[2], padding[2]),
-                    ),
-                    "symmetric",
-                )
-                self.imgs[i] = np.pad(
-                    xy_padded,
-                    ((0, 0), (padding[0], padding[0]), (0, 0), (0, 0)),
-                    "constant",
-                )
-
-    def __getitem__(self, index):
-        """
-        Returns:
-            image, filename, timepoint, coordinates of patch corner,
-            number of batches to save, and shape of input image
-        """
-        if len(self.filenames) > 0:
-            fn = self.filenames[index]
-        else:
-            fn = self.filenames[0]
-
-        if len(self.tts) > 0:
-            tt = self.tts[index]
-        else:
-            tt = []
-
-        if len(self.ijk) > 0:
-            ijk = self.ijk[index]
-        else:
-            ijk = []
-
-        if len(self.im_shape) > 0:
-            im_shape = self.im_shape[index]
-        else:
-            im_shape = self.im_shape[0]
-
-        return {
-            "img": from_numpy(self.imgs[index].astype(float)).float(),
-            "fn": fn,
-            "tt": tt,
-            "ijk": ijk,
-            "save_n_batches": self.save_n_batches,
-            "img_shape": im_shape,
-        }
-
-    def __len__(self):
-        return len(self.imgs)
-
-
-class TestDataset_load_at_runtime(Dataset):
-    def __init__(self, config):
-        inf_config = config["mode"]
-        model_config = config["model"]
-        try:  # monai
-            patch_size = model_config["patch_size"]
-            nchannel = model_config["in_channels"]
-        except KeyError:  # unet_xy_zoom
-            patch_size = model_config["size_in"]
-            nchannel = model_config["nchannel"]
-
-        self.save_n_batches = 1
-        self.filenames = []  # list of filenames, 1 per image patch or image
-        self.ijk = []  # list of ijk indices,
-        self.im_shape = []
-        self.imgs = []
-        self.tts = []
-
-        if inf_config["name"] == "file":
-            filenames = [inf_config["InputFile"]]
-        else:
-            from glob import glob
-
-            filenames = glob(inf_config["InputDir"] + "/*" + inf_config["DataType"])
-            filenames.sort()
-        print("Files to be processed:", filenames)
-
-        load_type = "test"
-        if inf_config["timelapse"]:
-            load_type = "timelapse"
-
-        for fn in filenames:  # only one filename unless in_config name is folder
-            imgs = load_img(fn, load_type, nchannel, config["InputCh"])
-            for tt, img in enumerate(imgs):  # only one image unless timelapse
-                img = image_normalization(img, config["Normalization"])
-                img = resize(img, config)
-
-                img_info = patchize_wrapper(
-                    config["large_image_resize"], fn, img, patch_size, tt
-                )
-                self.filenames += img_info["filenames"]
-                self.imgs += img_info["imgs"]
-                self.im_shape += img_info["im_shape"]
-                self.ijk += img_info["ijk"]
-                self.save_n_batches = img_info["save_n_batches"]
-                self.tts += img_info["tt"]
-
-        if model_config["size_in"] != model_config["size_out"]:
-            padding = [
-                (x - y) // 2
-                for x, y in zip(model_config["size_in"], model_config["size_out"])
-            ]
-
-            for i in range(len(self.imgs)):
-                xy_padded = np.pad(
-                    self.imgs[i],
-                    (
-                        (0, 0),
-                        (0, 0),
-                        (padding[1], padding[1]),
-                        (padding[2], padding[2]),
-                    ),
-                    "symmetric",
-                )
-                self.imgs[i] = np.pad(
-                    xy_padded,
-                    ((0, 0), (padding[0], padding[0]), (0, 0), (0, 0)),
-                    "constant",
-                )
-
-    def __getitem__(self, index):
-        """
-        Returns:
-            image, filename, timepoint, coordinates of patch corner,
-            number of batches to save, and shape of input image pre-patchize
-        """
-        return {
-            "img": from_numpy(self.imgs[index].astype(float)).float(),
-            "fn": self.filenames[index],
-            "tt": self.tts[index],
-            "ijk": self.ijk[index],
-            "save_n_batches": self.save_n_batches,
-            "img_shape": self.im_shape[index],
-        }
-
-    def __len__(self):
-        return len(self.imgs)
-
-
 def patchize_wrapper(pr, fn, img, patch_size, tt, timelapse):
     if pr == [1, 1, 1]:
         return_dict = {
@@ -700,7 +453,7 @@ def get_timepoints(filenames):
     return timepoints
 
 
-class RNDTestLoad(Dataset):
+class TestDataset(Dataset):
     def __init__(self, config):
         self.config = config
         self.inf_config = config["mode"]
