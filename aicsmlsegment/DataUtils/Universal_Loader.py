@@ -1,6 +1,7 @@
 import numpy as np
 import random
 from torch import from_numpy
+import torch
 from aicsimageio import AICSImage
 from aicsmlsegment.utils import (
     image_normalization,
@@ -72,11 +73,48 @@ def undo_resize(img, config):
     return img.astype(np.float32)
 
 
-def validate_shape(img, n_channel, filename):
-    # Legacy aicsimageio fix - image stored as zcyx instead of czyx
-    if img.shape[0] != n_channel and img.shape[1] == n_channel:
-        img = np.swapaxes(img, 0, 1)
-    return img
+def swap(l, index1, index2):
+    temp = l[index1]
+    l[index1] = l[index2]
+    l[index2] = temp
+    return l
+
+
+def validate_shape(img_shape, n_channel, timelapse):
+    img_shape = list(img_shape)
+    load_order = ["S", "T", "C", "Z", "Y", "X"]
+    expected_channel_idx = 2
+    # all dimensions that could be channel dimension
+    real_channel_idx = [i for i, elem in enumerate(img_shape) if elem == n_channel]
+
+    keep_channels = ["C"]
+    if expected_channel_idx not in real_channel_idx:
+        # if nchannels is 1, doesn't matter which other size-1 dim we swap it with
+        assert (
+            len(real_channel_idx) > 0 and n_channel > 1
+        ), "Index of channel dimension is incorrect and there are multiple candidate channel dimensions. Please check your image metadata."
+
+        # change load order and image shape to reflect new index of  channel dimension
+        real_channel_idx = real_channel_idx[-1]
+        keep_channels.append(load_order[real_channel_idx])
+        swap(load_order, real_channel_idx, expected_channel_idx)
+        swap(img_shape, real_channel_idx, expected_channel_idx)
+
+    load_dict = {"out_orientation": ""}
+    correct_shape = []
+    for s, load in zip(img_shape, load_order):
+        if s == 1 and load not in keep_channels:
+            # specify e.g. S=0 for aicsimagio
+            load_dict[load] = 0
+        else:
+            load_dict["out_orientation"] += load
+            correct_shape.append(s)
+    if timelapse:
+        assert (
+            correct_shape[1] > 1
+        ), "Image is not a timelapse, please check your image metadata"
+
+    return load_dict, tuple(correct_shape)
 
 
 def load_img(filename, img_type, n_channel=1, input_ch=None, shape_only=False):
@@ -97,30 +135,25 @@ def load_img(filename, img_type, n_channel=1, input_ch=None, shape_only=False):
         "timelapse": "",
     }
     reader = AICSImage(filename + extension_dict[img_type])
+    args_dict, correct_shape = validate_shape(
+        reader.shape, n_channel, img_type == "timelapse"
+    )
     if shape_only:
-        return reader.shape
-    if img_type in ["label", "input"]:
-        img = reader.get_image_data("CZYX", S=0, T=0)
-        img = validate_shape(img, n_channel, filename)
-    elif img_type == "costmap":
-        img = reader.get_image_data("CZYX", S=0, T=0)
-        img = validate_shape(img, n_channel, filename)
+        return correct_shape
+    img = reader.get_image_data(**args_dict)
+    if img_type == "costmap":
         img = np.squeeze(img, 0)  # remove channel dimension
     elif img_type == "test":
-        img = reader.get_image_data("CZYX", S=0, T=0).astype(float)
-        img = validate_shape(img, n_channel, filename)
+        # img = img.astype(float)
         img = img[input_ch, :, :, :]
         return [img]  # return as list so we can iterate through it in test dataloader
     elif img_type == "timelapse":
-        assert reader.shape[1] > 1, "not a timelapse, check your data"
         imgs = []
-        for tt in range(reader.shape[1]):
+        for tt in range(correct_shape[1]):
             # Assume:  dimensions = TCZYX
             img = reader.get_image_data("CZYX", S=0, T=tt, C=input_ch).astype(float)
-            img = validate_shape(img, n_channel, filename)
             imgs.append(img)
         return imgs
-
     return img
 
 
@@ -155,7 +188,7 @@ class UniversalDataset(Dataset):
             patchize: whether to divide image into patches
             check_crop: whether to check
         """
-
+        self.patchize = patchize
         self.img = []
         self.gt = []
         self.cmap = []
@@ -171,8 +204,13 @@ class UniversalDataset(Dataset):
             "patchize": patchize,
             "check_crop": check_crop,
         }
-        if init_only:
-            num_patch = 1
+        # if init_only:
+        #     num_patch = 1
+        # print("init only?", init_only)
+        # print("GONNA GENERATE", patchize * num_patch, "PATCHES")
+        # if not patchize:
+        #     print("Val data")
+        #     print(filenames)
         num_data = len(filenames)
         shuffle(filenames)
         num_patch_per_img = np.zeros((num_data,), dtype=int)
@@ -280,20 +318,6 @@ class UniversalDataset(Dataset):
                                     print("Failed to generate valid crops")
                                     break
                                 continue
-                            # if (
-                            #     0.1
-                            #     < np.mean(
-                            #         label[
-                            #             :,
-                            #             pz : pz + size_out[0],
-                            #             py : py + size_out[1],
-                            #             px : px + size_out[2],
-                            #         ]
-                            #     )
-                            #     < 0.7
-                            # ):
-                            #     print("Not ENOUGH GT, Skipping crop")
-                            #     continue
 
                         # confirmed good crop
                     (self.img).append(
@@ -326,6 +350,12 @@ class UniversalDataset(Dataset):
     def __getitem__(self, index):
         # converting to tensor in get item prevents conversion to double tensor
         # and saves gpu memory
+        # if index % 7 == 0 and self.patchize:
+        #     return (
+        #         torch.rand(self.img[index].shape, dtype=torch.float) / 10,
+        #         torch.zeros(self.img[index].shape, dtype=torch.float),
+        #         torch.ones(self.img[index].shape, dtype=torch.float),
+        #     )
         img_tensor = from_numpy(self.img[index].astype(float)).float()
         gt_tensor = from_numpy(self.gt[index].astype(float)).float()
         cmap_tensor = from_numpy(self.cmap[index].astype(float)).float()
@@ -434,6 +464,7 @@ def patchize_wrapper(pr, fn, img, patch_size, tt, timelapse):
 
 def pad_image(image, size_in, size_out):
     padding = [(x - y) // 2 for x, y in zip(size_in, size_out)]
+    print(image.shape)
     image = np.pad(
         image,
         ((0, 0), (0, 0), (padding[1], padding[1]), (padding[2], padding[2])),
@@ -487,8 +518,8 @@ class TestDataset(Dataset):
             )
             filenames.sort()
         print("Files to be processed:", filenames)
-        tp_per_image = get_timepoints(filenames)
 
+        tp_per_image = [1] * len(filenames)  # get_timepoints(filenames)
         children_per_image = np.array(tp_per_image) * self.patches_per_image
         parent_indices = list(np.cumsum(children_per_image))
         self.total_n_images = parent_indices.pop(-1)
