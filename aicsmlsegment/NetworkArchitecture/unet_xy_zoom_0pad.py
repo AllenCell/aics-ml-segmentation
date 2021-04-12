@@ -111,13 +111,6 @@ class UNet3D(nn.Module):
         self.predict2a = nn.Conv3d(n_classes[2], n_classes[2], 1)
         self.predict1a = nn.Conv3d(n_classes[1], n_classes[1], 1)
 
-        # self.conv_final = nn.Conv3d(n_classes[0]+n_classes[1]+n_classes[2], n_classes[0]+n_classes[1]+n_classes[2], 3, stride=1, padding=1, bias=True)
-        # self.predict_final = nn.Conv3d(n_classes[0]+n_classes[1]+n_classes[2], n_classes[3], 1)
-
-        self.softmax = F.log_softmax  # nn.LogSoftmax(1)
-
-        self.final_activation = nn.Softmax(dim=1)
-
         self.numClass = n_classes[0]
         self.numClass1 = n_classes[1]
         self.numClass2 = n_classes[2]
@@ -238,7 +231,6 @@ class UNet3D(nn.Module):
         return layer
 
     def forward(self, x):
-        k = self.k
         x0 = self.pool0(x)
         down1 = self.ec1(x0)
         x1 = self.pool1(down1)
@@ -259,34 +251,10 @@ class UNet3D(nn.Module):
         d0 = self.up0(u0)
 
         predict00 = self.predict0(self.dc0(d0))
-        p0_final = predict00.permute(
-            0, 2, 3, 4, 1
-        ).contiguous()  # move the class channel to the last dimension
-        p0_final = p0_final.view(p0_final.numel() // self.numClass, self.numClass)
-        p0_final = self.softmax(p0_final, dim=1)
+        # predict00 = F.pad(predict00, (-30, -30, -30, -30, -5, -5))
         if self.test_mode:
-            return [p0_final]
+            return [predict00]
 
         p1a = self.predict1a(self.conv1a(self.up1a(u1)))
-        p1_final = p1a.permute(
-            0, 2, 3, 4, 1
-        ).contiguous()  # move the class channel to the last dimension
-
-        p1_final = p1_final.view(p1_final.numel() // self.numClass1, self.numClass1)
-        p1_final = self.softmax(p1_final, dim=1)
-
         p2a = self.predict2a(self.conv2a(self.up2a(u2)))  ## fix +5
-        p2_final = p2a.permute(
-            0, 2, 3, 4, 1
-        ).contiguous()  # move the class channel to the last dimension
-
-        p2_final = p2_final.view(p2_final.numel() // self.numClass2, self.numClass2)
-        p2_final = self.softmax(p2_final, dim=1)
-
-        """
-        p_combine0 = self.predict_final(self.conv_final(torch.cat((p0, p1a, p2a), 1)))  # BCZYX
-        p_combine = p_combine0.permute(0, 2, 3, 4, 1).contiguous() # move the class channel to the last dimension
-        p_combine = p_combine.view(p_combine.numel() // self.numClass_combine, self.numClass_combine)
-        p_combine = self.softmax(p_combine)
-        """
-        return [p0_final, p1_final, p2_final]
+        return [predict00, p1a, p2a]

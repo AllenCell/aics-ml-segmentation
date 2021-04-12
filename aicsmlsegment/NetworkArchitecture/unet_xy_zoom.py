@@ -252,33 +252,18 @@ class UNet3D(nn.Module):
         d0 = self.up0(u0)
 
         predict00 = self.predict0(self.dc0(d0))
-        p0_final = predict00.permute(
-            0, 2, 3, 4, 1
-        ).contiguous()  # move the class channel to the last dimension
-        p0_final = p0_final.view(p0_final.numel() // self.numClass, self.numClass)
-        p0_final = self.softmax(p0_final, dim=1)
 
         if self.test_mode:
-            return [p0_final]
+            return [predict00]
 
         p1a = F.pad(
             self.predict1a(self.conv1a(self.up1a(u1))),
             (-2 * k - 1, -2 * k - 1, -2 * k - 1, -2 * k - 1, -3, -3),
         )
-        p1_final = p1a.permute(
-            0, 2, 3, 4, 1
-        ).contiguous()  # move the class channel to the last dimension
-        p1_final = p1_final.view(p1_final.numel() // self.numClass1, self.numClass1)
-        p1_final = self.softmax(p1_final, dim=1)
 
         p2a = F.pad(
             self.predict2a(self.conv2a(self.up2a(u2))),
             (-6 * k - 1, -6 * k - 1, -6 * k - 1, -6 * k - 1, -5, -5),
         )  # fix +5
-        p2_final = p2a.permute(
-            0, 2, 3, 4, 1
-        ).contiguous()  # move the class channel to the last dimension
-        p2_final = p2_final.view(p2_final.numel() // self.numClass2, self.numClass2)
-        p2_final = self.softmax(p2_final, dim=1)
 
-        return [p0_final, p1_final, p2_final]
+        return [predict00, p1a, p2a]

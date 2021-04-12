@@ -32,7 +32,6 @@ class UNet3D(nn.Module):
         self.dc1 = self.decoder(64 + 128, 64, batchnorm=batchnorm_flag)
 
         self.dc0 = nn.Conv3d(64, n_classes, 1)
-        self.softmax = F.log_softmax
 
         self.numClass = n_classes
 
@@ -167,10 +166,4 @@ class UNet3D(nn.Module):
         u0 = self.dc1(d1)
         out = self.dc0(u0)
 
-        out = out.permute(
-            0, 2, 3, 4, 1
-        ).contiguous()  # move the class channel to the last dimension
-        out = out.view(out.numel() // self.numClass, self.numClass)
-        out = self.softmax(out, dim=1)
-
-        return out
+        return [out]

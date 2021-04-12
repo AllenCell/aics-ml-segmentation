@@ -4,16 +4,37 @@ import torch.nn.functional as F
 
 
 class UNet3D(nn.Module):
+
+    """
+    3D adaptation of https://arxiv.org/ftp/arxiv/papers/2004/2004.03466.pdf
+    This network is similar to a standard UNet, but it exchanges the 2 stacked
+    convolutions followed by pooling for encoding with concatenation of a series of
+    dilated convolutions. The Decoder unit is similar, except pooling is replaced by
+    upsampling and concatenation with the encoder map.
+    """
+
     def __init__(self, in_channel, n_classes, loss, test_mode):
         self.in_channel = in_channel
         self.n_classes = n_classes[0]
-        self.softmax = F.log_softmax
         self.loss = loss
         super(UNet3D, self).__init__()
 
         self.input = self.conv_relu(self.in_channel, 32, 1, 1)
         self.one_by_oneconv = self.oneconv(32, self.n_classes)
         self.pool = nn.MaxPool3d((1, 2, 2))
+
+        # self.conv1 = self.conv_relu(
+        #     32, 32, stride=(1, 2, 2), kernel=(1, 2, 2), norm=False
+        # )
+        # self.conv2 = self.conv_relu(
+        #     64, 64, stride=(1, 2, 2), kernel=(1, 2, 2), norm=False
+        # )
+        # self.conv3 = self.conv_relu(
+        #     128, 128, stride=(1, 2, 2), kernel=(1, 2, 2), norm=False
+        # )
+        # self.conv4 = self.conv_relu(
+        #     256, 256, stride=(1, 2, 2), kernel=(1, 2, 2), norm=False
+        # )
 
         self.upsample_64 = self.upsample(64)
         self.upsample_128 = self.upsample(128)
@@ -26,6 +47,7 @@ class UNet3D(nn.Module):
         self.down_32_9 = self.conv_relu(8, 4, padding=9, dilation=9)
         self.down_32_12 = self.conv_relu(4, 4, padding=12, dilation=12)
         self.down_block1_fns = [
+            # self.conv1,
             self.pool,
             self.down_32_1,
             self.down_32_3,
@@ -40,6 +62,7 @@ class UNet3D(nn.Module):
         self.down_64_9 = self.conv_relu(16, 8, padding=9, dilation=9)
         self.down_64_12 = self.conv_relu(8, 8, padding=12, dilation=12)
         self.down_block2_fns = [
+            # self.conv2,
             self.pool,
             self.down_64_1,
             self.down_64_3,
@@ -54,6 +77,7 @@ class UNet3D(nn.Module):
         self.down_128_9 = self.conv_relu(32, 16, padding=9, dilation=9)
         self.down_128_12 = self.conv_relu(16, 16, padding=12, dilation=12)
         self.down_block3_fns = [
+            # self.conv3,
             self.pool,
             self.down_128_1,
             self.down_128_3,
@@ -68,6 +92,7 @@ class UNet3D(nn.Module):
         self.down_256_9 = self.conv_relu(64, 32, padding=9, dilation=9)
         self.down_256_12 = self.conv_relu(32, 32, padding=12, dilation=12)
         self.down_block4_fns = [
+            # self.conv4,
             self.pool,
             self.down_256_1,
             self.down_256_3,
@@ -155,20 +180,43 @@ class UNet3D(nn.Module):
             ),
         )
 
-    def conv_relu(self, in_channels, out_channels, padding, dilation):
-        return nn.Sequential(
-            nn.Conv3d(
-                in_channels,
-                out_channels,
-                3,
-                stride=1,
-                padding=padding,
-                bias=True,
-                dilation=dilation,
-            ),
-            nn.InstanceNorm3d(out_channels, affine=False),
-            nn.ReLU(),
-        )
+    def conv_relu(
+        self,
+        in_channels,
+        out_channels,
+        padding=0,
+        dilation=1,
+        stride=1,
+        kernel=3,
+        norm=True,
+    ):
+        if norm:
+            return nn.Sequential(
+                nn.Conv3d(
+                    in_channels,
+                    out_channels,
+                    kernel,
+                    stride=stride,
+                    padding=padding,
+                    bias=True,
+                    dilation=dilation,
+                ),
+                nn.InstanceNorm3d(out_channels, affine=False),
+                nn.ReLU(),
+            )
+        else:
+            return nn.Sequential(
+                nn.Conv3d(
+                    in_channels,
+                    out_channels,
+                    kernel,
+                    stride=stride,
+                    padding=padding,
+                    bias=True,
+                    dilation=dilation,
+                ),
+                # nn.ReLU(),
+            )
 
     def down_block(self, x, fns):
         """
@@ -205,10 +253,5 @@ class UNet3D(nn.Module):
         out = self.one_by_oneconv(up4)  # 32->2ch
 
         if self.loss == "Aux":
-            out = out.permute(
-                0, 2, 3, 4, 1
-            ).contiguous()  # move the class channel to the last dimension
-            out = out.view(out.numel() // self.n_classes, self.n_classes)
-            out = self.softmax(out, dim=1)
             return [out]
         return out
