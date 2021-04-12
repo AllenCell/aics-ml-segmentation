@@ -1,14 +1,10 @@
 #!/usr/bin/env python
 
 import argparse
-from aicsmlsegment.utils import (
-    load_config,
-)
+from aicsmlsegment.utils import load_config, create_unique_run_directory
 from aicsmlsegment.Model import Model
 from aicsmlsegment.DataUtils.DataMod import DataModule
 import pytorch_lightning
-import os
-
 import torch.autograd.profiler as profiler
 
 
@@ -36,10 +32,8 @@ def main():
             print("Number of GPUs must be -1 or > 0")
             quit()
 
-        output_dir = config["OutputDir"]
-        print(output_dir)
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
+        output_dir = create_unique_run_directory(config, train=False)
+        config["OutputDir"] = output_dir
 
         # ddp is the default unless only one gpu is requested
         accelerator = config["dist_backend"]

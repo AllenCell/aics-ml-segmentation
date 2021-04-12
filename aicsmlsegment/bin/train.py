@@ -1,22 +1,21 @@
 import pytorch_lightning
 import argparse
-from aicsmlsegment.utils import load_config, get_logger
+from aicsmlsegment.utils import load_config, get_logger, create_unique_run_directory
 from aicsmlsegment.Model import Model
 from aicsmlsegment.DataUtils.DataMod import DataModule
 from pytorch_lightning.callbacks import ModelCheckpoint
-import os
+import torch
 
 
-def main():
-    # torch.backends.cudnn.enabled = False
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", required=True)
-    args = parser.parse_args()
-
-    # create logger
-    logger = get_logger("ModelTrainer")
-    config, model_config = load_config(args.config, train=True)
-    logger.info(config)
+def main(config=None, model_config=None):
+    # torch.backends.cudnn.enabled = True
+    if config is None:
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--config", required=True)
+        args = parser.parse_args()
+        # create logger
+        logger = get_logger("ModelTrainer")
+        config, model_config = load_config(args.config, train=True)
 
     # load a specified saved model
     if config["resume"] is not None:
@@ -34,11 +33,9 @@ def main():
         print("Training new model from scratch")
         model = Model(config, model_config, train=True)
 
-    print(model)
-
-    checkpoint_dir = config["checkpoint_dir"]
-    if not os.path.exists(checkpoint_dir):
-        os.makedirs(checkpoint_dir)
+    checkpoint_dir = create_unique_run_directory(config, train=True)
+    config["checkpoint_dir"] = checkpoint_dir
+    logger.info(config)
 
     # model checkpoint every n epochs
     MC = ModelCheckpoint(
@@ -80,20 +77,19 @@ def main():
     # ddp is the default unless only one gpu is requested
     accelerator = config["dist_backend"]
     if config["tensorboard"] is not None:
-        from pytorch_lightning.callbacks import LearningRateMonitor
+        from pytorch_lightning.callbacks import LearningRateMonitor, GPUStatsMonitor
+        from pytorch_lightning.loggers import TensorBoardLogger
 
-        logger = pytorch_lightning.loggers.TensorBoardLogger(config["tensorboard"])
-        GPU = pytorch_lightning.callbacks.GPUStatsMonitor(
-            intra_step_time=True, inter_step_time=True
-        )
-        callbacks.append(GPU)
-        callbacks.append(LearningRateMonitor(logging_interval="epoch"))
+        logger = TensorBoardLogger(config["tensorboard"])
+        GPU = GPUStatsMonitor(intra_step_time=True, inter_step_time=True)
+        LR = LearningRateMonitor(logging_interval="epoch")
+        callbacks += [GPU, LR]
 
     else:
-        logger = None
+        from pytorch_lightning.loggers import CSVLogger
 
-    print("Training on ", gpu_config, "GPUs with backend", accelerator)
-    print("Initializing trainer...", end=" ")
+        logger = CSVLogger(save_dir=checkpoint_dir)
+
     trainer = pytorch_lightning.Trainer(
         gpus=gpu_config,
         max_epochs=config["epochs"],
@@ -104,15 +100,10 @@ def main():
         # reload_dataloaders_every_n_epoch = config['loader']['epoch_shuffle']
         distributed_backend=accelerator,
         logger=logger,
-        log_every_n_steps=30,
-        flush_logs_every_n_steps=30,
         precision=config["precision"],
     )
-    print("Done")
 
-    print("Initializing data module...", end=" ")
     data_module = DataModule(config)
-    print("Done")
 
     trainer.fit(model, data_module)
     print(

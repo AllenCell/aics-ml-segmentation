@@ -9,6 +9,9 @@ from scipy import stats
 import yaml
 import torch
 from monai.networks.layers import Norm, Act
+from monai.transforms import CropForeground, RandSpatialCrop, RandSpatialCropSamples
+import os
+import datetime
 
 
 REQUIRED_CONFIG_FIELDS = {
@@ -280,21 +283,56 @@ def validate_config(config, train):
 
     model_config = get_model_configurations(config)
 
-    # print("CONFIGURATION:")
-    # print(config)
-    # print()
-    # print("MODEL CONFIGURATION:")
-    # print(model_config)
-    # print()
-
     return config, model_config
 
 
 def load_config(config_file, train):
     config = yaml.load(open(config_file, "r"), Loader=yaml.FullLoader)
-    print(config)
     config, model_config = validate_config(config, train)
+    config["date"] = datetime.datetime.now().strftime("%b %d, %Y %H:%M")
     return config, model_config
+
+
+def create_unique_run_directory(config, train):
+    if train:
+        dir_name = config["checkpoint_dir"]
+    else:
+        dir_name = config["OutputDir"]
+    if not os.path.exists(dir_name):
+        os.makedirs(dir_name)
+        most_recent_run_number = 0
+    else:
+        subfolders = [x for x in os.walk(dir_name)][0][1]
+        run_numbers = [int(sub.split("_")[1]) for sub in subfolders]
+        if len(subfolders) > 0:
+            most_recent_run_number = max(run_numbers)
+            if train:
+                most_recent_run_dir = dir_name + "/run_" + str(most_recent_run_number)
+            else:
+                most_recent_run_dir = (
+                    dir_name + "/prediction_" + str(most_recent_run_number)
+                )
+            most_recent_config, _ = load_config(
+                most_recent_run_dir + "/config.yaml",
+                train=train,
+            )
+            # HACK - this will combine runs with the same config files that are run within a minute of one another.
+            # multi gpu case - don't create a new run folder
+            if most_recent_config == config:
+                return most_recent_run_dir
+        else:
+            most_recent_run_number = 0
+    if train:
+        new_run_folder_name = "/run_" + str(most_recent_run_number + 1)
+    else:
+        new_run_folder_name = "/prediction_" + str(most_recent_run_number + 1)
+    os.makedirs(dir_name + new_run_folder_name)
+    if train:
+        os.makedirs(dir_name + new_run_folder_name + "/validation_results")
+
+    with open(dir_name + new_run_folder_name + "/config.yaml", "w") as config_file:
+        yaml.dump(config, config_file, default_flow_style=False)
+    return dir_name + new_run_folder_name
 
 
 def get_samplers(num_training_data, validation_ratio, my_seed):
@@ -330,6 +368,19 @@ def simple_norm(img, a, b, m_high=-1, m_low=-1):
     return img
 
 
+def get_adjusted_min_max(img, a, b, m_high=-1, m_low=-1):
+    idx = np.ones(img.shape, dtype=bool)
+    if m_high > 0:
+        idx = np.logical_and(idx, img < m_high)
+    if m_low > 0:
+        idx = np.logical_and(idx, img > m_low)
+    img_valid = img[idx]
+    m, s = stats.norm.fit(img_valid.flat)
+    strech_min = max(m - a * s, img.min())
+    strech_max = min(m + b * s, img.max())
+    return strech_min, strech_max
+
+
 def background_sub(img, r):
     struct_img_smooth = ndi.gaussian_filter(img, sigma=r, mode="nearest", truncate=3.0)
     struct_img_smooth_sub = img - struct_img_smooth
@@ -340,7 +391,6 @@ def background_sub(img, r):
 
 
 def input_normalization(img, args):
-
     nchannel = img.shape[0]
     args.Normalization = int(args.Normalization)
     for ch_idx in range(nchannel):
@@ -416,6 +466,13 @@ def input_normalization(img, args):
             struct_img = background_sub(struct_img, 50)
             struct_img = simple_norm(struct_img, 1.5, 10)
             img[ch_idx, :, :, :] = struct_img[:, :, :]
+        elif args.Normalization == 19:  # EMT lamin
+            struct_img[struct_img > 4000] = struct_img.min()
+            struct_img = simple_norm(struct_img, 1, 15)
+            img[ch_idx, :, :, :] = struct_img[:, :, :]
+        elif args.Normalization == 22:
+            print("No Normalization")
+            img[ch_idx, :, :, :] = struct_img[:, :, :]
         else:
             print("no normalization recipe found")
             quit()
@@ -423,7 +480,6 @@ def input_normalization(img, args):
 
 
 def image_normalization(img, config):
-
     if type(config) is dict:
         ops = config["ops"]
         nchannel = img.shape[0]
@@ -499,16 +555,17 @@ def load_single_image(args, fn, time_flag=False):
 
 def compute_iou(prediction, gt, cmap):
     if type(prediction) == torch.Tensor:
-        prediction = prediction.cpu().detach().numpy()
+        prediction = prediction.detach().cpu().numpy()
     if type(gt) == torch.Tensor:
-        gt = gt.cpu().detach().numpy()
+        gt = gt.detach().cpu().numpy()
     if type(cmap) == torch.Tensor:
-        cmap = cmap.cpu().detach().numpy()
+        cmap = cmap.detach().cpu().numpy()
     if prediction.shape[1] == 2:  # take foreground channel
-        prediction = np.expand_dims(prediction[:, 1, :, :, :], axis=1)
-    if np.sum(cmap.shape) == 3:  # cost function doesn't take cmap
+        prediction = prediction[:, 1, :, :, :]
+    if len(prediction.shape) == 4:
+        prediction = np.expand_dims(prediction, axis=1)
+    if len(cmap.shape) == 3:  # cost function doesn't take cmap
         cmap = np.ones_like(prediction)
-
     area_i = np.logical_and(prediction, gt)
     area_i[cmap == 0] = False
     area_u = np.logical_or(prediction, gt)
