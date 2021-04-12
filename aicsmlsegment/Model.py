@@ -35,6 +35,8 @@ class Model(pytorch_lightning.LightningModule):
             import importlib
             from aicsmlsegment.model_utils import weights_init as weights_init
 
+            # from aicsmlsegment.custom_loss import PixelWiseCrossEntropy
+
             config["model_type"] = "custom"
             module = importlib.import_module(
                 "aicsmlsegment.NetworkArchitecture." + self.model_name
@@ -56,6 +58,7 @@ class Model(pytorch_lightning.LightningModule):
             self.args_inference["size_in"] = model_config["size_in"]
             self.args_inference["size_out"] = model_config["size_out"]
             self.args_inference["nclass"] = model_config["nclass"]
+            # self.val_loss = PixelWiseCrossEntropy(model_config["nclass"][0])
 
         else:  # monai model
             if self.model_name == "segresnetvae":
@@ -131,7 +134,6 @@ class Model(pytorch_lightning.LightningModule):
         return self.model(x)
 
     def configure_optimizers(self):
-        print("Configuring optimizers")
         optims = []
         scheds = []
 
@@ -193,7 +195,7 @@ class Model(pytorch_lightning.LightningModule):
                     factor=scheduler_params["factor"],
                     patience=scheduler_params["patience"],
                     verbose=scheduler_params["verbose"],
-                    min_lr=0.0000001,
+                    min_lr=0.0000000001,
                 )
                 # monitoring metric must be specified
                 return {
@@ -216,7 +218,6 @@ class Model(pytorch_lightning.LightningModule):
                     "That scheduler is not yet supported. No scheduler is being used."
                 )
                 return optims
-            print("done")
             scheds.append(scheduler)
             return optims, scheds
         else:
@@ -225,22 +226,22 @@ class Model(pytorch_lightning.LightningModule):
 
     def on_train_epoch_start(self):
         if self.current_epoch == 0 and self.dataset_params is None:
+            print([att for att in dir(self.datamodule)])
+
+            print("original dataloader", self.train_dataloader)
+            print("JUST GETTING PARAMS")
             self.dataset_params = self.train_dataloader().dataset.get_params()
-            self.train_dataloader = DataLoader(
+
+        if self.current_epoch % self.epoch_shuffle == 0:
+            print([att for att in dir(self) if "data" in att])
+            self.datamodule.train_dataloader = DataLoader(
                 UniversalDataset(**self.dataset_params),
                 batch_size=self.config["loader"]["batch_size"],
                 shuffle=True,
                 num_workers=self.config["loader"]["NumWorkers"],
                 pin_memory=True,
             )
-        elif self.current_epoch > 0 and self.current_epoch % self.epoch_shuffle == 0:
-            self.train_dataloader = DataLoader(
-                UniversalDataset(**self.dataset_params),
-                batch_size=self.config["loader"]["batch_size"],
-                shuffle=True,
-                num_workers=self.config["loader"]["NumWorkers"],
-                pin_memory=True,
-            )
+            print("next dataloader", self.train_dataloader)
 
     def get_upsample_grid(self, desired_shape, n_targets):
         x = torch.linspace(-1, 1, desired_shape[-1], device=self.device)
@@ -251,16 +252,17 @@ class Model(pytorch_lightning.LightningModule):
         grid = torch.stack([grid] * n_targets)  # one grid for each target in batch
         return grid
 
-    def log_and_return_loss(self, loss):
+    def log_and_return(self, name, value):
+        # sync_dist on_epoch=True ensures that results will be averaged across gpus
         self.log(
-            "epoch_train_loss",
-            loss,
+            name,
+            value,
             sync_dist=True,
             prog_bar=True,
             on_epoch=True,
             on_step=False,
         )
-        return {"loss": loss}
+        return {"loss": value}  # return val only used in train step
 
     def training_step(self, batch, batch_idx):
         inputs = batch[0]
@@ -303,62 +305,52 @@ class Model(pytorch_lightning.LightningModule):
         else:
             # from https://arxiv.org/pdf/1810.11654.pdf, vae_loss > 0 if model = segresnetvae
             loss = self.loss_function(outputs, targets, cmap) + 0.1 * vae_loss
-        return self.log_and_return_loss(loss)
+        return self.log_and_return("epoch_train_loss", loss)
 
     def validation_step(self, batch, batch_idx):
         input_img = batch[0]
         label = batch[1]
         costmap = batch[2]
 
-        extract = False
-        squeeze = True
-        if "unet_xy" in self.model_name:
-            extract = True
-            squeeze = False
-
         outputs, vae_loss = model_inference(
             self.model,
             input_img,
             self.args_inference,
-            squeeze=squeeze,
-            extract_output_ch=extract,
-            sigmoid=False,  # all loss functions accept logits
+            squeeze=True,
+            extract_output_ch=False,
             model_name=self.model_name,
         )
 
         # from https://arxiv.org/pdf/1810.11654.pdf
-        if "unet_xy" not in self.model_name:
-            val_loss = self.loss_function(outputs, label, costmap) + 0.1 * vae_loss
-            self.log(
-                "val_loss",
-                val_loss,
-                sync_dist=True,
-                on_epoch=True,
-                prog_bar=True,
-            )
+        val_loss = self.loss_function(outputs, label, costmap) + 0.1 * vae_loss
+        self.log_and_return("val_loss", val_loss)
 
+        outputs = torch.nn.Softmax(dim=1)(outputs)
         val_metric = compute_iou(outputs > 0.5, label, torch.unsqueeze(costmap, dim=1))
-        # sync_dist on_epoch=True ensures that results will be averaged across gpus
-        self.log(
-            "val_iou",
-            val_metric,
-            sync_dist=True,
-            on_epoch=True,
-            prog_bar=True,
-        )
+        self.log_and_return("val_iou", val_metric)
+        # save first validation image result
+        if batch_idx == 0:
+            imsave(
+                self.config["checkpoint_dir"]
+                + os.sep
+                + "validation_results"
+                + os.sep
+                + "epoch="
+                + str(self.current_epoch)
+                + "_loss="
+                + str(round(val_loss.item(), 3))
+                + "_iou="
+                + str(round(val_metric, 3))
+                + ".tiff",
+                outputs[0, 1, :, :, :].detach().cpu().numpy(),
+            )
 
     def test_step(self, batch, batch_idx):
         img = batch["img"]
         fn = batch["fn"][0]
         tt = batch["tt"][0]
-        save_n_batches = batch["save_n_batches"].cpu().detach().numpy()[0]
-
+        save_n_batches = batch["save_n_batches"].detach().cpu().numpy()[0]
         args_inference = self.args_inference
-
-        sigmoid = True
-        if "unet_xy" in self.model_name:
-            sigmoid = False  # softmax is applied to outputs during apply_on_image
-
         to_numpy = True
         if self.aggregate_img is not None:
             to_numpy = False  # prevent excess gpu->cpu data transfer
@@ -369,18 +361,14 @@ class Model(pytorch_lightning.LightningModule):
             args_inference,
             squeeze=False,
             to_numpy=to_numpy,
-            sigmoid=sigmoid,
+            softmax=True,
             model_name=self.model_name,
             extract_output_ch=True,
         )
 
         if self.aggregate_img is not None:
             # initialize the aggregate img
-            i, j, k = (
-                batch["ijk"][0],
-                batch["ijk"][1],
-                batch["ijk"][2],
-            )
+            i, j, k = batch["ijk"][0], batch["ijk"][1], batch["ijk"][2]
             if fn not in self.aggregate_img:
                 self.aggregate_img[fn] = torch.zeros(
                     batch["im_shape"], dtype=torch.float32, device=self.device
@@ -403,12 +391,13 @@ class Model(pytorch_lightning.LightningModule):
             ] += 1
 
         # only want to perform post-processing and saving once the aggregated image
-        # is completeor we're not aggregating an image
+        # is complete or we're not aggregating an image
         if (batch_idx + 1) % save_n_batches == 0:
-            # prepare aggregate img for output
             if self.aggregate_img is not None:
+                # normalize for overlapping patches
                 output_img = self.aggregate_img[fn] / self.count_map[fn]
-                output_img = output_img.cpu().detach().numpy()
+                output_img = output_img.detach().cpu().numpy()
+
             if args_inference["mode"] != "folder":
                 out = minmax(output_img)
                 out = undo_resize(out, self.config)

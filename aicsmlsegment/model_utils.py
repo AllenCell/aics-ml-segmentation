@@ -29,7 +29,7 @@ def apply_on_image(
     args: dict,
     squeeze: bool,
     to_numpy: bool,
-    sigmoid: bool,
+    softmax: bool,
     model_name,
     extract_output_ch: bool,
 ) -> np.ndarray:
@@ -55,11 +55,11 @@ def apply_on_image(
             model,
             input_img,
             args,
-            model_name,
-            squeeze,
-            to_numpy,
-            extract_output_ch,
-            sigmoid,
+            model_name=model_name,
+            squeeze=squeeze,
+            to_numpy=to_numpy,
+            extract_output_ch=extract_output_ch,
+            softmax=softmax,
         )
     else:
         out0, vae_loss = model_inference(
@@ -68,7 +68,7 @@ def apply_on_image(
             args,
             squeeze=False,
             to_numpy=False,
-            sigmoid=sigmoid,
+            softmax=softmax,
             model_name=model_name,
         )
         input_img = input_img[0]  # remove batch_dimension for flip
@@ -80,7 +80,7 @@ def apply_on_image(
                 args,
                 squeeze=True,
                 to_numpy=False,
-                sigmoid=sigmoid,
+                softmax=softmax,
                 model_name=model_name,
                 extract_output_ch=extract_output_ch,
             )
@@ -91,7 +91,7 @@ def apply_on_image(
         out0 /= 4
         vae_loss /= 4
         if to_numpy:
-            out0 = out0.cpu().detach().numpy()
+            out0 = out0.detach().cpu().numpy()
         return out0, vae_loss
 
 
@@ -127,7 +127,7 @@ def model_inference(
             model_name=model_name,
         )
     if softmax:
-        result = torch.nn.Softmax()(result)
+        result = torch.nn.Softmax(dim=1)(result)
 
     if extract_output_ch:
         # old models
@@ -140,7 +140,7 @@ def model_inference(
     if not squeeze:
         result = torch.unsqueeze(result, dim=1)
     if to_numpy:
-        result = result.cpu().detach().numpy()
+        result = result.detach().cpu().numpy()
     return result, vae_loss
 
 
