@@ -83,6 +83,24 @@ SUPPORTED_LOSSES = {
         "wrapper_args": {"n_label_ch": 2, "accepts_costmap": True},
         "compatibility": ["monai"],
     },
+    "MaskedCrossEntropy": {
+        "source": "aicsmlsegment.custom_loss",
+        "args": [],
+        "wrapper_args": {"n_label_ch": 2, "accepts_costmap": True},
+        "compatibility": ["custom"],
+    },
+    "MultiAuxillaryCrossEntropy": {
+        "source": "aicsmlsegment.custom_loss",
+        "args": ["weight", "num_class"],
+        "wrapper_args": {
+            "n_label_ch": 1,
+            "accepts_costmap": True,
+            "cmap_unsqueeze": True,
+            "label_squeeze": True,
+            "to_long": True,
+        },
+        "compatibility": ["custom"],
+    },
 }
 
 
@@ -104,7 +122,7 @@ def get_loss_criterion(config: Dict):
     name = config["loss"]["name"]
     # backwards compatibility
     if name == "Aux":
-        name = "MultiAuxillaryElementNLL"
+        name = "MultiAuxillaryCrossEntropy"
 
     loss_names = [name]
     if "+" in name:
@@ -170,7 +188,7 @@ class LossWrapper(torch.nn.Module):
 
     def forward(self, input, target, cmap=None):
         if self.n_label_ch == 2:
-            target = torch.squeeze(torch.stack([target, target], dim=1), dim=2)
+            target = torch.squeeze(torch.stack([1 - target, target], dim=1), dim=2)
         if self.cmap_unsqueeze:
             cmap = torch.unsqueeze(cmap, dim=1)
         if self.to_long:
@@ -204,14 +222,44 @@ class CombinedLoss(torch.nn.Module):
         return loss1_result + loss2_result
 
 
+class MaskedCrossEntropyLoss(torch.nn.Module):
+    def __init__(self):
+        super(MaskedCrossEntropyLoss, self).__init__()
+        self.loss = torch.nn.NLLLoss(reduce=False)
+        self.log_softmax = torch.nn.LogSoftmax(dim=1)
+
+    def forward(self, input, target, cmap):
+        """
+        expects input, target, cmap in NCZYX with input channels = 2, target_channels = 1
+        """
+        loss = self.loss(self.log_softmax(input), target)
+        loss = torch.mean(torch.mul(loss.view(loss.numel()), cmap.view(cmap.numel())))
+        return loss
+
+
+class MultiAuxillaryCrossEntropyLoss(torch.nn.Module):
+    def __init__(self, weight, num_class):
+        super(MultiAuxillaryCrossEntropyLoss, self).__init__()
+        self.weight = weight
+        self.loss_fn = MaskedCrossEntropyLoss()
+
+    def forward(self, input, target, cmap):
+        if not isinstance(input, list):  # custom model validation
+            input = [input]
+        total_loss = self.weight[0] * self.loss_fn(input[0], target, cmap)
+        for n in np.arange(1, len(input)):
+            total_loss += self.weight[n] * self.loss_fn(input[n], target, cmap)
+
+        return total_loss
+
+
 class ElementNLLLoss(torch.nn.Module):
     def __init__(self, num_class):
         super(ElementNLLLoss, self).__init__()
         self.num_class = num_class
 
     def forward(self, input, target, weight):
-
-        target_np = target.cpu().data.numpy()
+        target_np = target.detach().cpu().data.numpy()
         target_np = target_np.astype(np.uint8)
 
         row_num = target_np.shape[0]
@@ -506,7 +554,6 @@ class PixelWiseCrossEntropyLoss(nn.Module):
         self.log_softmax = nn.LogSoftmax(dim=1)
 
     def forward(self, input, target, weights):
-        print(weights.size())
         assert target.size() == weights.size()
         # normalize the input
         log_probabilities = self.log_softmax(input)
