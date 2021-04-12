@@ -15,7 +15,6 @@ class DataModule(pytorch_lightning.LightningDataModule):
     def __init__(self, config, train=True):
         super().__init__()
         self.config = config
-        self.model_name = config["model"]["name"]
 
         try:  # monai
             self.nchannel = self.config["model"]["nchannel"]
@@ -24,7 +23,6 @@ class DataModule(pytorch_lightning.LightningDataModule):
 
         if train:
             self.loader_config = config["loader"]
-            self.model_config = config["model"]
 
             name = config["loader"]["name"]
             if name not in ["default", "focus"]:
@@ -40,6 +38,17 @@ class DataModule(pytorch_lightning.LightningDataModule):
 
             _, self.accepts_costmap = get_loss_criterion(config)
 
+            model_config = config["model"]
+            if "unet_xy" in config["model"]["name"]:
+                self.size_in = model_config["size_in"]
+                self.size_out = model_config["size_out"]
+                self.nchannel = model_config["nchannel"]
+
+            else:
+                self.size_in = model_config["patch_size"]
+                self.size_out = self.size_in
+                self.nchannel = model_config["in_channels"]
+
     def prepare_data(self):
         pass
 
@@ -52,7 +61,6 @@ class DataModule(pytorch_lightning.LightningDataModule):
             validation_config = config["validation"]
             loader_config = config["loader"]
             if validation_config["metric"] is not None:
-                print("Preparing train/validation split...", end=" ")
                 filenames = glob(loader_config["datafolder"] + "/*_GT.ome.tif")
                 filenames.sort()
                 total_num = len(filenames)
@@ -113,7 +121,6 @@ class DataModule(pytorch_lightning.LightningDataModule):
 
                 self.valid_filenames = valid_filenames
                 self.train_filenames = train_filenames
-                print("Done.")
 
             else:
                 print("need validation in config file")
@@ -121,25 +128,13 @@ class DataModule(pytorch_lightning.LightningDataModule):
 
     def train_dataloader(self):
         loader_config = self.loader_config
-        model_config = self.model_config
-
-        if "unet_xy" in self.model_name:
-            size_in = model_config["size_in"]
-            size_out = model_config["size_out"]
-            nchannel = model_config["nchannel"]
-
-        else:
-            size_in = model_config["patch_size"]
-            size_out = size_in
-            nchannel = model_config["in_channels"]
-
         train_set_loader = DataLoader(
             UniversalDataset(
                 self.train_filenames,
                 loader_config["PatchPerBuffer"],
-                size_in,
-                size_out,
-                nchannel,
+                self.size_in,
+                self.size_out,
+                self.nchannel,
                 use_costmap=self.accepts_costmap,
                 transforms=self.transforms,
                 patchize=True,
@@ -155,24 +150,13 @@ class DataModule(pytorch_lightning.LightningDataModule):
 
     def val_dataloader(self):
         loader_config = self.loader_config
-        model_config = self.model_config
-        if "unet_xy" in self.model_name:
-            size_in = model_config["size_in"]
-            size_out = model_config["size_out"]
-            nchannel = model_config["nchannel"]
-
-        else:
-            size_in = model_config["patch_size"]
-            size_out = size_in
-            nchannel = model_config["in_channels"]
-
         val_set_loader = DataLoader(
             UniversalDataset(
                 self.valid_filenames,
                 loader_config["PatchPerBuffer"],
-                size_in,
-                size_out,
-                nchannel,
+                self.size_in,
+                self.size_out,
+                self.nchannel,
                 transforms=[],  # no transforms for validation data
                 use_costmap=self.accepts_costmap,
                 patchize=False,  # validate on entire image
