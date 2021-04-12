@@ -168,12 +168,6 @@ def sliding_window_inference(
         # old models output a list of three predictions
         if "unet_xy" in model_name and isinstance(seg_prob, list):
             seg_prob = seg_prob[0]
-            seg_prob = torch.softmax(seg_prob, dim=1)
-            seg_prob = seg_prob.view(
-                sw_batch_size, 1, out_size[0], out_size[1], out_size[2], 2
-            )
-            seg_prob = torch.transpose(seg_prob, 1, 5)
-            seg_prob = torch.squeeze(seg_prob, dim=5)
         elif model_name == "dynunet":
             seg_prob = seg_prob[0]
         elif model_name == "segresnetvae":  # segresnetvae
@@ -207,6 +201,7 @@ def sliding_window_inference(
         final_slicing.insert(0, slice_dim)
     while len(final_slicing) < len(output_image.shape):
         final_slicing.insert(0, slice(None))
+
     return output_image[final_slicing], vae_loss
 
 
