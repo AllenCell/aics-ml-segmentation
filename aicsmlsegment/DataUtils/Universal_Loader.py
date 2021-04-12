@@ -9,7 +9,8 @@ from aicsmlsegment.utils import (
 from random import shuffle
 from torch.utils.data import Dataset
 from scipy.ndimage import zoom
-from torchio.transforms import RandomAffine
+from torchio.transforms import RandomAffine, RandomBiasField, RandomNoise
+from monai.transforms import RandShiftIntensity
 
 
 # CODE for generic loader
@@ -73,26 +74,42 @@ def undo_resize(img, config):
     return img.astype(np.float32)
 
 
-def swap(l, index1, index2):
+def swap(l: list, index1: int, index2: int):
+    """
+    Swap index1 and index2 of list l
+    """
     temp = l[index1]
     l[index1] = l[index2]
     l[index2] = temp
     return l
 
 
-def validate_shape(img_shape, n_channel, timelapse):
+def validate_shape(img_shape: tuple, n_channel: int = 1, timelapse: bool = False):
+    """
+    General function to load and rearrange the dimensions of 3D images
+    input:
+        img_shape: STCZYX shape of image
+        n_channel: number of channels expted in image
+        timelapse: whether image is a timelapse
+
+    output:
+        load_dict: dictionary to be passed to AICSImage.get_image_data containing out_orientation and specific channel indices
+        correct_shape: tuple rearranged img_shape
+    """
     img_shape = list(img_shape)
     load_order = ["S", "T", "C", "Z", "Y", "X"]
     expected_channel_idx = 2
     # all dimensions that could be channel dimension
     real_channel_idx = [i for i, elem in enumerate(img_shape) if elem == n_channel]
-
     keep_channels = ["C"]
     if expected_channel_idx not in real_channel_idx:
+        assert (
+            len(real_channel_idx) > 0
+        ), f"The specified channel dimension is incorrect and no other dimensions have size {n_channel}"
         # if nchannels is 1, doesn't matter which other size-1 dim we swap it with
         assert (
-            len(real_channel_idx) > 0 and n_channel > 1
-        ), "Index of channel dimension is incorrect and there are multiple candidate channel dimensions. Please check your image metadata."
+            n_channel == 1 or len(real_channel_idx) == 1
+        ), f"Index of channel dimension is incorrect and there are multiple candidate channel dimensions. Please check your image metadata. {img_shape}"
 
         # change load order and image shape to reflect new index of  channel dimension
         real_channel_idx = real_channel_idx[-1]
@@ -124,8 +141,10 @@ def load_img(filename, img_type, n_channel=1, input_ch=None, shape_only=False):
         filename: name of image to be loaded
         img_type: one of "label", "input", or  "costmap" determining the file extension
         n_channel: number of channels expected by model
+        input_ch: channel to extract from image during loading for testing
+        shape_only: whether to only return validated shape of an image
     output:
-        img: numpy array containing desired image in CZYX order or ZYX if it's a costmap
+        img: list of np.ndarray(s) containing image data.
     """
     extension_dict = {
         "label": "_GT.ome.tif",
@@ -140,20 +159,18 @@ def load_img(filename, img_type, n_channel=1, input_ch=None, shape_only=False):
     )
     if shape_only:
         return correct_shape
-    img = reader.get_image_data(**args_dict)
-    if img_type == "costmap":
-        img = np.squeeze(img, 0)  # remove channel dimension
-    elif img_type == "test":
-        # img = img.astype(float)
-        img = img[input_ch, :, :, :]
-        return [img]  # return as list so we can iterate through it in test dataloader
-    elif img_type == "timelapse":
-        imgs = []
-        for tt in range(correct_shape[1]):
-            # Assume:  dimensions = TCZYX
-            img = reader.get_image_data("CZYX", S=0, T=tt, C=input_ch).astype(float)
-            imgs.append(img)
-        return imgs
+    if img_type != "timelapse":
+        img = reader.get_image_data(**args_dict)
+        if img_type == "costmap":
+            img = np.squeeze(img, 0)  # remove channel dimension
+        elif img_type == "test":
+            # return as list so we can iterate through it in test dataloader
+            img = img.astype(float)
+            img = [img[input_ch, :, :, :]]
+    else:
+        img = [
+            reader.get_image_data(**args_dict, T=tt) for tt in range(correct_shape[1])
+        ]
     return img
 
 
@@ -294,6 +311,16 @@ class UniversalDataset(Dataset):
                         np.transpose(np.expand_dims(costmap, axis=0), (0, 3, 2, 1))
                     )
                     costmap = np.transpose(out_map[0, :, :, :], (2, 1, 0))
+            if "RBF" in transforms:
+                random_bias_field = RandomBiasField()
+                raw = random_bias_field(raw)
+            if "RN" in transforms:
+                random_noise = RandomNoise()
+                raw = random_noise(raw)
+
+            if "RI" in transforms:
+                random_intensity = RandShiftIntensity(offsets=0.15, prob=0.2)
+                raw = random_intensity(raw)
 
             if patchize:
                 # take specified number of patches from current image
@@ -348,14 +375,6 @@ class UniversalDataset(Dataset):
                 (self.cmap).append(costmap)
 
     def __getitem__(self, index):
-        # converting to tensor in get item prevents conversion to double tensor
-        # and saves gpu memory
-        # if index % 7 == 0 and self.patchize:
-        #     return (
-        #         torch.rand(self.img[index].shape, dtype=torch.float) / 10,
-        #         torch.zeros(self.img[index].shape, dtype=torch.float),
-        #         torch.ones(self.img[index].shape, dtype=torch.float),
-        #     )
         img_tensor = from_numpy(self.img[index].astype(float)).float()
         gt_tensor = from_numpy(self.gt[index].astype(float)).float()
         cmap_tensor = from_numpy(self.cmap[index].astype(float)).float()
@@ -464,7 +483,6 @@ def patchize_wrapper(pr, fn, img, patch_size, tt, timelapse):
 
 def pad_image(image, size_in, size_out):
     padding = [(x - y) // 2 for x, y in zip(size_in, size_out)]
-    print(image.shape)
     image = np.pad(
         image,
         ((0, 0), (0, 0), (padding[1], padding[1]), (padding[2], padding[2])),
