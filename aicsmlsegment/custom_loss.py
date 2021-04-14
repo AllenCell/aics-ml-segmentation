@@ -11,19 +11,16 @@ SUPPORTED_LOSSES = {
         "source": "monai.losses",
         "args": ["softmax", "include_background"],
         "wrapper_args": {"n_label_ch": 2, "accepts_costmap": False},
-        "compatibility": ["monai"],
     },
     "GeneralizedDice": {
         "source": "monai.losses",
         "args": ["softmax", "include_background"],
         "wrapper_args": {"n_label_ch": 2, "accepts_costmap": False},
-        "compatibility": ["monai"],
     },
     "Focal": {
         "source": "monai.losses",
         "args": [],
         "wrapper_args": {"n_label_ch": 2, "accepts_costmap": False},
-        "compatibility": ["monai"],
     },
     "MaskedDice": {
         "source": "monai.losses",
@@ -33,14 +30,12 @@ SUPPORTED_LOSSES = {
             "accepts_costmap": True,
             "cmap_unsqueeze": True,
         },
-        "compatibility": ["monai"],
     },
     # TORCH
     "MSE": {
         "source": "torch.nn",
         "args": [],
         "wrapper_args": {"n_label_ch": 2, "accepts_costmap": False},
-        "compatibility": ["monai"],
     },
     "CrossEntropy": {
         "source": "torch.nn",
@@ -51,43 +46,34 @@ SUPPORTED_LOSSES = {
             "to_long": True,
             "label_squeeze": True,
         },
-        "compatibility": ["monai"],
     },
     # CUSTOM
-    "MultiAuxillaryElementNLL": {
-        "source": "aicsmlsegment.custom_loss",
-        "args": ["num_task", "weight", "num_class"],
-        "wrapper_args": {
-            "n_label_ch": 1,
-            "accepts_costmap": True,
-            "cmap_unsqueeze": True,
-        },
-        "compatibility": ["custom"],
-    },
     "PixelWiseCrossEntropy": {
         "source": "aicsmlsegment.custom_loss",
         "args": [],
         "costmap": True,
         "wrapper_args": {"n_label_ch": 2, "accepts_costmap": True},
-        "compatibility": ["custom"],
     },
     "ElementAngularMSE": {
         "source": "aicsmlsegment.custom_loss",
         "args": [],
         "wrapper_args": {"n_label_ch": 2, "accepts_costmap": True},
-        "compatibility": ["monai"],
     },
     "MaskedMSE": {
         "source": "aicsmlsegment.custom_loss",
         "args": [],
         "wrapper_args": {"n_label_ch": 2, "accepts_costmap": True},
-        "compatibility": ["monai"],
     },
     "MaskedCrossEntropy": {
         "source": "aicsmlsegment.custom_loss",
         "args": [],
-        "wrapper_args": {"n_label_ch": 2, "accepts_costmap": True},
-        "compatibility": ["custom"],
+        "wrapper_args": {
+            "n_label_ch": 1,
+            "accepts_costmap": True,
+            "cmap_unsqueeze": True,
+            "label_squeeze": True,
+            "to_long": True,
+        },
     },
     "MultiAuxillaryCrossEntropy": {
         "source": "aicsmlsegment.custom_loss",
@@ -99,7 +85,6 @@ SUPPORTED_LOSSES = {
             "label_squeeze": True,
             "to_long": True,
         },
-        "compatibility": ["custom"],
     },
 }
 
@@ -134,9 +119,6 @@ def get_loss_criterion(config: Dict):
             ln in SUPPORTED_LOSSES
         ), f'Invalid loss: {ln}. Supported losses: {[key for key in SUPPORTED_LOSSES]} or combinations as "l1+l2"'
         loss_info = SUPPORTED_LOSSES[ln]
-        assert (
-            config["model_type"] in loss_info["compatibility"]
-        ), f"{config['model']['name']} is not compatible with {ln} loss"
 
         init_args = loss_info["args"]
 
@@ -187,6 +169,9 @@ class LossWrapper(torch.nn.Module):
         self.to_long = to_long
 
     def forward(self, input, target, cmap=None):
+        print("PRE:", input.shape, target.shape, end=" ")
+        if cmap is not None:
+            print(cmap.shape)
         if self.n_label_ch == 2:
             target = torch.squeeze(torch.stack([1 - target, target], dim=1), dim=2)
         if self.cmap_unsqueeze:
@@ -198,8 +183,9 @@ class LossWrapper(torch.nn.Module):
         # THIS HAPPENS ON LAST OUTPUT OF extended_dynunet, not sure why
         if type(input) == tuple:
             input = input[0]
-
+        print("POST:", input.shape, target.shape, end=" ")
         if self.accepts_costmap and cmap is not None:
+            print(cmap.shape)
             loss = self.loss(input, target, cmap)
         else:
             loss = self.loss(input, target)
@@ -225,7 +211,7 @@ class CombinedLoss(torch.nn.Module):
 class MaskedCrossEntropyLoss(torch.nn.Module):
     def __init__(self):
         super(MaskedCrossEntropyLoss, self).__init__()
-        self.loss = torch.nn.NLLLoss(reduce=False)
+        self.loss = torch.nn.NLLLoss(reduction="none")
         self.log_softmax = torch.nn.LogSoftmax(dim=1)
 
     def forward(self, input, target, cmap):

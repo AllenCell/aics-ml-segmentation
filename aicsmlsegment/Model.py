@@ -35,7 +35,6 @@ class Model(pytorch_lightning.LightningModule):
             import importlib
             from aicsmlsegment.model_utils import weights_init as weights_init
 
-            config["model_type"] = "custom"
             module = importlib.import_module(
                 "aicsmlsegment.NetworkArchitecture." + self.model_name
             )
@@ -81,7 +80,6 @@ class Model(pytorch_lightning.LightningModule):
             self.args_inference["size_out"] = model_config["patch_size"]
             del model_config["patch_size"]
             self.model = model(**model_config)
-            config["model_type"] = "custom"
 
         self.config = config
         self.aggregate_img = None
@@ -221,6 +219,7 @@ class Model(pytorch_lightning.LightningModule):
             print("no scheduler is used")
             return optims
 
+    # HACK until pytorch lightning includes reload_dataloaders_every_n_epochs
     def on_train_epoch_start(self):
         if self.epoch_shuffle is not None:
             if self.current_epoch == 0 and self.dataset_params is None:
@@ -263,9 +262,9 @@ class Model(pytorch_lightning.LightningModule):
         if self.epoch_shuffle is not None:
             # ignore dataloader provided by pytorch lightning
             batch = next(self.iter_dataloader)
-            inputs = batch[0].half().cuda()
-            targets = batch[1].cuda()
-            cmap = batch[2].cuda()
+            inputs = batch[0].half().to(self.device)
+            targets = batch[1].to(self.device)
+            cmap = batch[2].to(self.device)
         else:
             inputs = batch[0]
             targets = batch[1]
@@ -331,21 +330,21 @@ class Model(pytorch_lightning.LightningModule):
         val_metric = compute_iou(outputs > 0.5, label, torch.unsqueeze(costmap, dim=1))
         self.log_and_return("val_iou", val_metric)
         # save first validation image result
-        if batch_idx == 0:
-            imsave(
-                self.config["checkpoint_dir"]
-                + os.sep
-                + "validation_results"
-                + os.sep
-                + "epoch="
-                + str(self.current_epoch)
-                + "_loss="
-                + str(round(val_loss.item(), 3))
-                + "_iou="
-                + str(round(val_metric, 3))
-                + ".tiff",
-                outputs[0, 1, :, :, :].detach().cpu().numpy(),
-            )
+        # if batch_idx == 0:
+        #     imsave(
+        #         self.config["checkpoint_dir"]
+        #         + os.sep
+        #         + "validation_results"
+        #         + os.sep
+        #         + "epoch="
+        #         + str(self.current_epoch)
+        #         + "_loss="
+        #         + str(round(val_loss.item(), 3))
+        #         + "_iou="
+        #         + str(round(val_metric, 3))
+        #         + ".tiff",
+        #         outputs[0, 1, :, :, :].detach().cpu().numpy(),
+        #     )
 
     def test_step(self, batch, batch_idx):
         img = batch["img"]
