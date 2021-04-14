@@ -35,8 +35,6 @@ class Model(pytorch_lightning.LightningModule):
             import importlib
             from aicsmlsegment.model_utils import weights_init as weights_init
 
-            # from aicsmlsegment.custom_loss import PixelWiseCrossEntropy
-
             config["model_type"] = "custom"
             module = importlib.import_module(
                 "aicsmlsegment.NetworkArchitecture." + self.model_name
@@ -58,7 +56,6 @@ class Model(pytorch_lightning.LightningModule):
             self.args_inference["size_in"] = model_config["size_in"]
             self.args_inference["size_out"] = model_config["size_out"]
             self.args_inference["nclass"] = model_config["nclass"]
-            # self.val_loss = PixelWiseCrossEntropy(model_config["nclass"][0])
 
         else:  # monai model
             if self.model_name == "segresnetvae":
@@ -84,7 +81,7 @@ class Model(pytorch_lightning.LightningModule):
             self.args_inference["size_out"] = model_config["patch_size"]
             del model_config["patch_size"]
             self.model = model(**model_config)
-            config["model_type"] = "monai"
+            config["model_type"] = "custom"
 
         self.config = config
         self.aggregate_img = None
@@ -185,10 +182,10 @@ class Model(pytorch_lightning.LightningModule):
                 assert 0 < scheduler_params["factor"] < 1
                 assert scheduler_params["patience"] > 0
                 # if patience is too short, validation metrics won't be available
-                if "val" in scheduler_params["monitor"]:
-                    assert (
-                        scheduler_params["patience"] > self.validation_period
-                    ), "Patience must be larger than validation frequency"
+                # if "val" in scheduler_params["monitor"]:
+                # assert (
+                #     scheduler_params["patience"] > self.validation_period
+                # ), "Patience must be larger than validation frequency"
                 scheduler = ReduceLROnPlateau(
                     optims[0],
                     mode=scheduler_params["mode"],
@@ -225,23 +222,21 @@ class Model(pytorch_lightning.LightningModule):
             return optims
 
     def on_train_epoch_start(self):
-        if self.current_epoch == 0 and self.dataset_params is None:
-            print([att for att in dir(self.datamodule)])
+        if self.epoch_shuffle is not None:
+            if self.current_epoch == 0 and self.dataset_params is None:
+                self.dataset_params = self.train_dataloader().dataset.get_params()
 
-            print("original dataloader", self.train_dataloader)
-            print("JUST GETTING PARAMS")
-            self.dataset_params = self.train_dataloader().dataset.get_params()
-
-        if self.current_epoch % self.epoch_shuffle == 0:
-            print([att for att in dir(self) if "data" in att])
-            self.datamodule.train_dataloader = DataLoader(
-                UniversalDataset(**self.dataset_params),
-                batch_size=self.config["loader"]["batch_size"],
-                shuffle=True,
-                num_workers=self.config["loader"]["NumWorkers"],
-                pin_memory=True,
-            )
-            print("next dataloader", self.train_dataloader)
+            if self.current_epoch % self.epoch_shuffle == 0:
+                if self.global_rank == 0:
+                    print("Reloading dataloader...")
+                self.DATALOADER = DataLoader(
+                    UniversalDataset(**self.dataset_params),
+                    batch_size=self.config["loader"]["batch_size"],
+                    shuffle=True,
+                    num_workers=self.config["loader"]["NumWorkers"],
+                    pin_memory=True,
+                )
+            self.iter_dataloader = iter(self.DATALOADER)
 
     def get_upsample_grid(self, desired_shape, n_targets):
         x = torch.linspace(-1, 1, desired_shape[-1], device=self.device)
@@ -265,9 +260,16 @@ class Model(pytorch_lightning.LightningModule):
         return {"loss": value}  # return val only used in train step
 
     def training_step(self, batch, batch_idx):
-        inputs = batch[0]
-        targets = batch[1]
-        cmap = batch[2]
+        if self.epoch_shuffle is not None:
+            # ignore dataloader provided by pytorch lightning
+            batch = next(self.iter_dataloader)
+            inputs = batch[0].half().cuda()
+            targets = batch[1].cuda()
+            cmap = batch[2].cuda()
+        else:
+            inputs = batch[0]
+            targets = batch[1]
+            cmap = batch[2]
         outputs = self(inputs)
 
         vae_loss = 0

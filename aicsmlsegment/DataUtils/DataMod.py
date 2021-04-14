@@ -24,7 +24,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
         if train:
             self.loader_config = config["loader"]
 
-            name = config["loader"]["name"]
+            name = self.loader_config["name"]
             if name not in ["default", "focus"]:
                 print("other loaders are under construction")
                 quit()
@@ -37,6 +37,10 @@ class DataModule(pytorch_lightning.LightningDataModule):
                 self.transforms = self.loader_config["Transforms"]
 
             _, self.accepts_costmap = get_loss_criterion(config)
+
+            self.init_only = False
+            if self.loader_config["epoch_shuffle"] is not None:
+                self.init_only = True
 
             model_config = config["model"]
             if "unet_xy" in config["model"]["name"]:
@@ -139,7 +143,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
                 transforms=self.transforms,
                 patchize=True,
                 check_crop=self.check_crop,
-                # init_only=True,  # first call of train_dataloader is just to get dataset params
+                init_only=self.init_only,  # first call of train_dataloader is just to get dataset params if init_only is true
             ),
             batch_size=loader_config["batch_size"],
             shuffle=True,

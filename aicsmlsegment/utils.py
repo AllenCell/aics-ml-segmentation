@@ -28,7 +28,6 @@ REQUIRED_CONFIG_FIELDS = {
             "datafolder",
             "batch_size",
             "PatchPerBuffer",
-            "epoch_shuffle",
             "NumWorkers",
             "Transforms",
         ],
@@ -59,6 +58,9 @@ OPTIONAL_CONFIG_FIELDS = {
         "SWA": ["swa_start", "swa_lr", "annealing_epochs", "annealing_strategy"],
         "tensorboard": None,
         "precision": None,
+        "loader": [
+            "epoch_shuffle",
+        ],
     },
     False: {
         "gpus": None,
@@ -80,6 +82,7 @@ DEFAULT_CONFIG = {
     "callbacks": {"name": None},
     "precision": 32,
     "large_image_resize": [1, 1, 1],
+    "epoch_shuffle": None,
 }
 
 MODEL_PARAMETERS = {

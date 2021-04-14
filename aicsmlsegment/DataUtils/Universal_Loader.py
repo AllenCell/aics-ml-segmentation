@@ -221,13 +221,10 @@ class UniversalDataset(Dataset):
             "patchize": patchize,
             "check_crop": check_crop,
         }
-        # if init_only:
-        #     num_patch = 1
-        # print("init only?", init_only)
-        # print("GONNA GENERATE", patchize * num_patch, "PATCHES")
-        # if not patchize:
-        #     print("Val data")
-        #     print(filenames)
+        self.num_patch = num_patch
+        self.init_only = init_only
+        if init_only:
+            num_patch = 1
         num_data = len(filenames)
         shuffle(filenames)
         num_patch_per_img = np.zeros((num_data,), dtype=int)
@@ -375,9 +372,12 @@ class UniversalDataset(Dataset):
                 (self.cmap).append(costmap)
 
     def __getitem__(self, index):
+        if self.init_only:
+            return torch.zeros(0)
         img_tensor = from_numpy(self.img[index].astype(float)).float()
         gt_tensor = from_numpy(self.gt[index].astype(float)).float()
         cmap_tensor = from_numpy(self.cmap[index].astype(float)).float()
+
         return (
             img_tensor,
             gt_tensor,
@@ -385,6 +385,8 @@ class UniversalDataset(Dataset):
         )
 
     def __len__(self):
+        if self.init_only:
+            return self.num_patch
         return len(self.img)
 
     def get_params(self):
