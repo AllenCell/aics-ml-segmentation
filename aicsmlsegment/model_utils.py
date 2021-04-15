@@ -2,6 +2,7 @@ import numpy as np
 import torch
 
 from aicsmlsegment.multichannel_sliding_window import sliding_window_inference
+from aicsmlsegment.fnet_prediction_torch import predict_piecewise
 
 
 def flip(img: np.ndarray, axis: int):
@@ -14,7 +15,6 @@ def flip(img: np.ndarray, axis: int):
         (1,C,Z,X,Y)-shaped tensor
     flip input img along axis
     """
-
     out_img = img.detach().clone()
     for ch_idx in range(out_img.shape[0]):
         str_im = out_img[ch_idx, :, :, :]
@@ -109,23 +109,36 @@ def model_inference(
     """
     perform model inference and extract output channel
     """
-    input_image_size = np.array((input_img.shape)[-3:])
-    added_padding = np.array(
-        [2 * ((x - y) // 2) for x, y in zip(args["size_in"], args["size_out"])]
-    )
-    original_image_size = input_image_size - added_padding
-    with torch.no_grad():
-        result, vae_loss = sliding_window_inference(
-            inputs=input_img.cuda(),
-            roi_size=args["size_in"],
-            out_size=args["size_out"],
-            original_image_size=original_image_size,
-            sw_batch_size=1,
-            predictor=model.forward,
-            overlap=0.25,
-            mode="gaussian",
-            model_name=model_name,
+    if args["size_in"] == args["size_out"]:
+
+        dims_max = [0] + args["size_in"]
+        overlaps = [int(0.25 * dim) for dim in dims_max]
+        result = predict_piecewise(
+            model,
+            torch.squeeze(input_img, dim=0),
+            dims_max=dims_max,
+            overlaps=overlaps,
         )
+        vae_loss = 0
+    else:
+        input_image_size = np.array((input_img.shape)[-3:])
+        added_padding = np.array(
+            [2 * ((x - y) // 2) for x, y in zip(args["size_in"], args["size_out"])]
+        )
+        original_image_size = input_image_size - added_padding
+        with torch.no_grad():
+            result, vae_loss = sliding_window_inference(
+                inputs=input_img.cuda(),
+                roi_size=args["size_in"],
+                out_size=args["size_out"],
+                original_image_size=original_image_size,
+                sw_batch_size=1,
+                predictor=model.forward,
+                overlap=0.25,
+                mode="gaussian",
+                model_name=model_name,
+            )
+
     if softmax:
         result = torch.nn.Softmax(dim=1)(result)
 
