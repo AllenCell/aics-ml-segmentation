@@ -297,38 +297,40 @@ def load_config(config_file, train):
 
 
 def create_unique_run_directory(config, train):
+    # directory to check for config in
+    subdir_names = {True: "/run_", False: "/prediction_"}
     if train:
         dir_name = config["checkpoint_dir"]
     else:
         dir_name = config["OutputDir"]
-    if not os.path.exists(dir_name):
-        os.makedirs(dir_name)
-        most_recent_run_number = 0
-    else:
+    if os.path.exists(dir_name):
         subfolders = [x for x in os.walk(dir_name)][0][1]
-        run_numbers = [int(sub.split("_")[1]) for sub in subfolders]
+        # only look at run_ or prediction_ folders
+        run_numbers = [
+            int(sub.split("_")[1])
+            for sub in subfolders
+            if subdir_names[train][1:] in sub
+        ]
         if len(subfolders) > 0:
             most_recent_run_number = max(run_numbers)
-            if train:
-                most_recent_run_dir = dir_name + "/run_" + str(most_recent_run_number)
-            else:
-                most_recent_run_dir = (
-                    dir_name + "/prediction_" + str(most_recent_run_number)
-                )
+            most_recent_run_dir = (
+                dir_name + subdir_names[train] + str(most_recent_run_number)
+            )
             most_recent_config, _ = load_config(
                 most_recent_run_dir + "/config.yaml",
                 train=train,
             )
             # HACK - this will combine runs with the same config files that are run within a minute of one another.
-            # multi gpu case - don't create a new run folder
+            # multi gpu case - don't create a new run folder on non-rank 0 gpu
             if most_recent_config == config:
                 return most_recent_run_dir
         else:
             most_recent_run_number = 0
-    if train:
-        new_run_folder_name = "/run_" + str(most_recent_run_number + 1)
     else:
-        new_run_folder_name = "/prediction_" + str(most_recent_run_number + 1)
+        os.makedirs(dir_name)
+        most_recent_run_number = 0
+
+    new_run_folder_name = subdir_names[train] + str(most_recent_run_number + 1)
     os.makedirs(dir_name + new_run_folder_name)
     if train:
         os.makedirs(dir_name + new_run_folder_name + "/validation_results")
