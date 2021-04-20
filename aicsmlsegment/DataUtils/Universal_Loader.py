@@ -457,33 +457,6 @@ def patchize(img, pr, patch_size):
     return ijk, imgs
 
 
-def patchize_wrapper(pr, fn, img, patch_size, tt, timelapse):
-    if pr == [1, 1, 1]:
-        return_dict = {
-            "fn": [fn] if timelapse else fn,
-            "img": [img] if timelapse else img,
-            "im_shape": [img.shape] if timelapse else img.shape,
-            "ijk": [-1] if timelapse else -1,  # avoid reducing list size when inserted
-            "save_n_batches": 1,
-            "tt": [tt] if timelapse else -1,
-        }
-
-    else:
-        save_n_batches = np.prod(pr)  # how many patches until aggregated image saved
-        ijk, imgs = patchize(
-            img, pr, patch_size
-        )  # make sure that filename aligns with img in get_item
-        return_dict = {
-            "fn": [fn] * save_n_batches,
-            "img": imgs,
-            "im_shape": [img.shape] * len(imgs),
-            "ijk": ijk,
-            "save_n_batches": save_n_batches,
-            "tt": [tt] * save_n_batches if timelapse else [-1] * save_n_batches,
-        }
-    return return_dict
-
-
 def pad_image(image, size_in, size_out):
     padding = [(x - y) // 2 for x, y in zip(size_in, size_out)]
     image = np.pad(
@@ -500,137 +473,7 @@ def pad_image(image, size_in, size_out):
     return image
 
 
-def get_timepoints(filenames):
-    timepoints = [load_img(fn, "test", shape_only=True)[1] for fn in filenames]
-    return timepoints
-
-
-class TestDataset(Dataset):
-    def __init__(self, config):
-        self.config = config
-        self.inf_config = config["mode"]
-        self.model_config = config["model"]
-        self.patchize_ratio = config["large_image_resize"]
-        self.patches_per_image = np.prod(self.patchize_ratio)
-        self.load_type = "test"
-        self.timelapse = False
-
-        try:  # monai
-            self.size_in = self.model_config["patch_size"]
-            self.size_out = self.model_config["patch_size"]
-            self.nchannel = self.model_config["in_channels"]
-        except KeyError:  # unet_xy_zoom
-            self.size_in = self.model_config["size_in"]
-            self.size_out = self.model_config["size_out"]
-
-            self.nchannel = self.model_config["nchannel"]
-
-        if self.inf_config["name"] == "file":
-            filenames = [self.inf_config["InputFile"]]
-            if "timelapse" in self.inf_config and self.inf_config["timelapse"]:
-                self.load_type = "timelapse"
-                self.timelapse = True
-        else:
-            from glob import glob
-
-            filenames = glob(
-                self.inf_config["InputDir"] + "/*" + self.inf_config["DataType"]
-            )
-            filenames.sort()
-        # print("Files to be processed:", filenames)
-
-        tp_per_image = [1] * len(filenames)  # get_timepoints(filenames)
-        children_per_image = np.array(tp_per_image) * self.patches_per_image
-        parent_indices = list(np.cumsum(children_per_image))
-        self.total_n_images = parent_indices.pop(-1)
-        parent_indices = [0] + parent_indices
-        self.worker_boundary_indices = parent_indices
-        self.image_info = {
-            "fn": [None] * self.total_n_images,
-            "ijk": [None] * self.total_n_images,
-            "im_shape": [None] * self.total_n_images,
-            "img": [None] * self.total_n_images,
-            "tt": [None] * self.total_n_images,
-            "is_parent": [False] * self.total_n_images,
-        }
-
-        for idx, fn in zip(parent_indices, filenames):
-            self.image_info["is_parent"][idx] = True
-            self.image_info["fn"][idx] = fn
-
-        # print(self.image_info["is_parent"])
-        self.save_n_batches = None
-
-    def clear_info(self, index):
-        # don't have to keep large image info after image has been returned
-        for key in self.image_info:
-            if key not in ["fn", "is_parent"]:
-                self.image_info[key][index] = None
-
-    def __getitem__(self, index):
-        # print([fn[-20:] if fn is not None else fn for fn in self.image_info["fn"]])
-        fn = self.image_info["fn"][index]
-        if self.image_info["img"][index] is None:  # image hasn't been loaded yet
-            imgs = load_img(fn, self.load_type, self.nchannel, self.config["InputCh"])
-            # only one image unless timelapse
-            for tt, img in enumerate(imgs):
-                img = resize(img, self.config)
-                print("normalizing", fn)
-                img = image_normalization(img, self.config["Normalization"])
-                # generate patch info
-                img_info = patchize_wrapper(
-                    self.patchize_ratio,
-                    fn,
-                    img,
-                    self.size_in,
-                    tt,
-                    self.timelapse,
-                )
-                self.save_n_batches = img_info["save_n_batches"]
-                #                    timelapse     or patchize
-                children_generated = len(imgs) > 1 or self.save_n_batches > 1
-                if children_generated:
-                    # add children to queue of images, remove parent from queue
-                    return_dict = {}
-                    for key in self.image_info:
-                        if key == "is_parent":
-                            continue
-                        # return first child image
-                        return_dict[key] = img_info[key][0]
-                        # add child images next in list
-                        start_index = index + tt * self.patches_per_image
-                        self.image_info[key][
-                            start_index : start_index + len(img_info[key])
-                        ] = img_info[key]
-                else:
-                    return_dict = img_info
-                return_dict["save_n_batches"] = self.save_n_batches
-                return_dict["img"] = pad_image(
-                    return_dict["img"], self.size_in, self.size_out
-                )
-                # print("Returning parent at", index)
-                self.clear_info(index)
-                return return_dict
-
-        else:
-            # print("Returning child at", index)
-            return_dict = {
-                "img": pad_image(
-                    self.image_info["img"][index], self.size_in, self.size_out
-                ),
-                "fn": self.image_info["fn"][index],
-                "tt": self.image_info["tt"][index],
-                "ijk": self.image_info["ijk"][index],
-                "save_n_batches": self.save_n_batches,
-                "im_shape": self.image_info["im_shape"][index],
-            }
-            self.clear_info(index)
-            return return_dict
-
-    def __len__(self):
-        return self.total_n_images
-
-
+# TODO deal with timelapse images
 class TestDataset_iterable(IterableDataset):
     def __init__(self, config):
         self.config = config
@@ -704,11 +547,7 @@ class TestDataset_iterable(IterableDataset):
         return self
 
     def __next__(self):
-        print(
-            f"Requesting {self.current_index} from worker {torch.utils.data.get_worker_info().id} with final index {self.end}. {len(self.all_img_info)} images remaining"
-        )
         if self.current_index > self.end and len(self.all_img_info) == 0:
-            print(f"worker {torch.utils.data.get_worker_info().id} STOP ITERATION")
             raise StopIteration
         if len(self.all_img_info) == 0:  # load new image
             fn = self.filenames[self.current_index]
