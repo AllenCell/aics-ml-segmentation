@@ -120,6 +120,7 @@ class Model(pytorch_lightning.LightningModule):
             if config["large_image_resize"] != [1, 1, 1]:
                 self.aggregate_img = {}
                 self.count_map = {}
+                self.batch_count = {}
         self.save_hyperparameters()
 
     def forward(self, x):
@@ -226,7 +227,7 @@ class Model(pytorch_lightning.LightningModule):
                 self.dataset_params = self.train_dataloader().dataset.get_params()
 
             if self.current_epoch % self.epoch_shuffle == 0:
-                if self.global_rank == 0:
+                if self.global_rank == 0 and self.current_epoch > 0:
                     print("Reloading dataloader...")
                 self.DATALOADER = DataLoader(
                     UniversalDataset(**self.dataset_params),
@@ -304,7 +305,8 @@ class Model(pytorch_lightning.LightningModule):
                 loss += self.loss_function(outputs[out], resize_target, resize_costmap)
             loss /= len(outputs)
         else:
-            # from https://arxiv.org/pdf/1810.11654.pdf, vae_loss > 0 if model = segresnetvae
+            # from https://arxiv.org/pdf/1810.11654.pdf,
+            # vae_loss > 0 if model = segresnetvae
             loss = self.loss_function(outputs, targets, cmap) + 0.1 * vae_loss
         return self.log_and_return("epoch_train_loss", loss)
 
@@ -330,21 +332,21 @@ class Model(pytorch_lightning.LightningModule):
         val_metric = compute_iou(outputs > 0.5, label, torch.unsqueeze(costmap, dim=1))
         self.log_and_return("val_iou", val_metric)
         # save first validation image result
-        # if batch_idx == 0:
-        #     imsave(
-        #         self.config["checkpoint_dir"]
-        #         + os.sep
-        #         + "validation_results"
-        #         + os.sep
-        #         + "epoch="
-        #         + str(self.current_epoch)
-        #         + "_loss="
-        #         + str(round(val_loss.item(), 3))
-        #         + "_iou="
-        #         + str(round(val_metric, 3))
-        #         + ".tiff",
-        #         outputs[0, 1, :, :, :].detach().cpu().numpy(),
-        #     )
+        if batch_idx == 0:
+            imsave(
+                self.config["checkpoint_dir"]
+                + os.sep
+                + "validation_results"
+                + os.sep
+                + "epoch="
+                + str(self.current_epoch)
+                + "_loss="
+                + str(round(val_loss.item(), 3))
+                + "_iou="
+                + str(round(val_metric, 3))
+                + ".tiff",
+                outputs[0, 1, :, :, :].detach().cpu().numpy(),
+            )
 
     def test_step(self, batch, batch_idx):
         img = batch["img"]
@@ -377,6 +379,7 @@ class Model(pytorch_lightning.LightningModule):
                 self.count_map[fn] = torch.zeros(
                     batch["im_shape"], dtype=torch.uint8, device=self.device
                 )
+                self.batch_count[fn] = 0
             self.aggregate_img[fn][
                 :,  # preserve all channels
                 i : i + output_img.shape[2],
@@ -390,10 +393,14 @@ class Model(pytorch_lightning.LightningModule):
                 j : j + output_img.shape[3],
                 k : k + output_img.shape[4],
             ] += 1
+            self.batch_count[fn] += 1
+        else:
+            # not aggregating an image, save every batch
+            self.batch_count = {fn: 1}
 
         # only want to perform post-processing and saving once the aggregated image
         # is complete or we're not aggregating an image
-        if (batch_idx + 1) % save_n_batches == 0:
+        if self.batch_count[fn] % save_n_batches == 0:
             if self.aggregate_img is not None:
                 # normalize for overlapping patches
                 output_img = self.aggregate_img[fn] / self.count_map[fn]

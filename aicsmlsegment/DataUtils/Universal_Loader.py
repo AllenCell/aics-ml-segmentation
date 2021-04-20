@@ -7,7 +7,7 @@ from aicsmlsegment.utils import (
     image_normalization,
 )
 from random import shuffle
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, IterableDataset
 from scipy.ndimage import zoom
 from torchio.transforms import RandomAffine, RandomBiasField, RandomNoise
 from monai.transforms import RandShiftIntensity
@@ -63,6 +63,7 @@ def undo_resize(img, config):
         img = zoom(
             img,
             (
+                1.0,
                 1.0,
                 1 / config["ResizeRatio"][0],
                 1 / config["ResizeRatio"][1],
@@ -225,6 +226,8 @@ class UniversalDataset(Dataset):
         self.init_only = init_only
         if init_only:
             num_patch = 1
+        if not patchize:
+            print("Validating on", filenames)
         num_data = len(filenames)
         shuffle(filenames)
         num_patch_per_img = np.zeros((num_data,), dtype=int)
@@ -245,8 +248,6 @@ class UniversalDataset(Dataset):
 
         # extract patches from images until num_patch reached
         for img_idx, fn in enumerate(filenames):
-            # print("training on", fn)
-
             # if we're not dividing into patches, don't break before transforming imgs
             if patchize and len(self.img) == num_patch:
                 break
@@ -509,7 +510,6 @@ class TestDataset(Dataset):
         self.config = config
         self.inf_config = config["mode"]
         self.model_config = config["model"]
-        self.precision = config["precision"]
         self.patchize_ratio = config["large_image_resize"]
         self.patches_per_image = np.prod(self.patchize_ratio)
         self.load_type = "test"
@@ -537,14 +537,14 @@ class TestDataset(Dataset):
                 self.inf_config["InputDir"] + "/*" + self.inf_config["DataType"]
             )
             filenames.sort()
-        print("Files to be processed:", filenames)
+        # print("Files to be processed:", filenames)
 
         tp_per_image = [1] * len(filenames)  # get_timepoints(filenames)
         children_per_image = np.array(tp_per_image) * self.patches_per_image
         parent_indices = list(np.cumsum(children_per_image))
         self.total_n_images = parent_indices.pop(-1)
         parent_indices = [0] + parent_indices
-
+        self.worker_boundary_indices = parent_indices
         self.image_info = {
             "fn": [None] * self.total_n_images,
             "ijk": [None] * self.total_n_images,
@@ -571,25 +571,12 @@ class TestDataset(Dataset):
         # print([fn[-20:] if fn is not None else fn for fn in self.image_info["fn"]])
         fn = self.image_info["fn"][index]
         if self.image_info["img"][index] is None:  # image hasn't been loaded yet
-            # # wait for another worker to produce child info
-            # if not self.image_info["is_parent"][index]:
-            #     timeout = 60 * 1  # 20  minutes for large image normalization
-            #     print(index, end=" ")
-            #     end_time = time.time() + timeout
-            #     print("waiting....")
-            #     while self.image_info["img"][index] is None and time.time() < end_time:
-            #         time.sleep(1)
-            #     if time.time() > end_time:
-            #         print(index, "TIMED OUT")
-            #     else:
-            #         print(index, "OTHER WORKER LOADED IMG")
-            #         print(self.image_info["fn"])
-
             imgs = load_img(fn, self.load_type, self.nchannel, self.config["InputCh"])
             # only one image unless timelapse
             for tt, img in enumerate(imgs):
-                img = image_normalization(img, self.config["Normalization"])
                 img = resize(img, self.config)
+                print("normalizing", fn)
+                img = image_normalization(img, self.config["Normalization"])
                 # generate patch info
                 img_info = patchize_wrapper(
                     self.patchize_ratio,
@@ -601,7 +588,6 @@ class TestDataset(Dataset):
                 )
                 self.save_n_batches = img_info["save_n_batches"]
                 #                    timelapse     or patchize
-
                 children_generated = len(imgs) > 1 or self.save_n_batches > 1
                 if children_generated:
                     # add children to queue of images, remove parent from queue
@@ -643,3 +629,102 @@ class TestDataset(Dataset):
 
     def __len__(self):
         return self.total_n_images
+
+
+class TestDataset_iterable(IterableDataset):
+    def __init__(self, config):
+        self.config = config
+        self.inf_config = config["mode"]
+        self.model_config = config["model"]
+        self.patchize_ratio = config["large_image_resize"]
+        self.patches_per_image = np.prod(self.patchize_ratio)
+        self.load_type = "test"
+        self.timelapse = False
+
+        try:  # monai
+            self.size_in = self.model_config["patch_size"]
+            self.size_out = self.model_config["patch_size"]
+            self.nchannel = self.model_config["in_channels"]
+        except KeyError:  # unet_xy_zoom
+            self.size_in = self.model_config["size_in"]
+            self.size_out = self.model_config["size_out"]
+            self.nchannel = self.model_config["nchannel"]
+
+        if self.inf_config["name"] == "file":
+            filenames = [self.inf_config["InputFile"]]
+            if "timelapse" in self.inf_config and self.inf_config["timelapse"]:
+                self.load_type = "timelapse"
+                self.timelapse = True
+        else:
+            from glob import glob
+
+            filenames = glob(
+                self.inf_config["InputDir"] + "/*" + self.inf_config["DataType"]
+            )
+            filenames.sort()
+        print("Files to be processed:", filenames)
+
+        self.filenames = filenames
+        self.start = None
+        self.end = None
+        self.all_img_info = []
+
+    def patchize_wrapper_iterable(self, pr, fn, img, patch_size, tt, timelapse):
+        if pr == [1, 1, 1]:
+            return_dicts = [
+                {
+                    "fn": fn,
+                    "img": pad_image(img, self.size_in, self.size_out),
+                    "im_shape": img.shape,
+                    "ijk": -1,
+                    "save_n_batches": 1,
+                    "tt": tt if timelapse else -1,
+                }
+            ]
+        else:
+            save_n_batches = np.prod(
+                pr
+            )  # how many patches until aggregated image saved
+            ijk, imgs = patchize(img, pr, patch_size)
+            return_dicts = []
+            for index, patch in zip(ijk, imgs):
+                return_dict = {
+                    "fn": fn,
+                    "img": pad_image(patch, self.size_in, self.size_out),
+                    "im_shape": img.shape,
+                    "ijk": index,
+                    "save_n_batches": save_n_batches,
+                    "tt": tt if timelapse else -1,
+                }
+                return_dicts.append(return_dict)
+        return return_dicts
+
+    def __iter__(self):
+        self.current_index = self.start
+        return self
+
+    def __next__(self):
+        print(
+            f"Requesting {self.current_index} from worker {torch.utils.data.get_worker_info().id} with final index {self.end}. {len(self.all_img_info)} images remaining"
+        )
+        if self.current_index > self.end and len(self.all_img_info) == 0:
+            print(f"worker {torch.utils.data.get_worker_info().id} STOP ITERATION")
+            raise StopIteration
+        if len(self.all_img_info) == 0:  # load new image
+            fn = self.filenames[self.current_index]
+            imgs = load_img(fn, self.load_type, self.nchannel, self.config["InputCh"])
+            # only one image unless timelapse
+            for tt, img in enumerate(imgs):
+                img = resize(img, self.config)
+                img = image_normalization(img, self.config["Normalization"])
+                # generate patch info
+                self.all_img_info += self.patchize_wrapper_iterable(
+                    self.patchize_ratio,
+                    fn,
+                    img,
+                    self.size_in,
+                    tt,
+                    self.timelapse,
+                )
+            self.current_index += 1  # next iteration load the next file
+        return self.all_img_info.pop()  # pop patch/tp

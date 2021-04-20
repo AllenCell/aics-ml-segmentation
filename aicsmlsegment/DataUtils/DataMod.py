@@ -1,6 +1,7 @@
 from aicsmlsegment.DataUtils.Universal_Loader import (
     UniversalDataset,
     TestDataset,
+    TestDataset_iterable,
     load_img,
 )
 import random
@@ -9,6 +10,17 @@ from torch.utils.data import DataLoader
 import pytorch_lightning
 from aicsmlsegment.Model import get_loss_criterion
 import numpy as np
+import torch
+from math import ceil
+
+
+def init_worker(worker_id):
+    worker_info = torch.utils.data.get_worker_info()
+    dataset = worker_info.dataset
+    # configure the dataset to only process the split workload
+    per_worker = int(ceil(len(dataset.filenames) / float(worker_info.num_workers)))
+    dataset.start = worker_info.id * per_worker
+    dataset.end = min(len(dataset.filenames), (worker_info.id + 1) * per_worker) - 1
 
 
 class DataModule(pytorch_lightning.LightningDataModule):
@@ -87,6 +99,8 @@ class DataModule(pytorch_lightning.LightningDataModule):
                         if LeaveOut[0] > 0 and LeaveOut[0] < 1:
                             num_train = int(np.floor((1 - LeaveOut[0]) * total_num))
                             shuffled_idx = np.arange(total_num)
+                            # make sure validation sets are same across gpus
+                            random.seed(0)
                             random.shuffle(shuffled_idx)
                             train_idx = shuffled_idx[:num_train]
                             valid_idx = shuffled_idx[num_train:]
@@ -174,10 +188,11 @@ class DataModule(pytorch_lightning.LightningDataModule):
 
     def test_dataloader(self):
         test_set_loader = DataLoader(
-            TestDataset(self.config),
+            TestDataset_iterable(self.config),  #
             batch_size=1,
             shuffle=False,
             num_workers=self.config["NumWorkers"],
             pin_memory=True,
+            worker_init_fn=init_worker,
         )
         return test_set_loader
