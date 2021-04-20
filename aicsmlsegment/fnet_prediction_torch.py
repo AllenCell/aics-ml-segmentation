@@ -25,17 +25,16 @@ def _predict_piecewise_recurse(
 ):
     """Performs piecewise prediction recursively."""
     if tuple(ar_in.shape[1:]) == tuple(dims_max[1:]):
-        ar_in = torch.unsqueeze(ar_in, dim=0)
-        ar_out = predictor.forward(ar_in.contiguous(), **predict_kwargs)
+        ar_out = predictor.forward(torch.unsqueeze(ar_in, dim=0), **predict_kwargs)
         if isinstance(ar_out, list):
             ar_out = ar_out[0]
-        ar_out = torch.squeeze(
-            ar_out, dim=0
-        )  # remove N dimension so that multichannel outputs can be used
+        # remove N dimension so that multichannel outputs can be used
+        ar_out = torch.squeeze(ar_out, dim=0)
         weights, shape_in = _get_weights(ar_out.shape)
         weights = torch.as_tensor(weights, dtype=ar_out.dtype, device=ar_out.device)
         ar_weight = torch.broadcast_to(weights, shape_in)
-        return ar_out * ar_weight, ar_weight
+        torch.mul(ar_out, ar_weight, out=ar_out)
+        return ar_out, weights
     dim = None
     # Find first dim where input > max
     for idx_d in range(1, ar_in.ndim):
@@ -62,11 +61,12 @@ def _predict_piecewise_recurse(
             ar_out = torch.zeros(
                 shape_out, dtype=pred_sub.dtype, device=pred_sub.device
             )
-            ar_weight = torch.zeros(
-                shape_out, dtype=pred_weight_sub.dtype, device=pred_sub.device
+            ar_weight = torch.zeros(  # ar_weight is identical across channels - only save 1 channel to preserve memory
+                shape_out[1:], dtype=pred_weight_sub.dtype, device=pred_sub.device
             )
-        ar_out[slices] += pred_sub
-        ar_weight[slices] += pred_weight_sub
+        torch.add(ar_out[slices], pred_sub, out=ar_out[slices])
+        torch.add(ar_weight[slices[1:]], pred_weight_sub, out=ar_weight[slices[1:]])
+
         offset += dims_max[dim] - overlaps[dim]
         if end == ar_in.shape[dim]:
             done = True
@@ -123,6 +123,11 @@ def predict_piecewise(
         predictor, tensor_in, dims_max=dims_max, overlaps=overlaps, **predict_kwargs
     )
 
-    mask = ar_weight > 0.0
-    ar_out[mask] = ar_out[mask] / ar_weight[mask]
-    return torch.unsqueeze(ar_out, dim=0)  # model_inference expects NCZYX
+    # move to cpu to avoid GPU OOM for divide on large images
+    ar_out = ar_out.detach().cpu().numpy()
+    ar_weight = ar_weight.detach().cpu().numpy()
+    # identical weights in each channel
+    ar_weight = np.broadcast_to(ar_weight, ar_out.shape)
+
+    np.divide(ar_out, ar_weight, out=ar_out, where=ar_weight > 0.0)
+    return np.expand_dims(ar_out, axis=0)  # model_inference expects NCZYX

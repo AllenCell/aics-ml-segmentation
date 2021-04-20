@@ -110,16 +110,36 @@ def model_inference(
     perform model inference and extract output channel
     """
     if args["size_in"] == args["size_out"]:
+        from scipy.special import softmax
 
         dims_max = [0] + args["size_in"]
-        overlaps = [int(0.25 * dim) for dim in dims_max]
+        overlaps = [int(0.1 * dim) for dim in dims_max]
         result = predict_piecewise(
             model,
-            torch.squeeze(input_img, dim=0),
+            input_img[0],
             dims_max=dims_max,
             overlaps=overlaps,
         )
-        vae_loss = 0
+        for i in range(1, input_img.shape[0]):
+            output = predict_piecewise(
+                model,
+                input_img[i],
+                dims_max=dims_max,
+                overlaps=overlaps,
+            )
+            result = np.append(result, output, axis=0)
+        if softmax:
+            result = softmax(result, axis=1)
+        if extract_output_ch:
+            # old models
+            if type(args["OutputCh"]) == list and len(args["OutputCh"]) >= 2:
+                args["OutputCh"] = args["OutputCh"][1]
+            result = result[:, args["OutputCh"], :, :, :]
+        if not squeeze:
+            result = np.expand_dims(result, axis=1)
+        if not to_numpy:
+            result = torch.as_tensor(result, device=input_img.device)
+        return result, 0
     else:
         input_image_size = np.array((input_img.shape)[-3:])
         added_padding = np.array(
@@ -128,7 +148,7 @@ def model_inference(
         original_image_size = input_image_size - added_padding
         with torch.no_grad():
             result, vae_loss = sliding_window_inference(
-                inputs=input_img.cuda(),
+                inputs=input_img,
                 roi_size=args["size_in"],
                 out_size=args["size_out"],
                 original_image_size=original_image_size,
@@ -141,13 +161,11 @@ def model_inference(
 
     if softmax:
         result = torch.nn.Softmax(dim=1)(result)
-
     if extract_output_ch:
         # old models
         if type(args["OutputCh"]) == list and len(args["OutputCh"]) >= 2:
             args["OutputCh"] = args["OutputCh"][1]
         result = result[:, args["OutputCh"], :, :, :]
-
     if sigmoid:
         result = torch.nn.Sigmoid()(result)
     if not squeeze:
