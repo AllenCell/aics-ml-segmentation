@@ -110,8 +110,6 @@ def model_inference(
     perform model inference and extract output channel
     """
     if args["size_in"] == args["size_out"]:
-        from scipy.special import softmax
-
         dims_max = [0] + args["size_in"]
         overlaps = [int(0.1 * dim) for dim in dims_max]
         result = predict_piecewise(
@@ -127,19 +125,8 @@ def model_inference(
                 dims_max=dims_max,
                 overlaps=overlaps,
             )
-            result = np.append(result, output, axis=0)
-        if softmax:
-            result = softmax(result, axis=1)
-        if extract_output_ch:
-            # old models
-            if type(args["OutputCh"]) == list and len(args["OutputCh"]) >= 2:
-                args["OutputCh"] = args["OutputCh"][1]
-            result = result[:, args["OutputCh"], :, :, :]
-        if not squeeze:
-            result = np.expand_dims(result, axis=1)
-        if not to_numpy:
-            result = torch.as_tensor(result, device=input_img.device)
-        return result, 0
+            result = torch.cat((result, output), dim=0)
+        vae_loss = 0
     else:
         input_image_size = np.array((input_img.shape)[-3:])
         added_padding = np.array(
