@@ -457,24 +457,8 @@ def patchize(img, pr, patch_size):
     return ijk, imgs
 
 
-def pad_image(image, size_in, size_out):
-    padding = [(x - y) // 2 for x, y in zip(size_in, size_out)]
-    image = np.pad(
-        image,
-        ((0, 0), (0, 0), (padding[1], padding[1]), (padding[2], padding[2])),
-        "symmetric",
-    )
-    image = np.pad(
-        image,
-        ((0, 0), (padding[0], padding[0]), (0, 0), (0, 0)),
-        "constant",
-    )
-    image = from_numpy(image.astype(float)).float()
-    return image
-
-
 # TODO deal with timelapse images
-class TestDataset_iterable(IterableDataset):
+class TestDataset(IterableDataset):
     def __init__(self, config):
         self.config = config
         self.inf_config = config["mode"]
@@ -505,19 +489,36 @@ class TestDataset_iterable(IterableDataset):
                 self.inf_config["InputDir"] + "/*" + self.inf_config["DataType"]
             )
             filenames.sort()
-        print("Files to be processed:", filenames)
+        print("Predicting on", len(filenames), "files")
 
         self.filenames = filenames
         self.start = None
         self.end = None
         self.all_img_info = []
 
-    def patchize_wrapper_iterable(self, pr, fn, img, patch_size, tt, timelapse):
+    def pad_image(self, image):
+        if len(image.shape) == 5:
+            image = np.squeeze(image, axis=0)
+        padding = [(x - y) // 2 for x, y in zip(self.size_in, self.size_out)]
+        image = np.pad(
+            image,
+            ((0, 0), (0, 0), (padding[1], padding[1]), (padding[2], padding[2])),
+            "symmetric",
+        )
+        image = np.pad(
+            image,
+            ((0, 0), (padding[0], padding[0]), (0, 0), (0, 0)),
+            "constant",
+        )
+        image = from_numpy(image.astype(float)).float()
+        return image
+
+    def patchize_wrapper(self, pr, fn, img, patch_size, tt, timelapse):
         if pr == [1, 1, 1]:
             return_dicts = [
                 {
                     "fn": fn,
-                    "img": pad_image(img, self.size_in, self.size_out),
+                    "img": self.pad_image(img),
                     "im_shape": img.shape,
                     "ijk": -1,
                     "save_n_batches": 1,
@@ -533,7 +534,7 @@ class TestDataset_iterable(IterableDataset):
             for index, patch in zip(ijk, imgs):
                 return_dict = {
                     "fn": fn,
-                    "img": pad_image(patch, self.size_in, self.size_out),
+                    "img": self.pad_image(patch),
                     "im_shape": img.shape,
                     "ijk": index,
                     "save_n_batches": save_n_batches,
@@ -557,7 +558,7 @@ class TestDataset_iterable(IterableDataset):
                 img = resize(img, self.config)
                 img = image_normalization(img, self.config["Normalization"])
                 # generate patch info
-                self.all_img_info += self.patchize_wrapper_iterable(
+                self.all_img_info += self.patchize_wrapper(
                     self.patchize_ratio,
                     fn,
                     img,
