@@ -1,7 +1,6 @@
 from aicsmlsegment.DataUtils.Universal_Loader import (
     UniversalDataset,
     TestDataset,
-    TestDataset_iterable,
     load_img,
 )
 import random
@@ -188,7 +187,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
 
     def test_dataloader(self):
         test_set_loader = DataLoader(
-            TestDataset_iterable(self.config),  #
+            TestDataset(self.config),
             batch_size=1,
             shuffle=False,
             num_workers=self.config["NumWorkers"],
