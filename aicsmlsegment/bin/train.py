@@ -4,19 +4,17 @@ from aicsmlsegment.utils import load_config, get_logger, create_unique_run_direc
 from aicsmlsegment.Model import Model
 from aicsmlsegment.DataUtils.DataMod import DataModule
 from pytorch_lightning.callbacks import ModelCheckpoint
-import torch
 
 
 def main(config=None, model_config=None):
-    # torch.backends.cudnn.enabled = True
-    if config is None:
+    if config is None:  # debugging
         parser = argparse.ArgumentParser()
         parser.add_argument("--config", required=True)
         args = parser.parse_args()
         # create logger
-        logger = get_logger("ModelTrainer")
         config, model_config = load_config(args.config, train=True)
 
+    logger = get_logger("ModelTrainer")
     # load a specified saved model
     if config["resume"] is not None:
         print(f"Loading checkpoint '{config['resume']}'...")
@@ -76,6 +74,13 @@ def main(config=None, model_config=None):
 
     # ddp is the default unless only one gpu is requested
     accelerator = config["dist_backend"]
+    plugins = None
+    if accelerator == "ddp":
+        from pytorch_lightning.plugins import DDPPlugin
+
+        # reduces multi-gpu model memory, removes unecessary backwards pass
+        plugins = ["ddp_sharded", DDPPlugin(find_unused_parameters=False)]
+
     if config["tensorboard"] is not None:
         from pytorch_lightning.callbacks import LearningRateMonitor, GPUStatsMonitor
         from pytorch_lightning.loggers import TensorBoardLogger
@@ -94,15 +99,15 @@ def main(config=None, model_config=None):
         gpus=gpu_config,
         max_epochs=config["epochs"],
         check_val_every_n_epoch=config["validation"]["validate_every_n_epoch"],
-        num_sanity_val_steps=1,
+        num_sanity_val_steps=0,
         callbacks=callbacks,
         reload_dataloaders_every_epoch=False,  # check https://github.com/PyTorchLightning/pytorch-lightning/pull/5043 for updates on pull request
         # reload_dataloaders_every_n_epoch = config['loader']['epoch_shuffle']
         distributed_backend=accelerator,
         logger=logger,
         precision=config["precision"],
+        plugins=plugins,
     )
-
     data_module = DataModule(config)
 
     trainer.fit(model, data_module)
