@@ -1,5 +1,6 @@
 from aicsmlsegment.DataUtils.Universal_Loader import (
     UniversalDataset,
+    UniversalDataset_redo_transforms,
     TestDataset,
     load_img,
 )
@@ -11,19 +12,41 @@ from aicsmlsegment.Model import get_loss_criterion
 import numpy as np
 import torch
 from math import ceil
+from typing import Dict
 
 
-def init_worker(worker_id):
+def init_worker(worker_id: int):
+    """
+    Divides the testing images equally among workers
+
+    Parameters
+    ----------
+    worker_id: int
+        id of worker, used to assign start and end images
+
+    Return: None
+    """
     worker_info = torch.utils.data.get_worker_info()
     dataset = worker_info.dataset
-    # configure the dataset to only process the split workload
+    # divide images among all workers
     per_worker = int(ceil(len(dataset.filenames) / float(worker_info.num_workers)))
     dataset.start = worker_info.id * per_worker
     dataset.end = min(len(dataset.filenames), (worker_info.id + 1) * per_worker) - 1
 
 
 class DataModule(pytorch_lightning.LightningDataModule):
-    def __init__(self, config, train=True):
+    def __init__(self, config: Dict, train: bool = True):
+        """
+        Initialize Datamodule variable based on config
+
+        Parameters
+        ----------
+        config: Dict
+            a top level configuration object describing which images to load,
+            how to load them, and what transforms to apply
+
+        Return: None
+        """
         super().__init__()
         self.config = config
 
@@ -67,7 +90,19 @@ class DataModule(pytorch_lightning.LightningDataModule):
     def prepare_data(self):
         pass
 
-    def setup(self, stage):
+    def setup(self, stage: str):
+        """
+        Set up identical train/val splits across gpus. Since all image in batches must be
+        the same size, if random splits are selected in the config, the loader will try 10
+        random splits until all of the validation images are the same size.
+
+        Parameters
+        ----------
+        stage: str
+            either "fit" or not
+
+        Return: None
+        """
         if stage == "fit":  # no setup is required for testing
             # load settings #
             config = self.config
@@ -76,8 +111,16 @@ class DataModule(pytorch_lightning.LightningDataModule):
             validation_config = config["validation"]
             loader_config = config["loader"]
             if validation_config["metric"] is not None:
-                filenames = glob(loader_config["datafolder"] + "/*_GT.ome.tif")
-                filenames.sort()
+
+                if type(loader_config["datafolder"]) == str:
+                    loader_config["datafolder"] = [loader_config["datafolder"]]
+
+                filenames = []
+                for folder in loader_config["datafolder"]:
+                    fns = glob(folder + "/*_GT.ome.tif")
+                    fns.sort()
+                    filenames += fns
+
                 total_num = len(filenames)
                 LeaveOut = validation_config["leaveout"]
 
@@ -124,6 +167,8 @@ class DataModule(pytorch_lightning.LightningDataModule):
                     ]
                     all_same_size = img_shapes.count(img_shapes[0]) == len(img_shapes)
                     it += 1
+                    if loader_config["batch_size"] == 1:
+                        all_same_size = True
                 if it == max_it:
                     assert (
                         all_same_size
@@ -144,6 +189,13 @@ class DataModule(pytorch_lightning.LightningDataModule):
                 quit()
 
     def train_dataloader(self):
+        """
+        Returns the train dataloader from the train filenames with the specified
+        transforms.
+
+        Parameters:None
+        Return: DataLoader train_set_loader
+        """
         loader_config = self.loader_config
         train_set_loader = DataLoader(
             UniversalDataset(
@@ -166,6 +218,12 @@ class DataModule(pytorch_lightning.LightningDataModule):
         return train_set_loader
 
     def val_dataloader(self):
+        """
+        Returns the validation dataloader from the validation filenames with no transforms
+
+        Parameters: None
+        Return: DataLoader val_set_loader
+        """
         loader_config = self.loader_config
         val_set_loader = DataLoader(
             UniversalDataset(
@@ -186,6 +244,11 @@ class DataModule(pytorch_lightning.LightningDataModule):
         return val_set_loader
 
     def test_dataloader(self):
+        """
+        Returns the test dataloader
+        Parameters: None
+        Return: DataLoader test_set_loader
+        """
         test_set_loader = DataLoader(
             TestDataset(self.config),
             batch_size=1,
