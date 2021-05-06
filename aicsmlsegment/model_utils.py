@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-
+from pathlib import Path, PurePosixPath
 from aicsmlsegment.multichannel_sliding_window import sliding_window_inference
 from aicsmlsegment.fnet_prediction_torch import predict_piecewise
 
@@ -34,8 +34,14 @@ def apply_on_image(
     extract_output_ch: bool,
 ) -> np.ndarray:
     """
+    Highest level API to perform inference on an input image through a model with 
+    or without runtime augmentation. If runtime augmentation is selected (via 
+    "RuntimeAug" in config yaml file), perform inference on both original image
+    and flipped images (3 version flipping along X, Y, Z) and average results.
+
     Inputs:
         model: pytorch model with a forward method
+        model_name: the name of the model
         input_img: tensor that model should be run on
         args: Object containing inference arguments
             RuntimeAug: boolean, if True inference is run on each of 4 flips
@@ -45,9 +51,8 @@ def apply_on_image(
         squeeze: boolean, if true removes the batch dimension in the output image
         to_numpy: boolean, if true converts output to a numpy array and send to cpu
 
-    Perform inference on an input img through a model with or without runtime augmentation.
-    If runtime augmentation is selected, perform inference on flipped images and average results.
-    returns: 4 or 5 dimensional numpy array or tensor with result of model.forward on input_img
+    Returns: 4 or 5 dimensional numpy array or tensor with result of model.forward 
+             on input_img
     """
 
     if not args["RuntimeAug"]:
@@ -93,6 +98,15 @@ def apply_on_image(
         if to_numpy:
             out0 = out0.detach().cpu().numpy()
         return out0, vae_loss
+
+
+def get_supported_model_names():
+    net_list = sorted(Path(__file__).glob("./NetworkArchitecture/*.py"))
+    all_names = [PurePosixPath(p.as_posix()).stem[:-3] for p in net_list]
+
+    # TODO: add monai model names
+
+    print(all_names)
 
 
 def model_inference(

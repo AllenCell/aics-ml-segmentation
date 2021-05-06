@@ -314,7 +314,7 @@ class Model(pytorch_lightning.LightningModule):
         input_img = batch[0]
         label = batch[1]
         costmap = batch[2]
-        fn = batch[3]
+        # fn = batch[3]
 
         outputs, vae_loss = model_inference(
             self.model,
