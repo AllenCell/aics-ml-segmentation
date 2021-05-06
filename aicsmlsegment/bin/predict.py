@@ -21,7 +21,7 @@ def main():
             model = Model.load_from_checkpoint(
                 model_path, config=config, model_config=model_config, train=False
             )
-        except KeyError:  # backwards compatibility
+        except KeyError:  # backwards compatibility for .pytorch checkpoints
             from aicsmlsegment.model_utils import load_checkpoint
 
             model = Model(config, model_config, train=False)
@@ -34,7 +34,7 @@ def main():
 
         output_dir = create_unique_run_directory(config, train=False)
         config["OutputDir"] = output_dir
-
+        print(config)
         # ddp is the default unless only one gpu is requested
         accelerator = config["dist_backend"]
         trainer = pytorch_lightning.Trainer(

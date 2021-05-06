@@ -5,14 +5,14 @@ from aicsmlsegment.multichannel_sliding_window import sliding_window_inference
 from aicsmlsegment.fnet_prediction_torch import predict_piecewise
 
 
-def flip(img: np.ndarray, axis: int):
+def flip(img: np.ndarray, axis: int) -> torch.Tensor:
     """
     Inputs:
         img: image to be flipped
         axis: axis along which to flip image. Should be indexed from the channel
                 dimension
     Outputs:
-        (1,C,Z,X,Y)-shaped tensor
+        (1,C,Z,Y,X)-shaped tensor
     flip input img along axis
     """
     out_img = img.detach().clone()
@@ -97,14 +97,14 @@ def apply_on_image(
 
 def model_inference(
     model,
-    input_img,
+    input_img: np.ndarray,
     args,
-    model_name,
-    squeeze=False,
-    to_numpy=False,
-    extract_output_ch=True,
-    sigmoid=False,
-    softmax=False,
+    model_name: str,
+    squeeze: bool = False,
+    to_numpy: bool = False,
+    extract_output_ch: bool = True,
+    sigmoid: bool = False,
+    softmax: bool = False,
 ):
     """
     perform model inference and extract output channel

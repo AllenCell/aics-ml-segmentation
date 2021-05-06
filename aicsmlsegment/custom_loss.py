@@ -153,12 +153,26 @@ class LossWrapper(torch.nn.Module):
     def __init__(
         self,
         loss,
-        n_label_ch,
-        accepts_costmap,
-        to_long=False,
-        cmap_unsqueeze=False,
-        label_squeeze=False,
+        n_label_ch: int,
+        accepts_costmap: bool,
+        to_long: bool = False,
+        cmap_unsqueeze: bool = False,
+        label_squeeze: bool = False,
     ):
+        """
+        Standardize how unnormalized logits transformed for each loss function
+
+        Parameters
+        ----------
+        loss: loss function
+        n_label_ch: number of channels that are expected for label by loss function
+        accepts_costmap: whether loss function expects a costmap
+        to_long: whether to convert label to long tensor
+        cmap_unsqueeze: whether to add channel dimension to costmap
+        label_squeeze: whether to remove channel dimension from label
+
+        Return: wrapped loss function
+        """
         super(LossWrapper, self).__init__()
 
         self.loss = loss
@@ -169,9 +183,6 @@ class LossWrapper(torch.nn.Module):
         self.to_long = to_long
 
     def forward(self, input, target, cmap=None):
-        print("PRE:", input.shape, target.shape, end=" ")
-        if cmap is not None:
-            print(cmap.shape)
         if self.n_label_ch == 2:
             target = torch.squeeze(torch.stack([1 - target, target], dim=1), dim=2)
         if self.cmap_unsqueeze:
@@ -183,9 +194,7 @@ class LossWrapper(torch.nn.Module):
         # THIS HAPPENS ON LAST OUTPUT OF extended_dynunet, not sure why
         if type(input) == tuple:
             input = input[0]
-        print("POST:", input.shape, target.shape, end=" ")
         if self.accepts_costmap and cmap is not None:
-            print(cmap.shape)
             loss = self.loss(input, target, cmap)
         else:
             loss = self.loss(input, target)
@@ -199,13 +208,7 @@ class CombinedLoss(torch.nn.Module):
         self.loss2 = loss2
 
     def forward(self, input, target, cmap=None):
-        if cmap is not None:
-            loss1_result = self.loss1(input, target, cmap)
-            loss2_result = self.loss2(input, target, cmap)
-        else:
-            loss1_result = self.loss1(input, target)
-            loss2_result = self.loss2(input, target)
-        return loss1_result + loss2_result
+        return self.loss1(input, target, cmap) + self.loss2(input, target, cmap)
 
 
 class MaskedCrossEntropyLoss(torch.nn.Module):

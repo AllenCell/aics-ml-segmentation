@@ -11,6 +11,7 @@ from torch.utils.data import Dataset, IterableDataset
 from scipy.ndimage import zoom
 from torchio.transforms import RandomAffine, RandomBiasField, RandomNoise
 from monai.transforms import RandShiftIntensity
+from typing import Dict, List, Sequence, Tuple
 
 
 # CODE for generic loader
@@ -27,11 +28,31 @@ from monai.transforms import RandShiftIntensity
 #       DD = Dense Deformation (TODO)
 
 
-def minmax(img):
+def minmax(img: np.ndarray) -> np.ndarray:
+    """
+    Performs minmax normalization on an image
+
+    Parameters
+    ----------
+    img: numpy array
+
+    Return: minmaxed numpy array
+    """
     return (img - img.min()) / (img.max() - img.min())
 
 
-def resize(img, config, min_max=False):
+def resize(img: np.ndarray, config: Dict, min_max: bool = False) -> np.ndarray:
+    """
+    Resize an image based on the provided config.
+
+    Parameters
+    ----------
+    img: 4d CZYX order numpy array
+    config: user-provided configuration file with "ResizeRatio" provided
+    min_max: whether to conduct minmax normalization on each channel independently
+
+    Return: resized + minmaxed img if specified
+    """
     if len(config["ResizeRatio"]) > 0 and config["ResizeRatio"] != [
         1.0,
         1.0,
@@ -40,6 +61,7 @@ def resize(img, config, min_max=False):
         # don't resize if resize ratio is all 1s
         # note that struct_img is only a view of img, so changes made on
         # struct_img also affects img
+        assert len(img.shape) == 4, f"Expected 4D image, got {len(img.shape)}-D array"
         img = zoom(
             img,
             (
@@ -58,7 +80,17 @@ def resize(img, config, min_max=False):
     return img
 
 
-def undo_resize(img, config):
+def undo_resize(img: np.ndarray, config: Dict):
+    """
+    Undo Resizing an image based on the provided config.
+
+    Parameters
+    ----------
+    img: 5d NCZYX order numpy array
+    config: user-provided configuration file with "ResizeRatio" provided
+
+    Return: float 32 numpy array img resized to its original dimensions
+    """
     if len(config["ResizeRatio"]) > 0 and config["ResizeRatio"] != [1.0, 1.0, 1.0]:
         img = zoom(
             img,
@@ -75,9 +107,16 @@ def undo_resize(img, config):
     return img.astype(np.float32)
 
 
-def swap(l: list, index1: int, index2: int):
+def swap(l: List, index1: int, index2: int) -> List:
     """
-    Swap index1 and index2 of list l
+    Swap index1 and index2 of list L
+
+    Parameters
+    ----------
+    l: list
+    index1, index2: integer indices to swap
+
+    Return: List l with index1 and index2 swapped
     """
     temp = l[index1]
     l[index1] = l[index2]
@@ -85,7 +124,11 @@ def swap(l: list, index1: int, index2: int):
     return l
 
 
-def validate_shape(img_shape: tuple, n_channel: int = 1, timelapse: bool = False):
+def validate_shape(
+    img_shape: Tuple[int],
+    n_channel: int = 1,
+    timelapse: bool = False,
+) -> Tuple[Dict, Tuple[Sequence[int]]]:
     """
     General function to load and rearrange the dimensions of 3D images
     input:
@@ -135,7 +178,13 @@ def validate_shape(img_shape: tuple, n_channel: int = 1, timelapse: bool = False
     return load_dict, tuple(correct_shape)
 
 
-def load_img(filename, img_type, n_channel=1, input_ch=None, shape_only=False):
+def load_img(
+    filename: str,
+    img_type: str,
+    n_channel: int = 1,
+    input_ch: int = None,
+    shape_only: bool = False,
+) -> List[np.ndarray]:
     """
     General function to load and rearrange the dimensions of 3D images
     input:
@@ -164,7 +213,7 @@ def load_img(filename, img_type, n_channel=1, input_ch=None, shape_only=False):
         img = reader.get_image_data(**args_dict)
         if img_type == "costmap":
             img = np.squeeze(img, 0)  # remove channel dimension
-        elif img_type == "test":
+        if img_type == "test":
             # return as list so we can iterate through it in test dataloader
             img = img.astype(float)
             img = [img[input_ch, :, :, :]]
@@ -184,13 +233,13 @@ class UniversalDataset(Dataset):
 
     def __init__(
         self,
-        filenames,
-        num_patch,
-        size_in,
-        size_out,
-        n_channel,
-        use_costmap=True,
-        transforms=[],
+        filenames: Sequence[str],
+        num_patch: int,
+        size_in: Sequence[int],
+        size_out: Sequence[int],
+        n_channel: int,
+        use_costmap: bool = True,
+        transforms: Sequence[str] = [],
         patchize: bool = True,
         check_crop: bool = False,
         init_only: bool = False,
@@ -226,10 +275,12 @@ class UniversalDataset(Dataset):
         self.init_only = init_only
         if init_only:
             num_patch = 1
-        if not patchize:
-            print("Validating on", filenames)
         num_data = len(filenames)
         shuffle(filenames)
+        self.filenames = None
+        if not patchize:
+            print("Validating on", filenames)
+            self.filenames = filenames
         num_patch_per_img = np.zeros((num_data,), dtype=int)
         if num_data >= num_patch:
             # take one patch from each image
@@ -375,15 +426,15 @@ class UniversalDataset(Dataset):
     def __getitem__(self, index):
         if self.init_only:
             return torch.zeros(0)
+        if self.filenames is not None:
+            fn = self.filenames[index]
+        else:
+            fn = ""
         img_tensor = from_numpy(self.img[index].astype(float)).float()
         gt_tensor = from_numpy(self.gt[index].astype(float)).float()
         cmap_tensor = from_numpy(self.cmap[index].astype(float)).float()
 
-        return (
-            img_tensor,
-            gt_tensor,
-            cmap_tensor,
-        )
+        return (img_tensor, gt_tensor, cmap_tensor, fn)
 
     def __len__(self):
         if self.init_only:
@@ -394,7 +445,297 @@ class UniversalDataset(Dataset):
         return self.parameters
 
 
-def patchize(img, pr, patch_size):
+from monai.transforms import (
+    MapTransform,
+    RandFlipd,
+    RandBiasFieldd,
+    RandGaussianNoised,
+    RandShiftIntensityd,
+    RandSpatialCropSamplesd,
+    RandSpatialCropd,
+    ToTensord,
+    Compose,
+)
+
+
+class LoadImageD(MapTransform):
+    def __init__(self, use_costmap, n_channel):
+        super(LoadImageD).__init__()
+        self.use_costmap = use_costmap
+        self.n_channel = n_channel
+
+    def __call__(self, data):
+        img_data = {}
+        img_data["label"] = load_img(data, img_type="label", n_channel=self.n_channel)
+        img_data["img"] = load_img(data, img_type="input", n_channel=self.n_channel)
+        if self.use_costmap:
+            img_data["costmap"] = load_img(
+                data, img_type="costmap", n_channel=self.n_channel
+            )
+        return img_data
+
+
+class PadImageD(MapTransform):
+    def __init__(self, padding, keys):
+        super(PadImageD).__init__()
+        self.padding = padding
+        self.keys = keys
+
+    def __call__(self, data):
+        for key in self.keys:
+            data[key] = np.pad(
+                data[key],
+                (
+                    (0, 0),
+                    (0, 0),
+                    (self.padding[1], self.padding[1]),
+                    (self.padding[2], self.padding[2]),
+                ),
+                "symmetric",
+            )
+            data[key] = np.pad(
+                data[key],
+                ((0, 0), (self.padding[0], self.padding[0]), (0, 0), (0, 0)),
+                "constant",
+            )
+        return data
+
+
+class RandomPatchesD(MapTransform):
+    def __init__(self, check_crop, size_in, size_out, keys, num_patch):
+        super(RandomPatchesD).__init__()
+        self.check_crop = check_crop
+        self.size_in = size_in
+        self.size_out = size_out
+        self.keys = keys
+        self.num_patch = num_patch
+
+    def __call__(self, data):
+        if self.check_crop:
+            cropper = RandSpatialCropd(self.keys, self.size_in, random_size=False)
+            num_fail = 0
+            n_patches = 0
+            while n_patches < self.num_patch:
+                additional_data = cropper(data)
+                if np.count_nonzero(additional_data["costmap"] > 1e-5) < 1000:
+                    num_fail += 1
+                    assert num_fail < 50, "Failed to generate valid crops."
+                else:
+                    for key in additional_data:
+                        data[key] += additional_data[key]
+                    n_patches += 1
+        else:
+            cropper = RandSpatialCropSamplesd(
+                self.keys, self.size_in, self.num_patch, random_size=False
+            )
+            data = cropper(data)
+        # crop costmap (if available) and label to match model output size
+        if self.size_in != self.size_out:
+            for key in self.keys:
+                if key == "img":
+                    continue
+                for i in range(len(data[key])):
+                    data[key][i] = data[key][i][
+                        0 : self.size_in[0], 0 : self.size_in[1], 0 : self.size_in[2]
+                    ]
+
+        return data
+
+
+class RandomRotationD(MapTransform):
+    def __init__(self, use_costmap):
+        super(RandomRotationD).__init__()
+        self.use_costmap = use_costmap
+
+    def __call__(self, data):
+        deg = random.randrange(1, 180)
+        trans = RandomAffine(
+            scales=(1.0, 1.0, 1.0, 1.0, 1.0, 1.0),
+            degrees=(0, 0, 0, 0, deg, deg),
+            default_pad_value=0,
+            image_interpolation="bspline",
+            center="image",
+        )
+        out_img = trans(np.transpose(data["img"], (0, 3, 2, 1)))
+        data["img"] = np.transpose(out_img, (0, 3, 2, 1))
+
+        trans_label = RandomAffine(
+            scales=(1.0, 1.0, 1.0, 1.0, 1.0, 1.0),
+            degrees=(0, 0, 0, 0, deg, deg),
+            default_pad_value=0,
+            image_interpolation="nearest",
+            center="image",
+        )
+        # rotate label and costmap
+        out_label = trans_label(np.transpose(data["label"], (0, 3, 2, 1)))
+        data["label"] = np.transpose(out_label, (0, 3, 2, 1))
+        if self.use_costmap:
+            out_map = trans_label(np.transpose(data["costmap"], (0, 3, 2, 1)))
+            data["costmap"] = np.transpose(out_map, (0, 3, 2, 1))
+
+        return data
+
+
+class UniversalDataset_redo_transforms(Dataset):
+    """
+    Multipurpose dataset for training and validation. Randomly crops images, labels,
+    and costmaps into user-specified number of patches. Users can specify which
+    augmentations to apply.
+    """
+
+    def __init__(
+        self,
+        filenames: Sequence[str],
+        num_patch: int,
+        size_in: Sequence[int],
+        size_out: Sequence[int],
+        n_channel: int,
+        use_costmap: bool = True,
+        transforms: Sequence[str] = [],
+        patchize: bool = True,
+        check_crop: bool = False,
+        init_only: bool = False,
+    ):
+        """
+        input:
+            filenames: path to images
+            num_patch: number of random crops to be produced
+            size_in: size of input to model
+            size_out: size of output from model
+            n_channel: number of iput channels expected by model
+            transforms: list of strings specifying transforms
+            patchize: whether to divide image into patches
+            check_crop: whether to check
+        """
+        self.data = {"img": [], "label": []}
+        if use_costmap:
+            self.data["costmap"] = []
+        self.parameters = {
+            "filenames": filenames,
+            "num_patch": num_patch,
+            "size_in": size_in,
+            "size_out": size_out,
+            "n_channel": n_channel,
+            "use_costmap": use_costmap,
+            "transforms": transforms,
+            "patchize": patchize,
+            "check_crop": check_crop,
+        }
+        self.init_only = init_only
+        if init_only:
+            num_patch = 1
+        num_data = len(filenames)
+        shuffle(filenames)
+        self.filenames = None
+        if not patchize:
+            print("Validating on", filenames)
+            self.filenames = filenames
+        num_patch_per_img = np.zeros((num_data,), dtype=int)
+        print(filenames)
+        print(num_data, num_patch)
+        if num_data >= num_patch:
+            # take one patch from each image
+            num_patch_per_img[:num_patch] = 1
+        else:  # assign how many patches to take form each img
+            basic_num = num_patch // num_data
+            # assign each image the same number of patches to extract
+            num_patch_per_img[:] = basic_num
+
+            # assign one more patch to the first few images to achieve the total patch number
+            num_patch_per_img[: (num_patch - basic_num * num_data)] = (
+                num_patch_per_img[: (num_patch - basic_num * num_data)] + 1
+            )
+
+        self.padding = [(x - y) // 2 for x, y in zip(size_in, size_out)]
+
+        # basepath = "//allen/aics/assay-dev/users/Benji/transform_test/"
+        # extract patches from images until num_patch reached
+        import time
+
+        t1 = time.time()
+        tsfrm = self.select_transforms(160)
+        for count, (fn, n_patch) in enumerate(zip(filenames, num_patch_per_img)):
+            if n_patch == 0 or count > num_patch:
+                break
+            aug_data = tsfrm(fn)
+            for key in self.data:  # costmap, img, label
+                for i in aug_data:  # each patch
+                    self.data[key] += i[key]
+        print(time.time() - t1)
+
+    def select_transforms(self, num_patch):
+        all_keys = ["img", "label"]
+        params = self.parameters
+        if params["use_costmap"]:
+            all_keys.append("costmap")
+        transform_fns = [
+            LoadImageD(
+                use_costmap=params["use_costmap"], n_channel=params["n_channel"]
+            ),
+            PadImageD(self.padding, keys=["img"]),
+        ]
+        if "RF" in params["transforms"]:
+            flipper = RandFlipd(keys=all_keys, prob=1, spatial_axis=-1)
+            transform_fns.append(flipper)
+        if "RR" in params["transforms"]:
+            transform_fns.append(RandomRotationD(use_costmap=params["use_costmap"]))
+        if "RBF" in params["transforms"]:
+            transform_fns.append(RandBiasFieldd(keys=["img"], coeff_range=(0.0, 0.01)))
+        if "RN" in params["transforms"]:
+            transform_fns.append(RandGaussianNoised(keys=["img"], std=0.001))
+        if "RI" in params["transforms"]:
+            transform_fns.append(RandShiftIntensityd(keys=["img"], offsets=0.08))
+        if params["patchize"]:
+            transform_fns.append(
+                RandomPatchesD(
+                    check_crop=params["check_crop"],
+                    size_in=params["size_in"],
+                    size_out=params["size_out"],
+                    keys=all_keys,
+                    num_patch=num_patch,
+                )
+            )
+        transform_fns.append(ToTensord(keys=all_keys))
+        return Compose(transform_fns)
+
+    def __getitem__(self, index):
+        if self.init_only:
+            return torch.zeros(0)
+        if self.filenames is not None:
+            fn = self.filenames[index]
+        else:
+            fn = ""
+
+        if self.parameters["use_costmap"]:
+            costmap = self.data["costmap"][index]
+        else:
+            costmap = []
+
+        return (self.data["img"][index], self.data["label"][index], costmap, fn)
+
+    def __len__(self):
+        if self.init_only:
+            return self.num_patch
+        return len(self.data["img"])
+
+    def get_params(self):
+        return self.parameters
+
+
+def patchize(
+    img: np.ndarray, pr: Sequence[int], patch_size: Sequence[int]
+) -> Tuple[List[List[int]], List[np.ndarray]]:
+    """
+    Break an image into z * y * x patches specified by pr
+
+    Parameters
+    ----------
+    img: 4d CZYX order numpy array
+    pr: length 3 list specifying number of patches to divide in z,y,x dimensions
+    patch_size: inference patch size to make sure that the patches are large enough for inference
+
+    Return: list of [i,j,k] start points of a patch and corresponding list of np.array imgs
+    """
     ijk = []
     imgs = []
 
@@ -411,6 +752,8 @@ def patchize(img, pr, patch_size):
         and y_patch_sz >= patch_size[1]
         and z_patch_sz >= patch_size[0]
     ), "Large image resize patches must be larger than model patch size"
+    assert len(img.shape) == 4, f"Expected 4D image, got {len(img.shape)}-D array"
+    assert len(pr) == 3, f"Expected pr to have length 3, got length {len(pr)}"
 
     maxs = [z_max, y_max, x_max]
     patch_szs = [z_patch_sz, y_patch_sz, x_patch_sz]
@@ -459,7 +802,15 @@ def patchize(img, pr, patch_size):
 
 # TODO deal with timelapse images
 class TestDataset(IterableDataset):
-    def __init__(self, config):
+    def __init__(self, config: Dict):
+        """
+        Dataset to load, resize, normalize, and return testing images when needed for inference
+
+        Parameters
+        ----------
+        config: user-provided preferences to specify how to shape and normalize images in preparation for prediction
+        Return: None
+        """
         self.config = config
         self.inf_config = config["mode"]
         self.model_config = config["model"]
@@ -485,10 +836,14 @@ class TestDataset(IterableDataset):
         else:
             from glob import glob
 
-            filenames = glob(
-                self.inf_config["InputDir"] + "/*" + self.inf_config["DataType"]
-            )
-            filenames.sort()
+            if type(self.inf_config["InputDir"]) == str:
+                self.inf_config["InputDir"] = [self.inf_config["InputDir"]]
+
+            filenames = []
+            for folder in self.inf_config["InputDir"]:
+                fns = glob(folder + "/*" + self.inf_config["DataType"])
+                fns.sort()
+                filenames += fns
         print("Predicting on", len(filenames), "files")
 
         self.filenames = filenames
@@ -496,7 +851,17 @@ class TestDataset(IterableDataset):
         self.end = None
         self.all_img_info = []
 
-    def pad_image(self, image):
+    def pad_image(self, image: np.ndarray) -> torch.Tensor:
+        """
+        Pad image so model output is the same size as the input. Padding is symmetric
+        in xy and constant in z
+
+        Parameters
+        ----------
+        image: 4d CZYX order numpy array
+
+        Return: padded image
+        """
         if len(image.shape) == 5:
             image = np.squeeze(image, axis=0)
         padding = [(x - y) // 2 for x, y in zip(self.size_in, self.size_out)]
@@ -513,7 +878,30 @@ class TestDataset(IterableDataset):
         image = from_numpy(image.astype(float)).float()
         return image
 
-    def patchize_wrapper(self, pr, fn, img, patch_size, tt, timelapse):
+    def patchize_wrapper(
+        self,
+        pr: Sequence[int],
+        fn: str,
+        img: np.ndarray,
+        patch_size: Tuple,
+        tt: int,
+        timelapse: bool,
+    ) -> Dict:
+        """
+        Create dictionary with information necessary for inference
+
+        Parameters
+        ----------
+        fn: filename
+        img: 4d CZYX order numpy array
+        pr: length 3 list specifying number of patches to divide in z,y,x dimensions
+        patch_size: inference patch size to make sure that the patches are large enough for inference
+        tt: timepoint
+        timelapse: whether image is a timelapse
+
+        Return: Dictionary containing image filename, tensor image, shape of input image, ijk index of patch from original image,
+            how many patches original image was split into, and timepoint
+        """
         if pr == [1, 1, 1]:
             return_dicts = [
                 {
@@ -550,7 +938,7 @@ class TestDataset(IterableDataset):
     def __next__(self):
         if self.current_index > self.end and len(self.all_img_info) == 0:
             raise StopIteration
-        if len(self.all_img_info) == 0:  # load new image
+        if len(self.all_img_info) == 0:  # load new image if no images have been loaded
             fn = self.filenames[self.current_index]
             imgs = load_img(fn, self.load_type, self.nchannel, self.config["InputCh"])
             # only one image unless timelapse

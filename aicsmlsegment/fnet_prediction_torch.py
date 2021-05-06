@@ -2,11 +2,19 @@ from scipy.signal import triang
 from typing import Union, List
 import numpy as np
 import torch
+from typing import Sequence, Tuple
 
 
-def _get_weights(shape):
-    # weights = torch.ones(shape[1:])
-    # return weights, shape
+def _get_weights(shape: Sequence[int]) -> Tuple[np.ndarray, Tuple[int]]:
+    """
+    Get triangular weights
+
+    Parameters
+    ----------
+    shape: CZYX shape
+
+    Return: 1ZYX weights np.ndarray, CZYX shape
+    """
     shape_in = shape
     shape = shape[1:]
     weights = 1
