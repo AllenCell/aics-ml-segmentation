@@ -68,6 +68,7 @@ OPTIONAL_CONFIG_FIELDS = {
         "model": ["norm", "act", "features", "dropout"],
         "large_image_resize": None,
         "precision": None,
+        "segmentation_name": None,
     },
 }
 
@@ -83,6 +84,7 @@ DEFAULT_CONFIG = {
     "precision": 32,
     "large_image_resize": [1, 1, 1],
     "epoch_shuffle": None,
+    "segmentation_name": "segmentation",
 }
 
 MODEL_PARAMETERS = {

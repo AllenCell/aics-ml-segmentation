@@ -191,7 +191,7 @@ class Model(pytorch_lightning.LightningModule):
                     factor=scheduler_params["factor"],
                     patience=scheduler_params["patience"],
                     verbose=scheduler_params["verbose"],
-                    min_lr=0.0000000001,
+                    min_lr=0.0000001,
                 )
                 # monitoring metric must be specified
                 return {
@@ -314,6 +314,7 @@ class Model(pytorch_lightning.LightningModule):
         input_img = batch[0]
         label = batch[1]
         costmap = batch[2]
+        fn = batch[3]
 
         outputs, vae_loss = model_inference(
             self.model,
@@ -322,12 +323,11 @@ class Model(pytorch_lightning.LightningModule):
             squeeze=True,
             extract_output_ch=False,
             model_name=self.model_name,
+            softmax=False,
         )
-
         # from https://arxiv.org/pdf/1810.11654.pdf
         val_loss = self.loss_function(outputs, label, costmap) + 0.1 * vae_loss
         self.log_and_return("val_loss", val_loss)
-
         outputs = torch.nn.Softmax(dim=1)(outputs)
         val_metric = compute_iou(outputs > 0.5, label, torch.unsqueeze(costmap, dim=1))
         self.log_and_return("val_iou", val_metric)
@@ -401,6 +401,8 @@ class Model(pytorch_lightning.LightningModule):
         # only want to perform post-processing and saving once the aggregated image
         # is complete or we're not aggregating an image
         if self.batch_count[fn] % save_n_batches == 0:
+            from aicsimageio.writers.ome_tiff_writer import OmeTiffWriter
+
             if self.aggregate_img is not None:
                 # normalize for overlapping patches
                 output_img = self.aggregate_img[fn] / self.count_map[fn]
@@ -426,21 +428,14 @@ class Model(pytorch_lightning.LightningModule):
                     )
                     out = out.astype(np.uint8)
                     out[out > 0] = 255
-            if tt == -1:
-                imsave(
-                    self.config["OutputDir"]
-                    + os.sep
-                    + pathlib.PurePosixPath(fn).stem
-                    + "_struct_segmentation.tiff",
-                    out,
-                )
-            else:
-                imsave(
-                    self.config["OutputDir"]
-                    + os.sep
-                    + pathlib.PurePosixPath(fn).stem
-                    + "_T_"
-                    + f"{tt:03}"
-                    + "_struct_segmentation.tiff",
-                    out,
+            out = np.squeeze(out, 0)  # remove N dimension
+            path = self.config["OutputDir"] + os.sep + pathlib.PurePosixPath(fn).stem
+            if tt != -1:
+                path = path + "_T_" + f"{tt:03}"
+            path += "_struct_segmentation.tiff"
+            with OmeTiffWriter(path, overwrite_file=True) as writer:
+                writer.save(
+                    data=out,
+                    channel_names=[self.config["segmentation_name"]],
+                    dimension_order="CZYX",
                 )
