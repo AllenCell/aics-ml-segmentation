@@ -3,6 +3,243 @@ import torch.nn as nn
 import torch.functional as F
 import torch
 import numpy as np
+from typing import Dict
+
+SUPPORTED_LOSSES = {
+    # MONAI
+    "Dice": {
+        "source": "monai.losses",
+        "args": ["softmax", "include_background"],
+        "wrapper_args": {"n_label_ch": 2, "accepts_costmap": False},
+    },
+    "GeneralizedDice": {
+        "source": "monai.losses",
+        "args": ["softmax", "include_background"],
+        "wrapper_args": {"n_label_ch": 2, "accepts_costmap": False},
+    },
+    "Focal": {
+        "source": "monai.losses",
+        "args": [],
+        "wrapper_args": {"n_label_ch": 2, "accepts_costmap": False},
+    },
+    "MaskedDice": {
+        "source": "monai.losses",
+        "args": ["softmax", "include_background"],
+        "wrapper_args": {
+            "n_label_ch": 2,
+            "accepts_costmap": True,
+            "cmap_unsqueeze": True,
+        },
+    },
+    # TORCH
+    "MSE": {
+        "source": "torch.nn",
+        "args": [],
+        "wrapper_args": {"n_label_ch": 2, "accepts_costmap": False},
+    },
+    "CrossEntropy": {
+        "source": "torch.nn",
+        "args": [],
+        "wrapper_args": {
+            "n_label_ch": 1,
+            "accepts_costmap": False,
+            "to_long": True,
+            "label_squeeze": True,
+        },
+    },
+    # CUSTOM
+    "PixelWiseCrossEntropy": {
+        "source": "aicsmlsegment.custom_loss",
+        "args": [],
+        "costmap": True,
+        "wrapper_args": {"n_label_ch": 2, "accepts_costmap": True},
+    },
+    "ElementAngularMSE": {
+        "source": "aicsmlsegment.custom_loss",
+        "args": [],
+        "wrapper_args": {"n_label_ch": 2, "accepts_costmap": True},
+    },
+    "MaskedMSE": {
+        "source": "aicsmlsegment.custom_loss",
+        "args": [],
+        "wrapper_args": {"n_label_ch": 2, "accepts_costmap": True},
+    },
+    "MaskedCrossEntropy": {
+        "source": "aicsmlsegment.custom_loss",
+        "args": [],
+        "wrapper_args": {
+            "n_label_ch": 1,
+            "accepts_costmap": True,
+            "cmap_unsqueeze": True,
+            "label_squeeze": True,
+            "to_long": True,
+        },
+    },
+    "MultiAuxillaryCrossEntropy": {
+        "source": "aicsmlsegment.custom_loss",
+        "args": ["weight", "num_class"],
+        "wrapper_args": {
+            "n_label_ch": 1,
+            "accepts_costmap": True,
+            "cmap_unsqueeze": True,
+            "label_squeeze": True,
+            "to_long": True,
+        },
+    },
+}
+
+
+def get_loss_criterion(config: Dict):
+    """
+    Returns the loss function based on provided configuration
+
+    Parameters
+    ----------
+    config: Dict
+        a top level configuration object containing the 'loss' key
+
+    Return:
+    -------------
+    an instance of the loss function and whether it accepts a costmap and loss weights
+    """
+    import importlib
+
+    name = config["loss"]["name"]
+    # backwards compatibility
+    if name == "Aux":
+        name = "MultiAuxillaryCrossEntropy"
+
+    loss_names = [name]
+    if "+" in name:
+        loss_names = name.split("+")
+    losses = []
+    costmap = []
+    for ln in loss_names:
+        assert (
+            ln in SUPPORTED_LOSSES
+        ), f'Invalid loss: {ln}. Supported losses: {[key for key in SUPPORTED_LOSSES]} or combinations as "l1+l2"'
+        loss_info = SUPPORTED_LOSSES[ln]
+
+        init_args = loss_info["args"]
+
+        module = importlib.import_module(loss_info["source"])
+        module = getattr(module, ln + "Loss")
+        args = {}
+        if "softmax" in init_args:
+            args["softmax"] = True
+        if "num_task" in init_args:
+            args["num_task"] = len(config["model"]["nclass"])
+        if "weight" in init_args:
+            args["weight"] = config["loss"]["loss_weight"]
+        if "num_class" in init_args:
+            args["num_class"] = config["model"]["nclass"]
+        if "include_background" in init_args:
+            args["include_background"] = False
+        loss = module(**args)
+        wrapped_loss = LossWrapper(loss, **loss_info["wrapper_args"])
+        losses.append(wrapped_loss)
+        costmap.append(loss_info["wrapper_args"]["accepts_costmap"])
+
+    if len(losses) == 2:
+        from aicsmlsegment.custom_loss import CombinedLoss
+
+        return CombinedLoss(*losses), np.any(costmap)
+
+    else:
+        return losses[0], np.any(costmap)
+
+
+class LossWrapper(torch.nn.Module):
+    def __init__(
+        self,
+        loss,
+        n_label_ch: int,
+        accepts_costmap: bool,
+        to_long: bool = False,
+        cmap_unsqueeze: bool = False,
+        label_squeeze: bool = False,
+    ):
+        """
+        Standardize how unnormalized logits transformed for each loss function
+
+        Parameters
+        ----------
+        loss: loss function
+        n_label_ch: number of channels that are expected for label by loss function
+        accepts_costmap: whether loss function expects a costmap
+        to_long: whether to convert label to long tensor
+        cmap_unsqueeze: whether to add channel dimension to costmap
+        label_squeeze: whether to remove channel dimension from label
+
+        Return: wrapped loss function
+        """
+        super(LossWrapper, self).__init__()
+
+        self.loss = loss
+        self.n_label_ch = n_label_ch
+        self.cmap_unsqueeze = cmap_unsqueeze
+        self.label_squeeze = label_squeeze
+        self.accepts_costmap = accepts_costmap
+        self.to_long = to_long
+
+    def forward(self, input, target, cmap=None):
+        if self.n_label_ch == 2:
+            target = torch.squeeze(torch.stack([1 - target, target], dim=1), dim=2)
+        if self.cmap_unsqueeze:
+            cmap = torch.unsqueeze(cmap, dim=1)
+        if self.to_long:
+            target = target.long()
+        if self.label_squeeze:
+            target = torch.squeeze(target, dim=1)
+        # THIS HAPPENS ON LAST OUTPUT OF extended_dynunet, not sure why
+        if type(input) == tuple:
+            input = input[0]
+        if self.accepts_costmap and cmap is not None:
+            loss = self.loss(input, target, cmap)
+        else:
+            loss = self.loss(input, target)
+        return loss
+
+
+class CombinedLoss(torch.nn.Module):
+    def __init__(self, loss1, loss2):
+        super(CombinedLoss, self).__init__()
+        self.loss1 = loss1
+        self.loss2 = loss2
+
+    def forward(self, input, target, cmap=None):
+        return self.loss1(input, target, cmap) + self.loss2(input, target, cmap)
+
+
+class MaskedCrossEntropyLoss(torch.nn.Module):
+    def __init__(self):
+        super(MaskedCrossEntropyLoss, self).__init__()
+        self.loss = torch.nn.NLLLoss(reduction="none")
+        self.log_softmax = torch.nn.LogSoftmax(dim=1)
+
+    def forward(self, input, target, cmap):
+        """
+        expects input, target, cmap in NCZYX with input channels = 2, target_channels = 1
+        """
+        loss = self.loss(self.log_softmax(input), target)
+        loss = torch.mean(torch.mul(loss.view(loss.numel()), cmap.view(cmap.numel())))
+        return loss
+
+
+class MultiAuxillaryCrossEntropyLoss(torch.nn.Module):
+    def __init__(self, weight, num_class):
+        super(MultiAuxillaryCrossEntropyLoss, self).__init__()
+        self.weight = weight
+        self.loss_fn = MaskedCrossEntropyLoss()
+
+    def forward(self, input, target, cmap):
+        if not isinstance(input, list):  # custom model validation
+            input = [input]
+        total_loss = self.weight[0] * self.loss_fn(input[0], target, cmap)
+        for n in np.arange(1, len(input)):
+            total_loss += self.weight[n] * self.loss_fn(input[n], target, cmap)
+
+        return total_loss
 
 
 class ElementNLLLoss(torch.nn.Module):
@@ -11,13 +248,13 @@ class ElementNLLLoss(torch.nn.Module):
         self.num_class = num_class
 
     def forward(self, input, target, weight):
-
-        target_np = target.cpu().data.numpy()
+        target_np = target.detach().cpu().data.numpy()
         target_np = target_np.astype(np.uint8)
 
         row_num = target_np.shape[0]
         mask = np.zeros((row_num, self.num_class))
         mask[np.arange(row_num), target_np] = 1
+
         class_x = torch.masked_select(
             input, Variable(torch.from_numpy(mask).cuda().bool())
         )
@@ -39,8 +276,6 @@ class MultiAuxillaryElementNLLLoss(torch.nn.Module):
             self.criteria_list.append(ElementNLLLoss(num_class[n]))
 
     def forward(self, input, target, cmap):
-        print(input.shape)
-        print(target.shape)
 
         total_loss = self.weight[0] * self.criteria_list[0](
             input[0], target.view(target.numel()), cmap.view(cmap.numel())
@@ -80,6 +315,17 @@ class MultiTaskElementNLLLoss(torch.nn.Module):
         return total_loss
 
 
+class MaskedMSELoss(torch.nn.Module):
+    def __init__(self):
+        super(MaskedMSELoss, self).__init__()
+
+    def forward(self, input, target, weight):
+        return (
+            torch.sum(torch.mul((input - target) ** 2, weight))
+            / torch.gt(weight, 0).data.nelement()
+        )
+
+
 class ElementAngularMSELoss(torch.nn.Module):
     def __init__(self):
         super(ElementAngularMSELoss, self).__init__()
@@ -87,7 +333,6 @@ class ElementAngularMSELoss(torch.nn.Module):
     def forward(self, input, target, weight):
 
         # ((input - target) ** 2).sum() / input.data.nelement()
-
         return (
             torch.sum(
                 torch.mul(
@@ -301,12 +546,13 @@ class PixelWiseCrossEntropyLoss(nn.Module):
         assert target.size() == weights.size()
         # normalize the input
         log_probabilities = self.log_softmax(input)
+
         # standard CrossEntropyLoss requires the target to be (NxDxHxW), so we need to expand it to (NxCxDxHxW)
         target = expand_as_one_hot(
-            target, C=input.size()[1], ignore_index=self.ignore_index
+            target[:, 0, :, :, :], C=input.size()[1], ignore_index=self.ignore_index
         )
         # expand weights
-        weights = weights.unsqueeze(0)
+        # weights = weights.unsqueeze(0)
         weights = weights.expand_as(input)
 
         # mask ignore_index if present
@@ -326,7 +572,6 @@ class PixelWiseCrossEntropyLoss(nn.Module):
         class_weights = Variable(class_weights, requires_grad=False)
         # add class_weights to each channel
         weights = class_weights + weights
-
         # compute the losses
         result = -weights * target * log_probabilities
         # average the losses
@@ -379,4 +624,5 @@ def expand_as_one_hot(input, C, ignore_index=None):
         return result
     else:
         # scatter to get the one-hot tensor
+        src = src.type(torch.int64)
         return torch.zeros(shape).to(input.device).scatter_(1, src, 1)

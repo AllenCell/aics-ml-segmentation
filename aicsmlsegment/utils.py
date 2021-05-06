@@ -7,21 +7,339 @@ from scipy.ndimage import zoom
 from scipy import ndimage as ndi
 from scipy import stats
 import yaml
+import torch
+from monai.networks.layers import Norm, Act
+from monai.transforms import CropForeground, RandSpatialCrop, RandSpatialCropSamples
+import os
+import datetime
 
 
-def load_config(config_path):
-    import torch
+REQUIRED_CONFIG_FIELDS = {
+    True: {
+        "model": ["name"],
+        "checkpoint_dir": None,
+        "learning_rate": None,
+        "weight_decay": None,
+        "epochs": None,
+        "save_every_n_epoch": None,
+        "loss": ["name", "loss_weight"],
+        "loader": [
+            "name",
+            "datafolder",
+            "batch_size",
+            "PatchPerBuffer",
+            "NumWorkers",
+            "Transforms",
+        ],
+        "validation": ["metric", "leaveout", "OutputCh", "validate_every_n_epoch"],
+    },
+    False: {
+        "model": ["name"],
+        "model_path": None,
+        "OutputCh": None,
+        "OutputDir": None,
+        "InputCh": None,
+        "ResizeRatio": None,
+        "Normalization": None,
+        "Threshold": None,
+        "RuntimeAug": None,
+        "batch_size": None,
+        "mode": ["name"],
+        "NumWorkers": None,
+    },
+}
+OPTIONAL_CONFIG_FIELDS = {
+    True: {
+        "resume": None,
+        "scheduler": ["name", "verbose"],
+        "gpus": None,
+        "dist_backend": None,
+        "callbacks": ["name"],
+        "SWA": ["swa_start", "swa_lr", "annealing_epochs", "annealing_strategy"],
+        "tensorboard": None,
+        "precision": None,
+        "loader": [
+            "epoch_shuffle",
+        ],
+    },
+    False: {
+        "gpus": None,
+        "dist_backend": None,
+        "model": ["norm", "act", "features", "dropout"],
+        "large_image_resize": None,
+        "precision": None,
+        "segmentation_name": None,
+    },
+}
 
-    config = _load_config_yaml(config_path)
-    # Get a device to train on
-    device_name = config.get("device", "cuda:0")
-    device = torch.device(device_name if torch.cuda.is_available() else "cpu")
-    config["device"] = device
-    return config
+GPUS = torch.cuda.device_count()
+DEFAULT_CONFIG = {
+    "SWA": None,
+    "resume": None,
+    "scheduler": {"name": None},
+    "gpus": GPUS,
+    "dist_backend": "ddp" if GPUS > 1 else None,
+    "tensorboard": None,
+    "callbacks": {"name": None},
+    "precision": 32,
+    "large_image_resize": [1, 1, 1],
+    "epoch_shuffle": None,
+    "segmentation_name": "segmentation",
+}
+
+MODEL_PARAMETERS = {
+    "basic_unet": {
+        "Optional": [
+            "features",
+            "act",
+            "norm",
+            "dropout",
+        ],
+        "Required": ["dimensions", "in_channels", "out_channels", "patch_size"],
+    },
+    "unet_xy": {
+        "Optional": [],
+        "Required": ["nchannel", "nclass", "size_in", "size_out"],
+    },
+    "unet_xy_zoom": {
+        "Optional": [],
+        "Required": ["nchannel", "nclass", "size_in", "size_out", "zoom_ratio"],
+    },
+    "unet_xy_zoom_0pad": {
+        "Optional": [],
+        "Required": ["nchannel", "nclass", "size_in", "size_out", "zoom_ratio"],
+    },
+    "unet_xy_zoom_0pad_stridedconv": {
+        "Optional": [],
+        "Required": ["nchannel", "nclass", "size_in", "size_out", "zoom_ratio"],
+    },
+    "unet_xy_zoom_0pad_nopadz_stridedconv": {
+        "Optional": [],
+        "Required": ["nchannel", "nclass", "size_in", "size_out", "zoom_ratio"],
+    },
+    "unet_xy_zoom_stridedconv": {
+        "Optional": [],
+        "Required": ["nchannel", "nclass", "size_in", "size_out", "zoom_ratio"],
+    },
+    "unet_xy_zoom_dilated": {
+        "Optional": [],
+        "Required": ["nchannel", "nclass", "size_in", "size_out", "zoom_ratio"],
+    },
+    "sdunet_xy": {
+        "Optional": [],
+        "Required": ["nchannel", "nclass", "size_in", "size_out"],
+    },
+    "unet": {
+        "Optional": [
+            "kernel_size",
+            "up_kernel_size",
+            "num_res_units",
+            "act",
+            "norm",
+            "dropout",
+        ],
+        "Required": [
+            "dimensions",
+            "in_channels",
+            "out_channels",
+            "channels",
+            "strides",
+            "patch_size",
+        ],
+    },
+    "dynunet": {
+        "Optional": ["norm_name", "deep_supr_num", "res_block", "deep_supervision"],
+        "Required": [
+            "spatial_dims",
+            "in_channels",
+            "out_channels",
+            "kernel_size",
+            "strides",
+            "upsample_kernel_size",
+            "patch_size",
+        ],
+    },
+    "extended_dynunet": {
+        "Optional": ["norm_name", "deep_supr_num", "res_block", "deep_supervision"],
+        "Required": [
+            "spatial_dims",
+            "in_channels",
+            "out_channels",
+            "kernel_size",
+            "strides",
+            "upsample_kernel_size",
+            "patch_size",
+        ],
+    },
+    "segresnet": {
+        "Optional": [
+            "dropout_prob",
+            "norm_name",
+            "num_groups",
+            "use_conv_final",
+            "blocks_down",
+            "blocks_up",
+            "upsample_mode",
+            "init_filters",
+        ],
+        "Required": [
+            "patch_size",
+            "spatial_dims",
+            "in_channels",
+            "out_channels",
+        ],
+    },
+    "segresnetvae": {
+        "Optional": [
+            "vae_estimate_std",
+            "vae_default_std",
+            "vae_nz",
+            "init_filters",
+            "dropout_prob",
+            "norm_name",
+            "num_groups",
+            "use_conv_final",
+            "blocks_down",
+            "blocks_up",
+            "upsample_mode",
+        ],
+        "Required": ["patch_size", "spatial_dims", "in_channels", "out_channels"],
+    },
+    "extended_vnet": {
+        "Optional": ["act", "dropout_prob", "dropout_dim"],
+        "Required": [
+            "spatial_dims",
+            "in_channels",
+            "out_channels",
+            "patch_size",
+        ],
+    },
+}
+
+ACTIVATIONS = {
+    "LeakyReLU": Act.LEAKYRELU,
+    "PReLU": Act.PRELU,
+    "ReLU": Act.RELU,
+    "ReLU6": Act.RELU6,
+}
+
+NORMALIZATIONS = {
+    "batch": Norm.BATCH,
+    "instance": Norm.INSTANCE,
+}
 
 
-def _load_config_yaml(config_file):
-    return yaml.load(open(config_file, "r"), Loader=yaml.FullLoader)
+def get_model_configurations(config):
+    model_config = config["model"]
+    model_parameters = {}
+
+    assert (
+        model_config["name"] in MODEL_PARAMETERS
+    ), f"{model_config['name']} is not a supported model name, supported model names are {list(MODEL_PARAMETERS.keys())}"
+    all_parameters = MODEL_PARAMETERS[model_config["name"]]
+
+    # allow users to overwrite specific parameters
+    for param in all_parameters["Optional"]:
+        # if optional parameters are not specified, skip them to use monai defaults
+        if param in model_config and not model_config[param] is None:
+            if param == "norm":
+                try:
+                    model_parameters[param] = NORMALIZATIONS[model_config[param]]
+                except KeyError:
+                    print(f"{model_config[param]} is not an acceptable normalization.")
+                    quit()
+            elif param == "act":
+                try:
+                    model_parameters[param] = ACTIVATIONS[model_config[param]]
+                except KeyError:
+                    print(f"{model_config[param]} is not an acceptable activation.")
+                    quit()
+            else:
+                model_parameters[param] = model_config[param]
+    # find parameters that must be included
+    for param in all_parameters["Required"]:
+        assert (
+            param in model_config
+        ), f"{param} is required for model {model_config['name']}"
+        model_parameters[param] = model_config[param]
+
+    return model_parameters
+
+
+def validate_config(config, train):
+    # make sure that all required elements are in the config file
+    for key in REQUIRED_CONFIG_FIELDS[train]:
+        assert (
+            key in config and not config[key] is None
+        ), f"{key} is required in the config file"
+        if REQUIRED_CONFIG_FIELDS[train][key]:
+            for key2 in REQUIRED_CONFIG_FIELDS[train][key]:
+                assert (
+                    key2 in config[key] and config[key][key2] is not None
+                ), f"{key2} is required in {key} configuration."
+
+    # check for optional elements and replace them with defaults if not provided
+    for key in OPTIONAL_CONFIG_FIELDS[train]:
+        if key not in config or config[key] is None:
+            config[key] = DEFAULT_CONFIG[key]
+
+    if GPUS == 1:
+        config["dist_backend"] = None
+
+    model_config = get_model_configurations(config)
+
+    return config, model_config
+
+
+def load_config(config_file, train):
+    config = yaml.load(open(config_file, "r"), Loader=yaml.FullLoader)
+    config, model_config = validate_config(config, train)
+    config["date"] = datetime.datetime.now().strftime("%b %d, %Y %H:%M")
+    return config, model_config
+
+
+def create_unique_run_directory(config, train):
+    # directory to check for config in
+    subdir_names = {True: "/run_", False: "/prediction_"}
+    if train:
+        dir_name = config["checkpoint_dir"]
+    else:
+        dir_name = config["OutputDir"]
+    if os.path.exists(dir_name):
+        subfolders = [x for x in os.walk(dir_name)][0][1]
+        # only look at run_ or prediction_ folders
+        run_numbers = [
+            int(sub.split("_")[1])
+            for sub in subfolders
+            if subdir_names[train][1:] in sub
+        ]
+        if len(subfolders) > 0:
+            most_recent_run_number = max(run_numbers)
+            most_recent_run_dir = (
+                dir_name + subdir_names[train] + str(most_recent_run_number)
+            )
+            most_recent_config, _ = load_config(
+                most_recent_run_dir + "/config.yaml",
+                train=train,
+            )
+            # HACK - this will combine runs with the same config files that are run within a minute of one another.
+            # multi gpu case - don't create a new run folder on non-rank 0 gpu
+            if most_recent_config == config:
+                return most_recent_run_dir
+        else:
+            most_recent_run_number = 0
+    else:
+        os.makedirs(dir_name)
+        most_recent_run_number = 0
+
+    new_run_folder_name = subdir_names[train] + str(most_recent_run_number + 1)
+    os.makedirs(dir_name + new_run_folder_name)
+    if train:
+        os.makedirs(dir_name + new_run_folder_name + "/validation_results")
+
+    with open(dir_name + new_run_folder_name + "/config.yaml", "w") as config_file:
+        yaml.dump(config, config_file, default_flow_style=False)
+    return dir_name + new_run_folder_name
 
 
 def get_samplers(num_training_data, validation_ratio, my_seed):
@@ -57,6 +375,19 @@ def simple_norm(img, a, b, m_high=-1, m_low=-1):
     return img
 
 
+def get_adjusted_min_max(img, a, b, m_high=-1, m_low=-1):
+    idx = np.ones(img.shape, dtype=bool)
+    if m_high > 0:
+        idx = np.logical_and(idx, img < m_high)
+    if m_low > 0:
+        idx = np.logical_and(idx, img > m_low)
+    img_valid = img[idx]
+    m, s = stats.norm.fit(img_valid.flat)
+    strech_min = max(m - a * s, img.min())
+    strech_max = min(m + b * s, img.max())
+    return strech_min, strech_max
+
+
 def background_sub(img, r):
     struct_img_smooth = ndi.gaussian_filter(img, sigma=r, mode="nearest", truncate=3.0)
     struct_img_smooth_sub = img - struct_img_smooth
@@ -67,7 +398,6 @@ def background_sub(img, r):
 
 
 def input_normalization(img, args):
-
     nchannel = img.shape[0]
     args.Normalization = int(args.Normalization)
     for ch_idx in range(nchannel):
@@ -115,7 +445,6 @@ def input_normalization(img, args):
             struct_img = background_sub(struct_img, 50)
             struct_img = simple_norm(struct_img, 2.5, 10)
             img[ch_idx, :, :, :] = struct_img[:, :, :]
-            print("subtracted background")
         elif args.Normalization == 11:
             struct_img = background_sub(struct_img, 50)
             # struct_img = simple_norm(struct_img, 2.5, 10)
@@ -144,6 +473,13 @@ def input_normalization(img, args):
             struct_img = background_sub(struct_img, 50)
             struct_img = simple_norm(struct_img, 1.5, 10)
             img[ch_idx, :, :, :] = struct_img[:, :, :]
+        elif args.Normalization == 19:  # EMT lamin
+            struct_img[struct_img > 4000] = struct_img.min()
+            struct_img = simple_norm(struct_img, 1, 15)
+            img[ch_idx, :, :, :] = struct_img[:, :, :]
+        elif args.Normalization == 22:
+            print("No Normalization")
+            img[ch_idx, :, :, :] = struct_img[:, :, :]
         else:
             print("no normalization recipe found")
             quit()
@@ -151,7 +487,6 @@ def input_normalization(img, args):
 
 
 def image_normalization(img, config):
-
     if type(config) is dict:
         ops = config["ops"]
         nchannel = img.shape[0]
@@ -226,7 +561,18 @@ def load_single_image(args, fn, time_flag=False):
 
 
 def compute_iou(prediction, gt, cmap):
-
+    if type(prediction) == torch.Tensor:
+        prediction = prediction.detach().cpu().numpy()
+    if type(gt) == torch.Tensor:
+        gt = gt.detach().cpu().numpy()
+    if type(cmap) == torch.Tensor:
+        cmap = cmap.detach().cpu().numpy()
+    if prediction.shape[1] == 2:  # take foreground channel
+        prediction = prediction[:, 1, :, :, :]
+    if len(prediction.shape) == 4:
+        prediction = np.expand_dims(prediction, axis=1)
+    if len(cmap.shape) == 3:  # cost function doesn't take cmap
+        cmap = np.ones_like(prediction)
     area_i = np.logical_and(prediction, gt)
     area_i[cmap == 0] = False
     area_u = np.logical_or(prediction, gt)

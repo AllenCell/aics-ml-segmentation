@@ -1,17 +1,47 @@
 import numpy as np
 import torch
-from monai.inferers import sliding_window_inference
+
+from aicsmlsegment.multichannel_sliding_window import sliding_window_inference
+from aicsmlsegment.fnet_prediction_torch import predict_piecewise
 
 
-def apply_on_image(model, input_img, args, squeeze, to_numpy):
+def flip(img: np.ndarray, axis: int) -> torch.Tensor:
+    """
+    Inputs:
+        img: image to be flipped
+        axis: axis along which to flip image. Should be indexed from the channel
+                dimension
+    Outputs:
+        (1,C,Z,Y,X)-shaped tensor
+    flip input img along axis
+    """
+    out_img = img.detach().clone()
+    for ch_idx in range(out_img.shape[0]):
+        str_im = out_img[ch_idx, :, :, :]
+        out_img[ch_idx, :, :, :] = torch.flip(str_im, dims=[axis])
+
+    return torch.unsqueeze(out_img, dim=0)
+
+
+def apply_on_image(
+    model,
+    input_img: torch.Tensor,
+    args: dict,
+    squeeze: bool,
+    to_numpy: bool,
+    softmax: bool,
+    model_name,
+    extract_output_ch: bool,
+) -> np.ndarray:
     """
     Inputs:
         model: pytorch model with a forward method
-        input_img: numpy array that model should be run on
+        input_img: tensor that model should be run on
         args: Object containing inference arguments
             RuntimeAug: boolean, if True inference is run on each of 4 flips
                 and final output is averaged across each of these augmentations
             SizeOut: size of sliding window for inference
+            OutputCh: channel to extract label from
         squeeze: boolean, if true removes the batch dimension in the output image
         to_numpy: boolean, if true converts output to a numpy array and send to cpu
 
@@ -19,88 +49,154 @@ def apply_on_image(model, input_img, args, squeeze, to_numpy):
     If runtime augmentation is selected, perform inference on flipped images and average results.
     returns: 4 or 5 dimensional numpy array or tensor with result of model.forward on input_img
     """
-    if len(input_img.shape) == 4:
-        input_img = np.expand_dims(
-            input_img, axis=0
-        )  # add batch_dimension for sliding window inference
 
-    if not args.RuntimeAug:
-        input_img = torch.from_numpy(input_img).float().cuda()
-        return model_inference(model, input_img, args, squeeze, to_numpy)
+    if not args["RuntimeAug"]:
+        return model_inference(
+            model,
+            input_img,
+            args,
+            model_name=model_name,
+            squeeze=squeeze,
+            to_numpy=to_numpy,
+            extract_output_ch=extract_output_ch,
+            softmax=softmax,
+        )
     else:
-        print("doing runtime augmentation")
-
-        input_img_aug = input_img.copy()
-        for ch_idx in range(input_img_aug.shape[0]):
-            str_im = input_img_aug[ch_idx, :, :, :]
-            input_img_aug[ch_idx, :, :, :] = np.flip(str_im, axis=2)
-
-        input_img_aug_tensor = (
-            torch.from_numpy(input_img_aug.astype(float)).float().cuda()
+        out0, vae_loss = model_inference(
+            model,
+            input_img,
+            args,
+            squeeze=False,
+            to_numpy=False,
+            softmax=softmax,
+            model_name=model_name,
         )
-        out1 = model_inference(
-            model, input_img_aug_tensor, args, squeeze=True, to_numpy=True
-        )
-
-        input_img_aug = []
-        input_img_aug = input_img.copy()
-        for ch_idx in range(input_img_aug.shape[0]):
-            str_im = input_img_aug[ch_idx, :, :, :]
-            input_img_aug[ch_idx, :, :, :] = np.flip(str_im, axis=1)
-
-        input_img_aug_tensor = (
-            torch.from_numpy(input_img_aug.astype(float)).float().cuda()
-        )
-        out2 = model_inference(
-            model, input_img_aug_tensor, args, squeeze=True, to_numpy=True
-        )
-
-        input_img_aug = []
-        input_img_aug = input_img.copy()
-        for ch_idx in range(input_img_aug.shape[0]):
-            str_im = input_img_aug[ch_idx, :, :, :]
-            input_img_aug[ch_idx, :, :, :] = np.flip(str_im, axis=0)
-
-        input_img_aug_tensor = (
-            torch.from_numpy(input_img_aug.astype(float)).float().cuda()
-        )
-        out3 = model_inference(
-            model, input_img_aug_tensor, args, squeeze=True, to_numpy=True
-        )
-
-        input_img_tensor = torch.from_numpy(input_img.astype(float)).float().cuda()
-        out0 = model_inference(
-            model, input_img_tensor, args, squeeze=True, to_numpy=True
-        )
-
-        for ch_idx in range(len(out0)):
-            out0[ch_idx] = 0.25 * (
-                out0[ch_idx]
-                + np.flip(out1[ch_idx], axis=2)
-                + np.flip(out2[ch_idx], axis=1)
-                + np.flip(out3[ch_idx], axis=0)
+        input_img = input_img[0]  # remove batch_dimension for flip
+        for i in range(3):
+            aug = flip(input_img, axis=i)
+            out, loss = model_inference(
+                model,
+                aug,
+                args,
+                squeeze=True,
+                to_numpy=False,
+                softmax=softmax,
+                model_name=model_name,
+                extract_output_ch=extract_output_ch,
             )
-        return np.expand_dims(out0, axis=0)  # add batch dimension
+            aug_flip = flip(out, axis=i)
+            out0 += aug_flip
+            vae_loss += loss
+
+        out0 /= 4
+        vae_loss /= 4
+        if to_numpy:
+            out0 = out0.detach().cpu().numpy()
+        return out0, vae_loss
 
 
-def model_inference(model, input_img, args, squeeze=False, to_numpy=False):
-    with torch.no_grad():
-        result = sliding_window_inference(
-            inputs=input_img,
-            roi_size=args.size_out,
-            sw_batch_size=1,
-            predictor=model.forward,
-            overlap=0.25,
-            mode="gaussian",
-            # sigma_scale=0.01,
+def model_inference(
+    model,
+    input_img: np.ndarray,
+    args,
+    model_name: str,
+    squeeze: bool = False,
+    to_numpy: bool = False,
+    extract_output_ch: bool = True,
+    sigmoid: bool = False,
+    softmax: bool = False,
+):
+    """
+    perform model inference and extract output channel
+    """
+    if args["size_in"] == args["size_out"]:
+        dims_max = [0] + args["size_in"]
+        overlaps = [int(0.1 * dim) for dim in dims_max]
+        result = predict_piecewise(
+            model,
+            input_img[0],
+            dims_max=dims_max,
+            overlaps=overlaps,
         )
-    if squeeze:
-        result = torch.squeeze(result, dim=0)  # remove batch dimension
+        for i in range(1, input_img.shape[0]):
+            output = predict_piecewise(
+                model,
+                input_img[i],
+                dims_max=dims_max,
+                overlaps=overlaps,
+            )
+            result = torch.cat((result, output), dim=0)
+        vae_loss = 0
+    else:
+        input_image_size = np.array((input_img.shape)[-3:])
+        added_padding = np.array(
+            [2 * ((x - y) // 2) for x, y in zip(args["size_in"], args["size_out"])]
+        )
+        original_image_size = input_image_size - added_padding
+        with torch.no_grad():
+            result, vae_loss = sliding_window_inference(
+                inputs=input_img,
+                roi_size=args["size_in"],
+                out_size=args["size_out"],
+                original_image_size=original_image_size,
+                sw_batch_size=1,
+                predictor=model.forward,
+                overlap=0.25,
+                mode="gaussian",
+                model_name=model_name,
+            )
+
+    if softmax:
+        result = torch.nn.Softmax(dim=1)(result)
+    if extract_output_ch:
+        # old models
+        if type(args["OutputCh"]) == list and len(args["OutputCh"]) >= 2:
+            args["OutputCh"] = args["OutputCh"][1]
+        result = result[:, args["OutputCh"], :, :, :]
+    if sigmoid:
+        result = torch.nn.Sigmoid()(result)
+    if not squeeze:
+        result = torch.unsqueeze(result, dim=1)
     if to_numpy:
-        result = result.cpu().numpy()
-    return result
+        result = result.detach().cpu().numpy()
+    return result, vae_loss
 
 
-def get_number_of_learnable_parameters(model):
-    model_parameters = filter(lambda p: p.requires_grad, model.parameters())
-    return sum([np.prod(p.size()) for p in model_parameters])
+def weights_init(m):
+    classname = m.__class__.__name__
+    if classname.find("Conv3d") != -1:
+        torch.nn.init.kaiming_normal_(m.weight)
+        m.bias.data.zero_()
+
+
+def load_checkpoint(checkpoint_path, model):
+    """Loads model from a given checkpoint_path, included for backwards compatibility
+    Args:
+        checkpoint_path (string): path to the checkpoint to be loaded
+        model (torch.nn.Module): model into which the parameters are to be copied
+    Returns:
+        state
+    """
+    import os
+
+    if not os.path.exists(checkpoint_path):
+        raise IOError(f"Checkpoint '{checkpoint_path}' does not exist")
+
+    # device = torch.device("cuda:0" if torch.cuda.is_available() else 'cpu')
+    state = torch.load(checkpoint_path, map_location=torch.device("cpu"))
+
+    if "model_state_dict" in state:
+        try:
+            model.load_state_dict(state["model_state_dict"])
+        except RuntimeError:
+            # HACK all keys need "model." appended to them sometimes
+            new_state_dict = {}
+            for key in state["model_state_dict"]:
+                new_state_dict["model." + key] = state["model_state_dict"][key]
+            model.load_state_dict(new_state_dict)
+    else:
+        model.load_state_dict(state)
+
+    # TODO: add an option to load training status
+
+    return state
