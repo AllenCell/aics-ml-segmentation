@@ -50,6 +50,7 @@ requirements = [
     "tqdm",
     "pyyaml",
     "monai>=0.4.0",
+    "pytorch-lightning",
     #'pytorch=1.0.0'
 ]
 

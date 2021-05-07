@@ -101,12 +101,39 @@ def apply_on_image(
 
 
 def get_supported_model_names():
-    net_list = sorted(Path(__file__).glob("./NetworkArchitecture/*.py"))
-    all_names = [PurePosixPath(p.as_posix()).stem[:-3] for p in net_list]
+    print(Path(__file__).parent)
+    net_list = sorted(Path(__file__).parent.glob("./NetworkArchitecture/*.py"))
+    all_names = [PurePosixPath(p.as_posix()).stem for p in net_list]
 
-    # TODO: add monai model names
+    # clean up names case by case for current models, future models will need to
+    # use module name
+    all_names.remove('vnet')
+    all_names.append("extended_vnet")
 
-    print(all_names)
+    all_names.remove("dynunet")
+    all_names.append("extended_dynunet")
+
+    from inspect import ismodule, getmembers
+    import monai.networks.nets as nets
+    flist = [o[0] for o in getmembers(nets) if ismodule(o[1])]
+    known_unsupport = [
+        'autoencoder',
+        'classifier',
+        'fullyconnectednet',
+        'generator',
+        'regressor',
+        'torchvision_fc',
+        'varautoencoder'
+    ]
+    for mname in known_unsupport:
+        flist.remove(mname)
+
+    flist = ['monai.networks.nets'+ v for v in flist]
+
+    # only special case
+    all_names.append("segresnetvae")
+    print(all_names + flist)
+    
 
 
 def model_inference(
