@@ -10,7 +10,7 @@ import pathlib
 import csv
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt 
+import matplotlib.pyplot as plt
 from glob import glob
 from random import shuffle
 from scipy import stats
@@ -35,8 +35,10 @@ draw_ax = None
 
 
 log = logging.getLogger()
-logging.basicConfig(level=logging.INFO,
-                    format='[%(asctime)s - %(name)s - %(lineno)3d][%(levelname)s] %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s - %(name)s - %(lineno)3d][%(levelname)s] %(message)s",
+)
 #
 # Set the default log level for other modules used by this script
 # logging.getLogger("labkey").setLevel(logging.ERROR)
@@ -44,6 +46,7 @@ logging.basicConfig(level=logging.INFO,
 # logging.getLogger("urllib3").setLevel(logging.WARNING)
 logging.getLogger("matplotlib").setLevel(logging.INFO)
 ####################################################################################################
+
 
 class Args(object):
     """
@@ -59,7 +62,7 @@ class Args(object):
 
     def __init__(self, log_cmdline=True):
         self.debug = False
-        self.output_dir = '.' + os.sep
+        self.output_dir = "." + os.sep
         self.struct_ch = 0
         self.xy = 0.108
 
@@ -88,15 +91,24 @@ class Args(object):
     def __parse(self):
         p = argparse.ArgumentParser()
         # Add arguments
-        p.add_argument('--d', '--debug', action='store_true', dest='debug',
-                       help='If set debug log output is enabled')
-        p.add_argument('--raw_path', required=True, help='path to raw images')
-        p.add_argument('--data_type', required=True, help='the type of raw images')
-        p.add_argument('--input_channel', default=0, type=int)
-        p.add_argument('--seg_path', required=True, help='path to segmentation results')
-        p.add_argument('--train_path', required=True, help='path to output training data')
-        p.add_argument('--mask_path', help='[optional] the output directory for masks')
-        p.add_argument('--Normalization', default=0, help='the normalization method to use')
+        p.add_argument(
+            "--d",
+            "--debug",
+            action="store_true",
+            dest="debug",
+            help="If set debug log output is enabled",
+        )
+        p.add_argument("--raw_path", required=True, help="path to raw images")
+        p.add_argument("--data_type", required=True, help="the type of raw images")
+        p.add_argument("--input_channel", default=0, type=int)
+        p.add_argument("--seg_path", required=True, help="path to segmentation results")
+        p.add_argument(
+            "--train_path", required=True, help="path to output training data"
+        )
+        p.add_argument("--mask_path", help="[optional] the output directory for masks")
+        p.add_argument(
+            "--Normalization", default=0, help="the normalization method to use"
+        )
 
         self.__no_args_print_help(p)
         p.parse_args(namespace=self)
@@ -113,52 +125,82 @@ class Args(object):
 
 ###############################################################################
 
-class Executor(object):
 
+class Executor(object):
     def __init__(self, args):
         pass
 
     def execute(self, args):
 
-        if not args.data_type.startswith('.'):
-            args.data_type = '.' + args.data_type
+        if not args.data_type.startswith("."):
+            args.data_type = "." + args.data_type
 
-        filenames = glob(args.raw_path + os.sep +'*' + args.data_type)
+        filenames = glob(args.raw_path + os.sep + "*" + args.data_type)
         filenames.sort()
 
-        existing_files = glob(args.train_path+os.sep+'img_*.ome.tif')
+        existing_files = glob(args.train_path + os.sep + "img_*.ome.tif")
         print(len(existing_files))
 
-        training_data_count = len(existing_files)//3
+        training_data_count = len(existing_files) // 3
         for _, fn in enumerate(filenames):
-            
+
             training_data_count += 1
-            
+
             # load raw
             reader = AICSImage(fn)
-            struct_img = reader.get_image_data("CZYX", S=0, T=0, C=[args.input_channel]).astype(np.float32)
+            struct_img = reader.get_image_data(
+                "CZYX", S=0, T=0, C=[args.input_channel]
+            ).astype(np.float32)
             struct_img = input_normalization(img, args)
 
             # load seg
-            seg_fn = args.seg_path + os.sep + os.path.basename(fn)[:-1*len(args.data_type)] + '_struct_segmentation.tiff'
+            seg_fn = (
+                args.seg_path
+                + os.sep
+                + os.path.basename(fn)[: -1 * len(args.data_type)]
+                + "_struct_segmentation.tiff"
+            )
             seg = np.squeeze(imread(seg_fn)) > 0.01
             seg = seg.astype(np.uint8)
-            seg[seg>0]=1
+            seg[seg > 0] = 1
 
             # excluding mask
             cmap = np.ones(seg.shape, dtype=np.float32)
-            mask_fn = args.mask_path + os.sep + os.path.basename(fn)[:-1*len(args.data_type)] + '_mask.tiff'
+            mask_fn = (
+                args.mask_path
+                + os.sep
+                + os.path.basename(fn)[: -1 * len(args.data_type)]
+                + "_mask.tiff"
+            )
             if os.path.isfile(mask_fn):
                 mask = np.squeeze(imread(mask_fn))
-                cmap[mask==0]=0
+                cmap[mask == 0] = 0
 
-            with OmeTiffWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '.ome.tif') as writer:
+            with OmeTiffWriter(
+                args.train_path
+                + os.sep
+                + "img_"
+                + f"{training_data_count:03}"
+                + ".ome.tif"
+            ) as writer:
                 writer.save(struct_img)
 
-            with OmeTiffWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '_GT.ome.tif') as writer:
+            with OmeTiffWriter(
+                args.train_path
+                + os.sep
+                + "img_"
+                + f"{training_data_count:03}"
+                + "_GT.ome.tif"
+            ) as writer:
                 writer.save(seg)
-            
-            with OmeTiffWriter(args.train_path + os.sep + 'img_' + f'{training_data_count:03}' + '_CM.ome.tif') as writer:
+
+            with OmeTiffWriter(
+                args.train_path
+                + os.sep
+                + "img_"
+                + f"{training_data_count:03}"
+                + "_CM.ome.tif"
+            ) as writer:
                 writer.save(cmap)
 
 
@@ -185,4 +227,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

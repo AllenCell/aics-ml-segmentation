@@ -34,8 +34,8 @@ def apply_on_image(
     extract_output_ch: bool,
 ) -> np.ndarray:
     """
-    Highest level API to perform inference on an input image through a model with 
-    or without runtime augmentation. If runtime augmentation is selected (via 
+    Highest level API to perform inference on an input image through a model with
+    or without runtime augmentation. If runtime augmentation is selected (via
     "RuntimeAug" in config yaml file), perform inference on both original image
     and flipped images (3 version flipping along X, Y, Z) and average results.
 
@@ -51,7 +51,7 @@ def apply_on_image(
         squeeze: boolean, if true removes the batch dimension in the output image
         to_numpy: boolean, if true converts output to a numpy array and send to cpu
 
-    Returns: 4 or 5 dimensional numpy array or tensor with result of model.forward 
+    Returns: 4 or 5 dimensional numpy array or tensor with result of model.forward
              on input_img
     """
 
@@ -107,7 +107,7 @@ def get_supported_model_names():
 
     # clean up names case by case for current models, future models will need to
     # use module name
-    all_names.remove('vnet')
+    all_names.remove("vnet")
     all_names.append("extended_vnet")
 
     all_names.remove("dynunet")
@@ -115,25 +115,25 @@ def get_supported_model_names():
 
     from inspect import ismodule, getmembers
     import monai.networks.nets as nets
+
     flist = [o[0] for o in getmembers(nets) if ismodule(o[1])]
     known_unsupport = [
-        'autoencoder',
-        'classifier',
-        'fullyconnectednet',
-        'generator',
-        'regressor',
-        'torchvision_fc',
-        'varautoencoder'
+        "autoencoder",
+        "classifier",
+        "fullyconnectednet",
+        "generator",
+        "regressor",
+        "torchvision_fc",
+        "varautoencoder",
     ]
     for mname in known_unsupport:
         flist.remove(mname)
 
-    flist = ['monai.networks.nets'+ v for v in flist]
+    flist = ["monai.networks.nets" + v for v in flist]
 
     # only special case
     all_names.append("segresnetvae")
     print(all_names + flist)
-    
 
 
 def model_inference(
