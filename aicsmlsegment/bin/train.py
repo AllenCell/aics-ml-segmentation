@@ -89,7 +89,6 @@ def main(config=None, model_config=None):
         GPU = GPUStatsMonitor(intra_step_time=True, inter_step_time=True)
         LR = LearningRateMonitor(logging_interval="epoch")
         callbacks += [GPU, LR]
-
     else:
         from pytorch_lightning.loggers import CSVLogger
 
@@ -101,7 +100,7 @@ def main(config=None, model_config=None):
         check_val_every_n_epoch=config["validation"]["validate_every_n_epoch"],
         num_sanity_val_steps=0,
         callbacks=callbacks,
-        reload_dataloaders_every_epoch=False,  # check https://github.com/PyTorchLightning/pytorch-lightning/pull/5043 for updates on pull request
+        reload_dataloaders_every_epoch=False,  # check https://github.com/PyTorchLightning/pytorch-lightning/pull/5043 for updates on pull request  # noqa E501
         # reload_dataloaders_every_n_epoch = config['loader']['epoch_shuffle']
         distributed_backend=accelerator,
         logger=logger,
