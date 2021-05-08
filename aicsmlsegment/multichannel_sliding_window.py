@@ -42,49 +42,7 @@ def sliding_window_inference(
     **kwargs: Any,
 ) -> torch.Tensor:
     """
-    Sliding window inference on `inputs` with `predictor`.
-
-    When roi_size is larger than the inputs' spatial size, the input image are padded during inference.
-    To maintain the same spatial sizes, the output image will be cropped to the original input size.
-
-    Args:
-        inputs: input image to be processed (assuming NCHW[D])
-        roi_size: the spatial window size for inferences.
-            When its components have None or non-positives, the corresponding inputs dimension will be used.
-            if the components of the `roi_size` are non-positive values, the transform will use the
-            corresponding components of img size. For example, `roi_size=(32, -1)` will be adapted
-            to `(32, 64)` if the second spatial dimension size of img is `64`.
-        sw_batch_size: the batch size to run window slices.
-        predictor: given input tensor `patch_data` in shape NCHW[D], `predictor(patch_data)`
-            should return a prediction with the same spatial shape and batch_size, i.e. NMHW[D];
-            where HW[D] represents the patch spatial size, M is the number of output channels, N is `sw_batch_size`.
-        overlap: Amount of overlap between scans.
-        mode: {``"constant"``, ``"gaussian"``}
-            How to blend output of overlapping windows. Defaults to ``"constant"``.
-
-            - ``"constant``": gives equal weight to all predictions.
-            - ``"gaussian``": gives less weight to predictions on edges of windows.
-
-        sigma_scale: the standard deviation coefficient of the Gaussian window when `mode` is ``"gaussian"``.
-            Default: 0.125. Actual window sigma is ``sigma_scale`` * ``dim_size``.
-            When sigma_scale is a sequence of floats, the values denote sigma_scale at the corresponding
-            spatial dimensions.
-        padding_mode: {``"constant"``, ``"reflect"``, ``"replicate"``, ``"circular"``}
-            Padding mode for ``inputs``, when ``roi_size`` is larger than inputs. Defaults to ``"constant"``
-            See also: https://pytorch.org/docs/stable/nn.functional.html#pad
-        cval: fill value for 'constant' padding mode. Default: 0
-        sw_device: device for the window data.
-            By default the device (and accordingly the memory) of the `inputs` is used.
-            Normally `sw_device` should be consistent with the device where `predictor` is defined.
-        device: device for the stitched output prediction.
-            By default the device (and accordingly the memory) of the `inputs` is used. If for example
-            set to device=torch.device('cpu') the gpu memory consumption is less and independent of the
-            `inputs` and `roi_size`. Output is on the `device`.
-        args: optional args to be passed to ``predictor``.
-        kwargs: optional keyword args to be passed to ``predictor``.
-
-    Note:
-        - input must be channel-first and have a batch dim, supports N-D sliding window.
+    modified from https://docs.monai.io/en/latest/_modules/monai/inferers/utils.html#sliding_window_inference  # noqa E501
 
     """
     num_spatial_dims = len(inputs.shape) - 2
@@ -179,12 +137,14 @@ def sliding_window_inference(
         if not _initialized:  # init. buffer at the first iteration
             output_classes = seg_prob.shape[1]
             output_shape = [batch_size, output_classes] + list(original_image_size)
-            # allocate memory to store the full output and the count for overlapping parts
+            # allocate memory to store the full output and the count for 
+            # overlapping parts
             output_image = torch.zeros(output_shape, dtype=torch.float32, device=device)
             count_map = torch.zeros(output_shape, dtype=torch.float32, device=device)
             _initialized = True
 
-        # store the result in the proper location of the full output. Apply weights from importance map.
+        # store the result in the proper location of the full output. Apply weights 
+        # from importance map.
         for idx, original_idx in zip(slice_range, unravel_slice_out):
             output_image[original_idx] += importance_map * seg_prob[idx - slice_g]
             count_map[original_idx] += importance_map

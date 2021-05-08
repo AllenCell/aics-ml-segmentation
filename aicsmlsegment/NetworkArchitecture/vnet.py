@@ -85,7 +85,7 @@ class VNet(nn.Module):
         self.out_tr = OutputTransition(spatial_dims, 32, out_channels, act)
 
     def forward(self, x):
-        x = nn.MaxPool3d((1, k, k))
+        x = nn.MaxPool3d((1, 3, 3))  # TODO: make as variable
         out16 = self.in_tr(x)
         out32 = self.down_tr32(out16)
         out64 = self.down_tr64(out32)

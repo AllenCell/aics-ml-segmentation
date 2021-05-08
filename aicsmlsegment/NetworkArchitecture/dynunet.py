@@ -15,51 +15,7 @@ from monai.networks.nets.dynunet import DynUNetSkipLayer
 
 class DynUNet(nn.Module):
     """
-    This reimplementation of a dynamic UNet (DynUNet) is based on:
-    `Automated Design of Deep Learning Methods for Biomedical Image Segmentation <https://arxiv.org/abs/1904.08128>`_.
-    `nnU-Net: Self-adapting Framework for U-Net-Based Medical Image Segmentation <https://arxiv.org/abs/1809.10486>`_.
-
-    This model is more flexible compared with ``monai.networks.nets.UNet`` in three
-    places:
-
-        - Residual connection is supported in conv blocks.
-        - Anisotropic kernel sizes and strides can be used in each layers.
-        - Deep supervision heads can be added.
-
-    The model supports 2D or 3D inputs and is consisted with four kinds of blocks:
-    one input block, `n` downsample blocks, one bottleneck and `n+1` upsample blocks. Where, `n>0`.
-    The first and last kernel and stride values of the input sequences are used for input block and
-    bottleneck respectively, and the rest value(s) are used for downsample and upsample blocks.
-    Therefore, pleasure ensure that the length of input sequences (``kernel_size`` and ``strides``)
-    is no less than 3 in order to have at least one downsample upsample blocks.
-
-    Args:
-        spatial_dims: number of spatial dimensions.
-        in_channels: number of input channels.
-        out_channels: number of output channels.
-        kernel_size: convolution kernel size.
-        strides: convolution strides for each blocks.
-        upsample_kernel_size: convolution kernel size for transposed convolution layers.
-        norm_name: [``"batch"``, ``"instance"``, ``"group"``]
-            feature normalization type and arguments.
-        deep_supervision: whether to add deep supervision head before output. Defaults to ``False``.
-            If ``True``, in training mode, the forward function will output not only the last feature
-            map, but also the previous feature maps that come from the intermediate up sample layers.
-            In order to unify the return type (the restriction of TorchScript), all intermediate
-            feature maps are interpolated into the same size as the last feature map and stacked together
-            (with a new dimension in the first axis)into one single tensor.
-            For instance, if there are three feature maps with shapes: (1, 2, 32, 24), (1, 2, 16, 12) and
-            (1, 2, 8, 6). The last two will be interpolated into (1, 2, 32, 24), and the stacked tensor
-            will has the shape (1, 3, 2, 8, 6).
-            When calculating the loss, you can use torch.unbind to get all feature maps can compute the loss
-            one by one with the groud truth, then do a weighted average for all losses to achieve the final loss.
-            (To be added: a corresponding tutorial link)
-
-        deep_supr_num: number of feature maps that will output during deep supervision head. The
-            value should be larger than 0 and less than the number of up sample layers.
-            Defaults to 1.
-        res_block: whether to use residual connection based convolution blocks during the network.
-            Defaults to ``True``.
+    modified from https://docs.monai.io/en/latest/_modules/monai/networks/nets/dynunet.html#DynUNet  # noqa E501
     """
 
     def __init__(
@@ -99,19 +55,13 @@ class DynUNet(nn.Module):
         self.check_kernel_stride()
         self.check_deep_supr_num()
 
-        # initialize the typed list of supervision head outputs so that Torchscript can recognize what's going on
+        # initialize the typed list of supervision head outputs so that Torchscript 
+        # can recognize what's going on
         self.heads: List[torch.Tensor] = [torch.rand(1)] * (
             len(self.deep_supervision_heads) + 1
         )
 
         def create_skips(index, downsamples, upsamples, superheads, bottleneck):
-            """
-            Construct the UNet topology as a sequence of skip layers terminating with the bottleneck layer. This is
-            done recursively from the top down since a recursive nn.Module subclass is being used to be compatible
-            with Torchscript. Initially the length of `downsamples` will be one more than that of `superheads`
-            since the `input_block` is passed to this function as the first item in `downsamples`, however this
-            shouldn't be associated with a supervision head.
-            """
 
             if len(downsamples) != len(upsamples):
                 raise AssertionError(f"{len(downsamples)} != {len(upsamples)}")
@@ -164,15 +114,13 @@ class DynUNet(nn.Module):
         for idx in range(len(kernels)):
             kernel, stride = kernels[idx], strides[idx]
             if not isinstance(kernel, int):
-                error_msg = "length of kernel_size in block {} should be the same as spatial_dims.".format(
-                    idx
-                )
+                error_msg = f"length of kernel_size in block {idx} should "\
+                            "be the same as spatial_dims."
                 if len(kernel) != self.spatial_dims:
                     raise AssertionError(error_msg)
             if not isinstance(stride, int):
-                error_msg = "length of stride in block {} should be the same as spatial_dims.".format(
-                    idx
-                )
+                error_msg = f"length of stride in block {idx} should be "\
+                            "the same as spatial_dims."
                 if len(stride) != self.spatial_dims:
                     raise AssertionError(error_msg)
 

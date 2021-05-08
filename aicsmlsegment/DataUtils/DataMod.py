@@ -1,6 +1,5 @@
 from aicsmlsegment.DataUtils.Universal_Loader import (
     UniversalDataset,
-    UniversalDataset_redo_transforms,
     TestDataset,
     load_img,
 )
@@ -92,9 +91,9 @@ class DataModule(pytorch_lightning.LightningDataModule):
 
     def setup(self, stage: str):
         """
-        Set up identical train/val splits across gpus. Since all image in batches must be
-        the same size, if random splits are selected in the config, the loader will try 10
-        random splits until all of the validation images are the same size.
+        Set up identical train/val splits across gpus. Since all image in batches must
+        be the same size, if random splits are selected in the config, the loader will
+        try 10 random splits until all of the validation images are the same size.
 
         Parameters
         ----------
@@ -133,7 +132,8 @@ class DataModule(pytorch_lightning.LightningDataModule):
                         print("Validation images not all same size. Reshuffling...")
                     elif not rand and it > 0:
                         print(
-                            "Validation images must be the same size. Please choose different validation img indices"
+                            "Validation images must be the same size. Please choose"
+                            " different validation img indices"
                         )
                         quit()
 
@@ -208,7 +208,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
                 transforms=self.transforms,
                 patchize=True,
                 check_crop=self.check_crop,
-                init_only=self.init_only,  # first call of train_dataloader is just to get dataset params if init_only is true
+                init_only=self.init_only,  # first call of train_dataloader is just to get dataset params if init_only is true  # noqa E501
             ),
             batch_size=loader_config["batch_size"],
             shuffle=True,
@@ -219,7 +219,8 @@ class DataModule(pytorch_lightning.LightningDataModule):
 
     def val_dataloader(self):
         """
-        Returns the validation dataloader from the validation filenames with no transforms
+        Returns the validation dataloader from the validation filenames with
+        no transforms
 
         Parameters: None
         Return: DataLoader val_set_loader

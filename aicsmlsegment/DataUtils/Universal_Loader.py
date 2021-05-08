@@ -107,7 +107,7 @@ def undo_resize(img: np.ndarray, config: Dict):
     return img.astype(np.float32)
 
 
-def swap(l: List, index1: int, index2: int) -> List:
+def swap(ll: List, index1: int, index2: int) -> List:
     """
     Swap index1 and index2 of list L
 
@@ -118,10 +118,10 @@ def swap(l: List, index1: int, index2: int) -> List:
 
     Return: List l with index1 and index2 swapped
     """
-    temp = l[index1]
-    l[index1] = l[index2]
-    l[index2] = temp
-    return l
+    temp = ll[index1]
+    ll[index1] = ll[index2]
+    ll[index2] = temp
+    return ll
 
 
 def validate_shape(
@@ -137,7 +137,8 @@ def validate_shape(
         timelapse: whether image is a timelapse
 
     output:
-        load_dict: dictionary to be passed to AICSImage.get_image_data containing out_orientation and specific channel indices
+        load_dict: dictionary to be passed to AICSImage.get_image_data 
+                   containing out_orientation and specific channel indices
         correct_shape: tuple rearranged img_shape
     """
     img_shape = list(img_shape)
@@ -149,11 +150,12 @@ def validate_shape(
     if expected_channel_idx not in real_channel_idx:
         assert (
             len(real_channel_idx) > 0
-        ), f"The specified channel dimension is incorrect and no other dimensions have size {n_channel}"
+        ), f"The specified channel dim is wrong, no other dims have size {n_channel}"
         # if nchannels is 1, doesn't matter which other size-1 dim we swap it with
         assert (
             n_channel == 1 or len(real_channel_idx) == 1
-        ), f"Index of channel dimension is incorrect and there are multiple candidate channel dimensions. Please check your image metadata. {img_shape}"
+        ), "Index of channel dimension is incorrect and there are multiple candidate " \
+           f"channel dimensions. Please check your image metadata. {img_shape}"
 
         # change load order and image shape to reflect new index of  channel dimension
         real_channel_idx = real_channel_idx[-1]
@@ -290,7 +292,7 @@ class UniversalDataset(Dataset):
             # assign each image the same number of patches to extract
             num_patch_per_img[:] = basic_num
 
-            # assign one more patch to the first few images to achieve the total patch number
+            # assign 1 more patch to the first few images to get the total patch number
             num_patch_per_img[: (num_patch - basic_num * num_data)] = (
                 num_patch_per_img[: (num_patch - basic_num * num_data)] + 1
             )
@@ -641,7 +643,7 @@ class UniversalDataset_redo_transforms(Dataset):
             # assign each image the same number of patches to extract
             num_patch_per_img[:] = basic_num
 
-            # assign one more patch to the first few images to achieve the total patch number
+            # assign 1 more patch to the first few images to get the total patch number
             num_patch_per_img[: (num_patch - basic_num * num_data)] = (
                 num_patch_per_img[: (num_patch - basic_num * num_data)] + 1
             )
@@ -732,9 +734,11 @@ def patchize(
     ----------
     img: 4d CZYX order numpy array
     pr: length 3 list specifying number of patches to divide in z,y,x dimensions
-    patch_size: inference patch size to make sure that the patches are large enough for inference
+    patch_size: inference patch size to make sure that the patches are large 
+                enough for inference
 
-    Return: list of [i,j,k] start points of a patch and corresponding list of np.array imgs
+    Return: list of [i,j,k] start points of a patch and corresponding list of 
+            np.array imgs
     """
     ijk = []
     imgs = []
@@ -804,11 +808,13 @@ def patchize(
 class TestDataset(IterableDataset):
     def __init__(self, config: Dict):
         """
-        Dataset to load, resize, normalize, and return testing images when needed for inference
+        Dataset to load, resize, normalize, and return testing images when needed for 
+        inference
 
         Parameters
         ----------
-        config: user-provided preferences to specify how to shape and normalize images in preparation for prediction
+        config: user-provided preferences to specify how to shape and normalize images
+                in preparation for prediction
         Return: None
         """
         self.config = config
@@ -895,12 +901,14 @@ class TestDataset(IterableDataset):
         fn: filename
         img: 4d CZYX order numpy array
         pr: length 3 list specifying number of patches to divide in z,y,x dimensions
-        patch_size: inference patch size to make sure that the patches are large enough for inference
+        patch_size: inference patch size to make sure that the patches are large enough
+                    for inference
         tt: timepoint
         timelapse: whether image is a timelapse
 
-        Return: Dictionary containing image filename, tensor image, shape of input image, ijk index of patch from original image,
-            how many patches original image was split into, and timepoint
+        Return: Dictionary containing image filename, tensor image, shape of input
+                image, ijk index of patch from original image, how many patches 
+                original image was split into, and timepoint
         """
         if pr == [1, 1, 1]:
             return_dicts = [

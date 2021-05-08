@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 class UNet3D(nn.Module):
@@ -256,5 +255,5 @@ class UNet3D(nn.Module):
             return [predict00]
 
         p1a = self.predict1a(self.conv1a(self.up1a(u1)))
-        p2a = self.predict2a(self.conv2a(self.up2a(u2)))  ## fix +5
+        p2a = self.predict2a(self.conv2a(self.up2a(u2)))  # fix +5
         return [predict00, p1a, p2a]

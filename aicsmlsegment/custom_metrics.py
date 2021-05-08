@@ -228,8 +228,7 @@ class AveragePrecision:
             per_channel_ap.append(ap)
 
         # get maximum average precision across channels
-        max_ap, c_index = np.max(per_channel_ap), np.argmax(per_channel_ap)
-        # LOGGER.info(f'Max average precision: {max_ap}, channel: {c_index}')
+        max_ap, _ = np.max(per_channel_ap), np.argmax(per_channel_ap)
         return max_ap
 
     def _calculate_average_precision(self, predicted, target, target_instances):

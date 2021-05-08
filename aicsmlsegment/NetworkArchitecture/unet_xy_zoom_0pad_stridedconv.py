@@ -135,9 +135,6 @@ class UNet3D(nn.Module):
         self.predict2a = nn.Conv3d(n_classes[2], n_classes[2], 1)
         self.predict1a = nn.Conv3d(n_classes[1], n_classes[1], 1)
 
-        # self.conv_final = nn.Conv3d(n_classes[0]+n_classes[1]+n_classes[2], n_classes[0]+n_classes[1]+n_classes[2], 3, stride=1, padding=1, bias=True)
-        # self.predict_final = nn.Conv3d(n_classes[0]+n_classes[1]+n_classes[2], n_classes[3], 1)
-
         self.softmax = F.log_softmax  # nn.LogSoftmax(1)
 
         self.final_activation = nn.Softmax(dim=1)
@@ -262,7 +259,6 @@ class UNet3D(nn.Module):
         return layer
 
     def forward(self, x):
-        k = self.k
         x0 = self.conv0(x)
         down1 = self.ec1(x0)
         x1 = self.conv1(down1)
@@ -289,5 +285,5 @@ class UNet3D(nn.Module):
 
         p1a = self.predict1a(self.conv1a(self.up1a(u1)))
 
-        p2a = self.predict2a(self.conv2a(self.up2a(u2)))  ## fix +5
+        p2a = self.predict2a(self.conv2a(self.up2a(u2)))  # fix +5
         return [predict00, p1a, p2a]
