@@ -30,7 +30,7 @@ jobs:
         pip install .[test]
     - name: Test with pytest
       run: |
-        pytest --cov-report xml --cov=test test/tests/
+        pytest --cov-report xml --cov=test aicsmlsegment/tests/
     - name: Upload codecov
       uses: codecov/codecov-action@v1
 
