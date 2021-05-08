@@ -44,4 +44,4 @@ jobs:
         flake8 test --count --verbose --show-source --statistics
     - name: Check with black
       run: |
-        black --check test
+        black --check aicsmlsegment
