@@ -41,7 +41,7 @@ jobs:
         pip install .[test]
     - name: Lint with flake8
       run: |
-        flake8 test --count --verbose --show-source --statistics
+        flake8 aicsmlsegment --count --verbose --show-source --statistics
     - name: Check with black
       run: |
         black --check aicsmlsegment
