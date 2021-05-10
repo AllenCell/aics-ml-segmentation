@@ -5,26 +5,15 @@ import sys
 import logging
 import argparse
 import traceback
-import importlib
-import pathlib
-import csv
-import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 from glob import glob
-from random import shuffle
-from scipy import stats
-from skimage.io import imsave
-from skimage.draw import line, polygon
-from scipy import ndimage as ndi
 
-from aicssegmentation.core.utils import histogram_otsu
 from aicsimageio import AICSImage, imread
 from aicsimageio.writers import OmeTiffWriter
 
 from aicsmlsegment.utils import input_normalization
 
-####################################################################################################
+######################################################################################
 # global settings
 button = 0
 flag_done = False
@@ -45,7 +34,7 @@ logging.basicConfig(
 # logging.getLogger("requests").setLevel(logging.WARNING)
 # logging.getLogger("urllib3").setLevel(logging.WARNING)
 logging.getLogger("matplotlib").setLevel(logging.INFO)
-####################################################################################################
+######################################################################################
 
 
 class Args(object):
@@ -81,7 +70,7 @@ class Args(object):
         This is used to print out the help if no arguments are provided.
         Note:
         - You need to remove it's usage if your script truly doesn't want arguments.
-        - It exits with 1 because it's an error if this is used in a script with no args.
+        - It exits with 1 because it's an error if this is used in a script with no args
           That's a non-interactive use scenario - typically you don't want help there.
         """
         if len(sys.argv) == 1:
@@ -151,7 +140,7 @@ class Executor(object):
             struct_img = reader.get_image_data(
                 "CZYX", S=0, T=0, C=[args.input_channel]
             ).astype(np.float32)
-            struct_img = input_normalization(img, args)
+            struct_img = input_normalization(struct_img, args)
 
             # load seg
             seg_fn = (

@@ -5,19 +5,13 @@ import sys
 import logging
 import argparse
 import traceback
-import importlib
-import pathlib
 import csv
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 from glob import glob
-from random import shuffle
-from scipy import stats
-from skimage.io import imsave
 from skimage.draw import line, polygon
-from scipy import ndimage as ndi
 
 from aicssegmentation.core.utils import histogram_otsu
 from aicsimageio import AICSImage, imread
@@ -26,7 +20,7 @@ from aicsmlsegment.utils import input_normalization
 
 matplotlib.use("TkAgg")
 
-####################################################################################################
+#####################################################################################
 # global settings
 button = 0
 flag_done = False
@@ -47,7 +41,7 @@ logging.basicConfig(
 # logging.getLogger("requests").setLevel(logging.WARNING)
 # logging.getLogger("urllib3").setLevel(logging.WARNING)
 logging.getLogger("matplotlib").setLevel(logging.INFO)
-####################################################################################################
+######################################################################################
 
 
 def quit_curation(event):
@@ -71,7 +65,7 @@ def gt_sorting_callback(event):
 def draw_polygons(event):
     global pts, draw_img, draw_ax, draw_mask
     if event.button == 1:
-        if not (event.ydata == None or event.xdata == None):
+        if not (event.ydata is None or event.xdata is None):
             pts.append([event.xdata, event.ydata])
             if len(pts) > 1:
                 rr, cc = line(
@@ -237,10 +231,11 @@ def create_mask(raw_img, seg):
     ax = fig.add_subplot(111)
     ax.set_title(
         "Interface for annotating excluding mask. \n"
-        + "Left: Middle z slice of raw. Middle: Middle z slice of segmentation. Right: Max z projection of segmentation \n"
+        + "Left: Middle z slice of raw. Middle: Middle z slice of segmentation. "
+        + "Right: Max z projection of segmentation \n"
         + "Please draw in the left panel \n"
         + "Left click to add a vertex; Right click to close the current polygon \n"
-        + "Press D to finish annotating mask, Press Q to quit curation (can resume later)"
+        + "Press D to finish annotation, Press Q to quit curation (can resume later)"
     )
     draw_ax = ax.imshow(img)
     cid = fig.canvas.mpl_connect("button_press_event", draw_polygons)
@@ -283,7 +278,7 @@ class Args(object):
         This is used to print out the help if no arguments are provided.
         Note:
         - You need to remove it's usage if your script truly doesn't want arguments.
-        - It exits with 1 because it's an error if this is used in a script with no args.
+        - It exits with 1 because it's an error if this is used in a script with no args
           That's a non-interactive use scenario - typically you don't want help there.
         """
         if len(sys.argv) == 1:
@@ -339,7 +334,7 @@ class Executor(object):
 
         if os.path.exists(args.csv_name):
             print(
-                "the csv file for saving sorting results exists, sorting will be resumed"
+                "the csv file for saving sorting results exists, sorting resuming"
             )
         else:
             print("no existing csv found, start a new sorting ")
