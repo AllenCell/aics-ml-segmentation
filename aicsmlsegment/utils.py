@@ -232,10 +232,10 @@ def get_model_configurations(config):
     model_config = config["model"]
     model_parameters = {}
 
-    assert (
-        model_config["name"] in MODEL_PARAMETERS
-    ), f"{model_config['name']} is not supported, supported model names "\
+    assert model_config["name"] in MODEL_PARAMETERS, (
+        f"{model_config['name']} is not supported, supported model names "
         f"are {list(MODEL_PARAMETERS.keys())}"
+    )
     all_parameters = MODEL_PARAMETERS[model_config["name"]]
 
     # allow users to overwrite specific parameters
@@ -323,7 +323,7 @@ def create_unique_run_directory(config, train):
                 train=train,
             )
             # HACK - this will combine runs with the same config files that are run
-            # within a minute of one another. multi gpu case - don't create a new 
+            # within a minute of one another. multi gpu case - don't create a new
             # run folder on non-rank 0 gpu
             if most_recent_config == config:
                 return most_recent_run_dir
@@ -402,10 +402,8 @@ def input_normalization(img, args):
     nchannel = img.shape[0]
     args.Normalization = int(args.Normalization)
     for ch_idx in range(nchannel):
-        struct_img = img[
-            ch_idx, :, :, :
-        ] 
-        # note that struct_img is only a view of img, so changes made on 
+        struct_img = img[ch_idx, :, :, :]
+        # note that struct_img is only a view of img, so changes made on
         # struct_img also affects img
         if args.Normalization == 0:  # min-max normalization
             struct_img = (struct_img - struct_img.min() + 1e-8) / (
@@ -543,10 +541,8 @@ def load_single_image(args, fn, time_flag=False):
     # normalization
     if args.mode == "train":
         for ch_idx in range(args.nchannel):
-            struct_img = img[
-                ch_idx, :, :, :
-            ]   
-            # note that struct_img is only a view of img, so changes 
+            struct_img = img[ch_idx, :, :, :]
+            # note that struct_img is only a view of img, so changes
             # made on struct_img also affects img
             struct_img = (struct_img - struct_img.min()) / (
                 struct_img.max() - struct_img.min()

@@ -333,9 +333,7 @@ class Executor(object):
     def __init__(self, args):
 
         if os.path.exists(args.csv_name):
-            print(
-                "the csv file for saving sorting results exists, sorting resuming"
-            )
+            print("the csv file for saving sorting results exists, sorting resuming")
         else:
             print("no existing csv found, start a new sorting ")
             if not args.data_type.startswith("."):

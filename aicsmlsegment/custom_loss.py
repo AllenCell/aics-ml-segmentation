@@ -115,10 +115,10 @@ def get_loss_criterion(config: Dict):
     losses = []
     costmap = []
     for ln in loss_names:
-        assert (
-            ln in SUPPORTED_LOSSES
-        ), f"Invalid loss: {ln}. Supported losses: "\
-           f"{[key for key in SUPPORTED_LOSSES]} or combinations as 'l1+l2'"
+        assert ln in SUPPORTED_LOSSES, (
+            f"Invalid loss: {ln}. Supported losses: "
+            f"{[key for key in SUPPORTED_LOSSES]} or combinations as 'l1+l2'"
+        )
         loss_info = SUPPORTED_LOSSES[ln]
 
         init_args = loss_info["args"]
@@ -393,11 +393,11 @@ class DiceLoss(nn.Module):
         self.register_buffer("weight", weight)
         self.ignore_index = ignore_index
         # The output from the network during training is assumed to be un-normalized
-        # probabilities and we would like to normalize the logits. Since Dice 
-        # (or soft Dice in this case) is usually used for binary data, normalizing 
-        # the channels with Sigmoid is the default choice even for multi-class 
+        # probabilities and we would like to normalize the logits. Since Dice
+        # (or soft Dice in this case) is usually used for binary data, normalizing
+        # the channels with Sigmoid is the default choice even for multi-class
         # segmentation problems. However if one would like to apply Softmax in order
-        # to get the proper probability distribution from the output, just specify 
+        # to get the proper probability distribution from the output, just specify
         # sigmoid_normalization=False.
         if sigmoid_normalization:
             self.normalization = nn.Sigmoid()
@@ -430,7 +430,7 @@ class DiceLoss(nn.Module):
 
 class GeneralizedDiceLoss(nn.Module):
     """
-    Computes Generalized Dice Loss (GDL) as described in 
+    Computes Generalized Dice Loss (GDL) as described in
     https://arxiv.org/pdf/1707.03237.pdf
     """
 
@@ -483,7 +483,7 @@ class GeneralizedDiceLoss(nn.Module):
 
 class WeightedCrossEntropyLoss(nn.Module):
     """
-    WeightedCrossEntropyLoss (WCE) as described 
+    WeightedCrossEntropyLoss (WCE) as described
     in https://arxiv.org/pdf/1707.03237.pdf
     """
 
@@ -514,7 +514,7 @@ class WeightedCrossEntropyLoss(nn.Module):
 
 class BCELossWrapper:
     """
-    Wrapper around BCE loss functions allowing to pass 'ignore_index' 
+    Wrapper around BCE loss functions allowing to pass 'ignore_index'
     as well as 'skip_last_target' option.
     """
 
@@ -558,7 +558,7 @@ class PixelWiseCrossEntropyLoss(nn.Module):
         # normalize the input
         log_probabilities = self.log_softmax(input)
 
-        # standard CrossEntropyLoss requires the target to be (NxDxHxW), 
+        # standard CrossEntropyLoss requires the target to be (NxDxHxW),
         # so we need to expand it to (NxCxDxHxW)
         target = expand_as_one_hot(
             target[:, 0, :, :, :], C=input.size()[1], ignore_index=self.ignore_index
@@ -606,7 +606,7 @@ def flatten(tensor):
 
 def expand_as_one_hot(input, C, ignore_index=None):
     """
-    Converts NxDxHxW label image to NxCxDxHxW, where each label is stored in 
+    Converts NxDxHxW label image to NxCxDxHxW, where each label is stored in
     a separate channel
     :param input: 4D input image (NxDxHxW)
     :param C: number of channels/labels

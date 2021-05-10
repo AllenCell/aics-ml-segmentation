@@ -55,7 +55,7 @@ class DynUNet(nn.Module):
         self.check_kernel_stride()
         self.check_deep_supr_num()
 
-        # initialize the typed list of supervision head outputs so that Torchscript 
+        # initialize the typed list of supervision head outputs so that Torchscript
         # can recognize what's going on
         self.heads: List[torch.Tensor] = [torch.rand(1)] * (
             len(self.deep_supervision_heads) + 1
@@ -114,13 +114,17 @@ class DynUNet(nn.Module):
         for idx in range(len(kernels)):
             kernel, stride = kernels[idx], strides[idx]
             if not isinstance(kernel, int):
-                error_msg = f"length of kernel_size in block {idx} should "\
-                            "be the same as spatial_dims."
+                error_msg = (
+                    f"length of kernel_size in block {idx} should "
+                    "be the same as spatial_dims."
+                )
                 if len(kernel) != self.spatial_dims:
                     raise AssertionError(error_msg)
             if not isinstance(stride, int):
-                error_msg = f"length of stride in block {idx} should be "\
-                            "the same as spatial_dims."
+                error_msg = (
+                    f"length of stride in block {idx} should be "
+                    "the same as spatial_dims."
+                )
                 if len(stride) != self.spatial_dims:
                     raise AssertionError(error_msg)
 

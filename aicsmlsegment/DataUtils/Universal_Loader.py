@@ -137,7 +137,7 @@ def validate_shape(
         timelapse: whether image is a timelapse
 
     output:
-        load_dict: dictionary to be passed to AICSImage.get_image_data 
+        load_dict: dictionary to be passed to AICSImage.get_image_data
                    containing out_orientation and specific channel indices
         correct_shape: tuple rearranged img_shape
     """
@@ -152,10 +152,10 @@ def validate_shape(
             len(real_channel_idx) > 0
         ), f"The specified channel dim is wrong, no other dims have size {n_channel}"
         # if nchannels is 1, doesn't matter which other size-1 dim we swap it with
-        assert (
-            n_channel == 1 or len(real_channel_idx) == 1
-        ), "Index of channel dimension is incorrect and there are multiple candidate " \
-           f"channel dimensions. Please check your image metadata. {img_shape}"
+        assert n_channel == 1 or len(real_channel_idx) == 1, (
+            "Index of channel dimension is incorrect and there are multiple candidate "
+            f"channel dimensions. Please check your image metadata. {img_shape}"
+        )
 
         # change load order and image shape to reflect new index of  channel dimension
         real_channel_idx = real_channel_idx[-1]
@@ -734,10 +734,10 @@ def patchize(
     ----------
     img: 4d CZYX order numpy array
     pr: length 3 list specifying number of patches to divide in z,y,x dimensions
-    patch_size: inference patch size to make sure that the patches are large 
+    patch_size: inference patch size to make sure that the patches are large
                 enough for inference
 
-    Return: list of [i,j,k] start points of a patch and corresponding list of 
+    Return: list of [i,j,k] start points of a patch and corresponding list of
             np.array imgs
     """
     ijk = []
@@ -808,7 +808,7 @@ def patchize(
 class TestDataset(IterableDataset):
     def __init__(self, config: Dict):
         """
-        Dataset to load, resize, normalize, and return testing images when needed for 
+        Dataset to load, resize, normalize, and return testing images when needed for
         inference
 
         Parameters
@@ -907,7 +907,7 @@ class TestDataset(IterableDataset):
         timelapse: whether image is a timelapse
 
         Return: Dictionary containing image filename, tensor image, shape of input
-                image, ijk index of patch from original image, how many patches 
+                image, ijk index of patch from original image, how many patches
                 original image was split into, and timepoint
         """
         if pr == [1, 1, 1]:

@@ -137,13 +137,13 @@ def sliding_window_inference(
         if not _initialized:  # init. buffer at the first iteration
             output_classes = seg_prob.shape[1]
             output_shape = [batch_size, output_classes] + list(original_image_size)
-            # allocate memory to store the full output and the count for 
+            # allocate memory to store the full output and the count for
             # overlapping parts
             output_image = torch.zeros(output_shape, dtype=torch.float32, device=device)
             count_map = torch.zeros(output_shape, dtype=torch.float32, device=device)
             _initialized = True
 
-        # store the result in the proper location of the full output. Apply weights 
+        # store the result in the proper location of the full output. Apply weights
         # from importance map.
         for idx, original_idx in zip(slice_range, unravel_slice_out):
             output_image[original_idx] += importance_map * seg_prob[idx - slice_g]
