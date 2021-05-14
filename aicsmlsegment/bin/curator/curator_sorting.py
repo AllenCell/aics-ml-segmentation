@@ -299,6 +299,7 @@ class Args(object):
         p.add_argument("--data_type", required=True, help="the type of raw images")
         p.add_argument("--input_channel", default=0, type=int)
         p.add_argument("--seg_path", required=True, help="path to segmentation results")
+        p.add_argument("--seg_ext", required=True, help="extention of seg files")
         p.add_argument(
             "--train_path", required=True, help="path to output training data"
         )
@@ -351,9 +352,11 @@ class Executor(object):
                         args.seg_path
                         + os.sep
                         + os.path.basename(fn)[: -1 * len(args.data_type)]
-                        + "_struct_segmentation.tiff"
+                        + args.seg_ext
                     )
-                    assert os.path.exists(seg_fn)
+                    if not os.path.exists(seg_fn):
+                        print(f"skipping {seg_fn}")
+                        continue
                     filewriter.writerow([fn, seg_fn, None, None])
 
     def execute(self, args):
