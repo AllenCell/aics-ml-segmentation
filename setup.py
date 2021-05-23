@@ -9,7 +9,7 @@ with open("README.md") as readme_file:
     readme = readme_file.read()
 
 PACKAGE_NAME = "aicsmlsegment"
-MODULE_VERSION = ""
+MODULE_VERSION = "0.0.7"
 
 
 setup_requirements = [

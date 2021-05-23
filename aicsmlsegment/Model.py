@@ -23,6 +23,7 @@ from torch.utils.data import DataLoader
 
 
 class Model(pytorch_lightning.LightningModule):
+    # the base class for all the models
     def __init__(self, config, model_config, train):
         super().__init__()
 
@@ -211,7 +212,7 @@ class Model(pytorch_lightning.LightningModule):
                 )
             else:
                 print(
-                    "That scheduler is not yet supported. No scheduler is being used."
+                    "The selected scheduler is not yet supported. No scheduler is used."
                 )
                 return optims
             scheds.append(scheduler)
