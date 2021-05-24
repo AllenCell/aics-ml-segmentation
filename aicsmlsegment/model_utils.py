@@ -97,13 +97,12 @@ def apply_on_image(
 
 def model_inference(
     model,
-    input_img: np.ndarray,
+    input_img: torch.Tensor,
     args,
     model_name: str,
     squeeze: bool = False,
     to_numpy: bool = False,
     extract_output_ch: bool = True,
-    sigmoid: bool = False,
     softmax: bool = False,
 ):
     """
@@ -112,20 +111,14 @@ def model_inference(
     if args["size_in"] == args["size_out"]:
         dims_max = [0] + args["size_in"]
         overlaps = [int(0.1 * dim) for dim in dims_max]
-        result = predict_piecewise(
-            model,
-            input_img[0],
-            dims_max=dims_max,
-            overlaps=overlaps,
-        )
-        for i in range(1, input_img.shape[0]):
+        for i in range(input_img.shape[0]):
             output = predict_piecewise(
-                model,
-                input_img[i],
-                dims_max=dims_max,
-                overlaps=overlaps,
+                model, input_img[i], dims_max=dims_max, overlaps=overlaps, mode="fast"
             )
-            result = torch.cat((result, output), dim=0)
+            if i == 0:
+                result = output
+            else:
+                result = torch.cat((result, output), dim=0)
         vae_loss = 0
     else:
         input_image_size = np.array((input_img.shape)[-3:])
@@ -145,7 +138,6 @@ def model_inference(
                 mode="gaussian",
                 model_name=model_name,
             )
-
     if softmax:
         result = torch.nn.Softmax(dim=1)(result)
     if extract_output_ch:
@@ -153,8 +145,6 @@ def model_inference(
         if type(args["OutputCh"]) == list and len(args["OutputCh"]) >= 2:
             args["OutputCh"] = args["OutputCh"][1]
         result = result[:, args["OutputCh"], :, :, :]
-    if sigmoid:
-        result = torch.nn.Sigmoid()(result)
     if not squeeze:
         result = torch.unsqueeze(result, dim=1)
     if to_numpy:
