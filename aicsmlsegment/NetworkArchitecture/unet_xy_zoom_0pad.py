@@ -114,6 +114,9 @@ class UNet3D(nn.Module):
         self.numClass1 = n_classes[1]
         self.numClass2 = n_classes[2]
 
+        # a property will be used when calling this model in model zoo
+        self.final_activation = nn.Softmax(dim=1)
+
         self.k = k
         # self.numClass_combine = n_classes[3]
 
