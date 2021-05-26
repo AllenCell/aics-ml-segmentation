@@ -9,6 +9,16 @@ This is a detailed description of the configuration for training a DL model in *
 3. Only need to change once on a particular machine (parameters specific to each machine), marked by :computer:
 4. No need to change for most problems (parameters pre-defined as a general training scheme and requires advacned deep learning knowledge to adjust), marked by :ok:
 
+********************************************************************
+Here is a list of example yaml configuration files:
+- [basic](../configs/train_config.yaml)
+- [unet_xy_zoom_0pad using tensorboard]()
+- [TBA]()
+- [TBA]()
+- [TBA]()
+- [TBA]()
+********************************************************************
+
 
 ### Model related parameters
 
