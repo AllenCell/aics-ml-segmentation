@@ -23,7 +23,11 @@ or
 model: 
   name: unet_xy
 ```
-There may be probably more than 100 models in the literature for 3D image segmentation. The two models we implemented here are carefully designed for cell structure segmentation in 3D microscopy images. Model `unet_xy` is suitable for smaller-scale structures, like severl voxels thick (e.g., tubulin, lamin b1). Model `unet_xy_zoom` is more suitable for larger-scale structures, like more than 100 voxels in diameter (e.g., nucleus), while the `zoom_ratio` is an integer (e.g., 2 or 3) and can be estimated by average diameter of target object in voxels divided by 150. 
+There may be probably more than 100 models in the literature for 3D image segmentation. The two models we implemented here are carefully designed for cell structure segmentation in 3D microscopy images. Model `unet_xy` is suitable for smaller-scale structures, like severl voxels thick (e.g., tubulin, lamin b1). Model `unet_xy_zoom` is more suitable for larger-scale structures, like more than 100 voxels in diameter (e.g., nucleus), while the `zoom_ratio` is an integer (e.g., 2 or 3). Larger `zoom_ratio` allows the model to take more neighbor information into account, but reduce the resolution. 
+
+There are a few more models `unet_xy_zoom_0pad`
+
+Now, we can also support most of the baseline models implemented in [MONAI](https://docs.monai.io/en/latest/networks.html#nets). All the parameters in those models can be passed in here.
 
 2. start from an existing model? (:warning:)
 
@@ -38,7 +42,7 @@ When doing iterative deep learning, it may be useful to start from the model tra
 nchannel: 1
 nclass: [2, 2, 2]
 ```
-These are related to the model architecture and fixed by default. We assume the input image has only one channel.
+These are related to the model architecture and fixed by default. We assume the input image has only one channel. For `nclass`, it could be `[2, 2, 2]` (for `unet_xy`, `unet_xy_zoom`) or `2` (for other monai models). You can also use more classes than 2, which will also need to have corresponding values in the ground truth images.
 
 4. patch size (:computer:) (:pushpin:)
 
