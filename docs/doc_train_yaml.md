@@ -25,7 +25,7 @@ model:
 ```
 There may be probably more than 100 models in the literature for 3D image segmentation. The two models we implemented here are carefully designed for cell structure segmentation in 3D microscopy images. Model `unet_xy` is suitable for smaller-scale structures, like severl voxels thick (e.g., tubulin, lamin b1). Model `unet_xy_zoom` is more suitable for larger-scale structures, like more than 100 voxels in diameter (e.g., nucleus), while the `zoom_ratio` is an integer (e.g., 2 or 3). Larger `zoom_ratio` allows the model to take more neighbor information into account, but reduce the resolution. 
 
-There are a few more models `unet_xy_zoom_0pad`
+There are a few more variations of `unet_xy_zoom`: `unet_xy_zoom_0pad` (add 0 padding after all convolutions, so `size_in = size_out`), `unet_xy_zoom_dilated` (use dilated convolution), `unet_xy_zoom_stridedconv` (use larger strides in convolution), `unet_xy_zoom_0pad_stridedconv` (both 0 padding and larger stride in convolution), etc. 
 
 Now, we can also support most of the baseline models implemented in [MONAI](https://docs.monai.io/en/latest/networks.html#nets). All the parameters in those models can be passed in here.
 
