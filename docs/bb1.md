@@ -40,7 +40,7 @@ batch_processing \
 
 ### Understanding model output
 
-The actual prediction from a deep learning based segmentation model is not binary. The value of each voxel is a real number between 0 and 1. To make it binary, we usually apply a cutoff value, i.e., the `Threshold` parameter in the [configuration file](./doc_pred_yaml.md). For each model, a different cutoff value may be needed. To determine a proper cutoff value, you can use `-1` for `Threshold` on sample images and open the output in ImageJ (with [bio-formats importer](https://imagej.net/Bio-Formats#Bio-Formats_Importer)) and try out different threshold values. Then, you can set `Threshold` as the new value and run on all images. Now, the results will be binary.
+The actual prediction from a deep learning based segmentation model is not binary. The value of each voxel is a real number between 0 and 1. To make it binary, we usually apply a cutoff value, i.e., the `Threshold` parameter in the [configuration file](./doc_pred_yaml.md). For each model, a different cutoff value may be needed. To determine a proper cutoff value, you can use `-1` for `Threshold` on sample images and open the output in ImageJ (with [bio-formats importer](https://imagej.net/Bio-Formats#Bio-Formats_Importer)) and try out different threshold values. Then, you can set `Threshold` as the new value and run on all images. Then, the results will be binary. Another way to determine the cutoff is to collect a few images with ground truth and sweeping through different cutoff values to find the cutoff achieving the highest accuracy.
 
 
 ### Apply on one image

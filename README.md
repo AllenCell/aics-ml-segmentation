@@ -5,7 +5,7 @@ The Allen Cell Structure Segmenter is a Python-based open source toolkit develop
 **Note: This repository has only the code for the "Iterative Deep Learning Workflow". The classic part can be found at [https://github.com/AllenCell/aics-segmentation](https://github.com/AllenCell/aics-segmentation)**
 
 ***********************************************************************
-Note: We have refactored and modernizaed the deep learning code base 
+**June 2021 Update**: We have refactored and modernizaed the deep learning code base 
 to be more powerful. Examples of new features are:
 - utilize [pytorch-lightning](https://www.pytorchlightning.ai/) to perform more sophisticated training
   (e.g., 16-bit training, stachastic weight averaging, various learning
@@ -15,6 +15,8 @@ to be more powerful. Examples of new features are:
 - new inference function utilizing weighted blending to avoid stiching
   effect when applying the model on a large image
 - support tensorboard for visualizing and tracking experiments
+
+More details on how the new code is organized can be found here: [code overview](./docs/code_overview.md)
 ***********************************************************************
 
 # Link to [Documentations and Tutorials](./docs/overview.md)
