@@ -278,37 +278,13 @@ class Model(pytorch_lightning.LightningModule):
             # segresnetvae forward returns an additional vae loss term
             outputs, vae_loss = outputs
         if (
-            self.model_name == "extended_dynunet"
-            and self.model_config["deep_supervision"]
+            "dynunet" in self.model_name and self.model_config["deep_supervision"]
         ):  # output is a stacked tensor all of same shape instead of a list
             outputs = torch.unbind(outputs, dim=1)
-            loss = torch.zeros(1, device=self.device)
-            for out in outputs:
-                loss += self.loss_function(out, targets, cmap)
-            loss /= len(outputs)
 
-        if (
-            isinstance(outputs, list) and self.model_name == "dynunet"
-        ):  # average loss across deep supervision heads for dynunet w/ deep supervision
-            loss = self.loss_function(outputs[0], targets, cmap)
-            for out in range(1, len(outputs)):  # resize label and costmap
-                grid = self.get_upsample_grid(outputs[out].shape, targets.shape[0])
-                resize_target = torch.nn.functional.grid_sample(
-                    targets, grid, align_corners=True
-                )
-                if self.accepts_costmap:
-                    resize_costmap = torch.nn.functional.grid_sample(
-                        torch.unsqueeze(cmap, dim=1), grid, align_corners=True
-                    )
-                    resize_costmap = torch.squeeze(resize_costmap, dim=1)
-                else:
-                    resize_costmap = cmap
-                loss += self.loss_function(outputs[out], resize_target, resize_costmap)
-            loss /= len(outputs)
-        else:
-            # from https://arxiv.org/pdf/1810.11654.pdf,
-            # vae_loss > 0 if model = segresnetvae
-            loss = self.loss_function(outputs, targets, cmap) + 0.1 * vae_loss
+        # from https://arxiv.org/pdf/1810.11654.pdf,
+        # vae_loss > 0 if model = segresnetvae
+        loss = self.loss_function(outputs, targets, cmap) + 0.1 * vae_loss
         return self.log_and_return("epoch_train_loss", loss)
 
     def validation_step(self, batch, batch_idx):
@@ -326,7 +302,7 @@ class Model(pytorch_lightning.LightningModule):
             model_name=self.model_name,
             softmax=False,
         )
-        # from https://arxiv.org/pdf/1810.11654.pdf
+        # from https://arxiv.org/pdf/1810.11654.pdf, # mode = 'validation'
         val_loss = self.loss_function(outputs, label, costmap) + 0.1 * vae_loss
         self.log_and_return("val_loss", val_loss)
         outputs = torch.nn.Softmax(dim=1)(outputs)

@@ -31,6 +31,7 @@ def _predict_piecewise_recurse(
     ar_in: np.ndarray,
     dims_max: Union[int, List[int]],
     overlaps: Union[int, List[int]],
+    mode: str = "fast",
     **predict_kwargs,
 ):
     """Performs piecewise prediction recursively."""
@@ -42,6 +43,8 @@ def _predict_piecewise_recurse(
         ar_out = torch.squeeze(
             ar_out, dim=0
         )  # remove N dimension so that multichannel outputs can be used
+        if mode != "fast":
+            ar_out = ar_out.detach().cpu()
         weights, shape_in = _get_weights(ar_out.shape)
         weights = torch.as_tensor(weights, dtype=ar_out.dtype, device=ar_out.device)
         ar_weight = torch.broadcast_to(weights, shape_in)
@@ -65,7 +68,7 @@ def _predict_piecewise_recurse(
         slices = tuple(slices)
         ar_in_sub = ar_in[slices]
         pred_sub, pred_weight_sub = _predict_piecewise_recurse(
-            predictor, ar_in_sub, dims_max, overlaps, **predict_kwargs
+            predictor, ar_in_sub, dims_max, overlaps, mode=mode, **predict_kwargs
         )
         if ar_out is None or ar_weight is None:
             shape_out[0] = pred_sub.shape[0]  # Set channel dim for output
@@ -90,6 +93,7 @@ def predict_piecewise(
     tensor_in: torch.Tensor,
     dims_max: Union[int, List[int]] = 64,
     overlaps: Union[int, List[int]] = 0,
+    mode: str = "fast",
     **predict_kwargs,
 ) -> torch.Tensor:
     """Performs piecewise prediction and combines results.
@@ -127,7 +131,15 @@ def predict_piecewise(
     dims_max[0] = None
     overlaps[0] = None
     ar_out, ar_weight = _predict_piecewise_recurse(
-        predictor, tensor_in, dims_max=dims_max, overlaps=overlaps, **predict_kwargs
+        predictor,
+        tensor_in,
+        dims_max=dims_max,
+        overlaps=overlaps,
+        mode=mode,
+        **predict_kwargs,
     )
 
-    return torch.unsqueeze(ar_out / ar_weight, dim=0)
+    weight_corrected = torch.unsqueeze(ar_out / ar_weight, dim=0)
+    if mode != "fast":
+        weight_corrected = weight_corrected.float()
+    return weight_corrected
