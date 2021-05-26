@@ -4,11 +4,26 @@ The Allen Cell Structure Segmenter is a Python-based open source toolkit develop
 
 **Note: This repository has only the code for the "Iterative Deep Learning Workflow". The classic part can be found at [https://github.com/AllenCell/aics-segmentation](https://github.com/AllenCell/aics-segmentation)**
 
+***********************************************************************
+Note: We have refactored and modernizaed the deep learning code base 
+to be more powerful. Examples of new features are:
+- utilize [pytorch-lightning](https://www.pytorchlightning.ai/) to perform more sophisticated training
+  (e.g., 16-bit training, stachastic weight averaging, various learning
+  rate schedulers, multi-GPU training)
+- support more baseline models from [MONAI](https://monai.io/)
+- utilize [TorchIO](https://github.com/fepegar/torchio) for more efficient 3D data augmentation
+- new inference function utilizing weighted blending to avoid stiching
+  effect when applying the model on a large image
+- support tensorboard for visualizing and tracking experiments
+***********************************************************************
+
+# Link to [Documentations and Tutorials](./docs/overview.md)
+
 ## Installation:
 
 0. prerequisite:
 
-To perform training/prediction of the deep learning models in this package, we assume an [NVIDIA GPU](https://www.nvidia.com/en-us/deep-learning-ai/developer/) has been set up properly on a Linux operating system, either on a local machine or on a remote computation cluster. Make sure to check if your GPU supports at least CUDA 8.0 (CUDA 9.0 and up is preferred): [NVIDIA Driver check](https://www.nvidia.com/Download/index.aspx?lang=en-us).
+To perform training/prediction of the deep learning models in this package, we assume an [NVIDIA GPU](https://www.nvidia.com/en-us/deep-learning-ai/developer/) has been set up properly on a Linux operating system, either on a local machine or on a remote computation cluster. Make sure to check if your GPU supports at least CUDA 10.0: [NVIDIA Driver check](https://www.nvidia.com/Download/index.aspx?lang=en-us).
 
 The GPUs we used to develop and test our package are two types: (1) GeForce GTX 1080 Ti GPU (about 11GB GPU memory), (2) Titan Xp GPU (about 12GB GPU memory), (3) Tesla V100 for PCIe (with about 33GB memory). These cover common chips for personal workstations and data centers.
 
@@ -20,7 +35,7 @@ The GPUs we used to develop and test our package are two types: (1) GeForce GTX 
 1. create a conda environment: 
 
 ```bash
-conda create --name mlsegmenter python=3.7
+conda create --name mlsegmenter python=3.8
 ```
 
 (For how to install conda, see [here](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html#installing-conda-on-a-system-that-has-other-python-installations-or-packages))
@@ -37,8 +52,8 @@ conda activate mlsegmenter
 
 Go to [PyTorch website](https://pytorch.org/get-started/locally/), and find the right installation command for you. 
 
-* we use version 1.0 (which is the stable version at the time of our development)
-* we use Linux (OS), Conda (package), python 3.6 (Language), CUDA=10.0 (Question about CUDA? see [setup CUDA](./docs/check_cuda.md)). 
+* we use version 1.8.1 (which is the stable version at the time of our release)
+* we use Linux (OS), Conda (package), python 3.8 (Language), CUDA=10.2 (Question about CUDA? see [setup CUDA](./docs/check_cuda.md)). 
 
 ***Make sure you use either the automatically generated command on PyTorch website, or the command recommended on PyTorch website for installing [older version](https://pytorch.org/get-started/previous-versions/)***
 
@@ -56,6 +71,3 @@ The `-e` flag when doing `pip install` will allow users to modify any the source
 
 ## Level of Support
 We are offering it to the community AS IS; we have used the toolkit within our organization. We are not able to provide guarantees of support. However, we welcome feedback and submission of issues. Users are encouraged to sign up on our [Allen Cell Discussion Forum](https://forum.allencell.org/) for community quesitons and comments.
-
-
-# Link to [Documentations and Tutorials](./docs/overview.md)
