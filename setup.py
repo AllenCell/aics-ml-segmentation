@@ -51,6 +51,7 @@ requirements = [
     "pyyaml",
     "monai>=0.4.0",
     "pytorch-lightning",
+    "torchio",
 ]
 
 extra_requirements = {
