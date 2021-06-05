@@ -32,6 +32,7 @@ def apply_on_image(
     softmax: bool,
     model_name,
     extract_output_ch: bool,
+    maximum_softmax: bool,
 ) -> np.ndarray:
     """
     Highest level API to perform inference on an input image through a model with
@@ -65,6 +66,7 @@ def apply_on_image(
             to_numpy=to_numpy,
             extract_output_ch=extract_output_ch,
             softmax=softmax,
+            maximum_softmax=maximum_softmax,
         )
     else:
         out0, vae_loss = model_inference(
@@ -145,6 +147,7 @@ def model_inference(
     to_numpy: bool = False,
     extract_output_ch: bool = True,
     softmax: bool = False,
+    maximum_softmax: bool = False,
 ):
     """
     perform model inference and extract output channel
@@ -189,9 +192,11 @@ def model_inference(
                 mode="gaussian",
                 model_name=model_name,
             )
-
     if softmax:
         result = torch.nn.Softmax(dim=1)(result)
+    uncertainty_map = None
+    if maximum_softmax:
+        uncertainty_map, _ = torch.max(result, dim=1)
     if extract_output_ch:
         # old models
         if type(args["OutputCh"]) == list and len(args["OutputCh"]) >= 2:
@@ -201,7 +206,8 @@ def model_inference(
         result = torch.unsqueeze(result, dim=1)
     if to_numpy:
         result = result.detach().cpu().numpy()
-    return result, vae_loss
+        if uncertainty_map is not None: uncertainty_map = uncertainty_map.detach().cpu().numpy()
+    return result, vae_loss, uncertainty_map
 
 
 def weights_init(m):

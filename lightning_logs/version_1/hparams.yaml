@@ -1,0 +1,69 @@
+config:
+  InputCh:
+  - 0
+  Normalization: 10
+  NumWorkers: 8
+  OutputCh:
+  - 0
+  - 1
+  - 1
+  - 1
+  - 2
+  - 1
+  OutputDir: /allen/aics/assay-dev/users/Dewen/project/test_data/same_domain/outputs
+  ResizeRatio:
+  - 1.0
+  - 1.0
+  - 1.0
+  RuntimeAug: false
+  Threshold: 0.5
+  batch_size: 1
+  date: Jun 05, 2021 13:32
+  dist_backend: null
+  gpus: 1
+  large_image_resize:
+  - 1
+  - 1
+  - 1
+  mode:
+    DataType: .tif
+    InputDir: /allen/aics/assay-dev/users/Dewen/project/test_data/same_domain/images
+    name: folder
+  model:
+    name: unet_xy_zoom_0pad
+    nchannel: 1
+    nclass: &id001
+    - 2
+    - 2
+    - 2
+    size_in: &id002
+    - 65
+    - 384
+    - 384
+    size_out: &id003
+    - 65
+    - 384
+    - 384
+    zoom_ratio: 3
+  model_path: /allen/aics/assay-dev/users/Dewen/project/baseline_models/run_2/checkpoint_epoch=99.ckpt
+  precision: 32
+  segmentation_name: segmentation
+  validation:
+    OutputCh:
+    - 0
+    - 1
+    - 1
+    - 1
+    - 2
+    - 1
+    leaveout:
+    - 0.02
+    metric: default
+    validate_every_n_epoch: 10
+model_config:
+  nchannel: 1
+  nclass: *id001
+  size_in: *id002
+  size_out: *id003
+  zoom_ratio: 3
+train: false

@@ -335,7 +335,7 @@ class Model(pytorch_lightning.LightningModule):
         if self.aggregate_img is not None:
             to_numpy = False  # prevent excess gpu->cpu data transfer
 
-        output_img, _ = apply_on_image(
+        output_img, _, uncertaintymap = apply_on_image(
             self.model,
             img,
             args_inference,
@@ -344,6 +344,7 @@ class Model(pytorch_lightning.LightningModule):
             softmax=True,
             model_name=self.model_name,
             extract_output_ch=True,
+            maximum_softmax=True,
         )
 
         if self.aggregate_img is not None:
@@ -406,6 +407,7 @@ class Model(pytorch_lightning.LightningModule):
                     out = out.astype(np.uint8)
                     out[out > 0] = 255
             out = np.squeeze(out, 0)  # remove N dimension
+            if uncertaintymap is not None: uncertaintymap = np.squeeze(uncertaintymap, 0)
             path = self.config["OutputDir"] + os.sep + pathlib.PurePosixPath(fn).stem
             if tt != -1:
                 path = path + "_T_" + f"{tt:03}"
@@ -414,5 +416,14 @@ class Model(pytorch_lightning.LightningModule):
                 writer.save(
                     data=out,
                     channel_names=[self.config["segmentation_name"]],
+                    dimension_order="CZYX",
+                )
+            
+            # save uncertainty map
+            path += "_uncertainty.tiff"
+            with OmeTiffWriter(path, overwrite_file=True) as writer:
+                writer.save(
+                    data=uncertaintymap,
+                    channel_names=['uncertainty'],
                     dimension_order="CZYX",
                 )
