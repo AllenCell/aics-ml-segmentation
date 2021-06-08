@@ -1,0 +1,70 @@
+###################
+# MODEL
+###################
+model: 
+  name: basic_unet
+  patch_size: [32, 256, 256]
+  dimensions: 3
+  in_channels: 1
+  out_channels: 2
+  features : [32,  64, 128, 256, 512, 64] 
+
+checkpoint_dir: '/path/to/save/directory'
+resume: 'path/to/model/checkpoint'
+precision: 16 #16 or 32, whether to use 16-bit or 32-bit model weights.
+
+#####################
+# TRAINING
+#####################
+learning_rate: 0.00001
+weight_decay: 0.005
+loss:
+  name: Aux
+  loss_weight: [1, 1, 1] # weights on each auxilliary loss
+  ignore_index: null
+
+scheduler:
+  name: ExponentialLR #name of learning rate scheduler. A full list of scheduler is in aicsmlsegment/Model.py
+  gamma: 0.85
+  verbose: True
+
+SWA: # Configuration for Stochastic Weight Averaging
+  swa_start: 1 # if > 1, epoch when to start SWA, if between 0 and 1, percentage of epochs to start SWA
+  swa_lr: 0.001 # learning rate to ramp up to at end of SWA
+  annealing_epochs: 3 #number of epochs to ramp from learning rate to swa_lr
+  annealing_strategy: cos # cos or linear, whether to ramp up to swa_lr linearly or cosine
+
+epochs: 400
+save_every_n_epoch: 50
+
+callbacks:
+  name: EarlyStopping
+  monitor: val_loss # one of val_loss, train_loss, val_iou - the metric to base early stopping decision on
+  min_delta: 0.01 # minimum change in metric to prevent early stopping
+  patience: 10 # how many epochs to wait for a change greater than min_delta before stopping training
+  verbose: True # whether to print updates to commandline
+  mode: min #whether the monitor value should be minimized or maximized
+
+gpus: -1 # -1 to use all available gpus, otherwise a positive integer
+dist_backend: ddp # either blank or ddp, whether to use ddp or not for multi-GPU training
+
+tensorboard: "path/to/logdir" # log directory where tensorboard should look for tensorboard files
+
+######################
+# DATA
+######################
+loader:
+  name: default  
+  datafolder: '/allen/aics/assay-dev/Segmentation/DeepLearning/for_april_2019_release/LMNB1_training_data_iter_1/'
+  batch_size: 8
+  PatchPerBuffer: 160
+  epoch_shuffle: 5
+  NumWorkers: 1
+  Transforms: ['RR'] # list containing any of RR (random rotation), RF (random flip), RN (random noise), RI (random intensity shift), RBF (random bias field)
+
+validation:
+  metric: default  
+  leaveout: [0]
+  OutputCh: [0, 1, 1, 1, 2, 1]
+  validate_every_n_epoch: 25
+

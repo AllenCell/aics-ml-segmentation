@@ -1,0 +1,45 @@
+###################
+# MODEL
+###################
+model: 
+  name: basic_unet
+  patch_size: [32, 256, 256]
+  dimensions: 3
+  in_channels: 1
+  out_channels: 2
+  features : [32,  64, 128, 256, 512, 64] 
+
+model_path:  'path/to/model/checkpoint'
+
+#####################
+# PREDICTION
+#####################
+OutputCh: 1 # which channel should be taken from the prediction
+precision: 16 #16 or 32, whether to use 16-bit or 32-bit model weights.
+batch_size: 1
+inference_mode: 'fast'
+gpus: -1 # -1 to use all available gpus, otherwise a positive integer
+dist_backend: ddp # either blank or ddp, whether to use ddp or not for multi-GPU training
+NumWorkers: 8 # number of workers to spawn for data loading. More workers increases memory usage
+segmentation_name: "name_of_segmentation_type" # name of segmentation, written to output image metadata
+
+######################
+# DATA
+######################
+OutputDir:  'path/to/save/results'
+InputCh: [1] # channel to take from input image
+large_image_resize: [1,1,1]  # if single images are too large to fit into GPU, specifies number of chunks to split each image into
+ResizeRatio: [1,1,1] #ratio to resize image 
+Normalization: 18 # normalization 'recipe', should match training data
+Threshold:  -1 # whether to binarize output images. Either -1 or an integer between 0 and 1
+RuntimeAug: False # run prediction on four flipped versions of the image - increases quality, takes ~4x longer
+
+mode:
+  name: file # whether to predict on individual file or entire folder of images
+  InputFile: "path/to/input/input/img"
+  timelapse: False 
+# OR #
+# mode:
+#   name: folder
+#   InputDir: "path/to/input/input/img/directory"
+#   DataType: '.tif'

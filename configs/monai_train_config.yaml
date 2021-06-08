@@ -1,0 +1,39 @@
+model: 
+  name: basic_unet
+  patch_size: [32, 256, 256]
+  dimensions: 3
+  in_channels: 1
+  out_channels: 2
+  features : [32,  64, 128, 256, 512, 64]
+
+checkpoint_dir: '/checkpoints/'
+resume: null
+
+learning_rate: 0.00001
+weight_decay: 0.005
+epochs: 1000
+save_every_n_epoch: 200
+loss:
+  name: GeneralizedDice+CrossEntropy
+  loss_weight: [1, 1, 1]
+  ignore_index: null
+
+gpus: -1 
+dist_backend:  ddp 
+tensorboard: '/lightning_logs'
+precision: 32
+
+loader:
+  name: default
+  datafolder:  ['/folder1/', '/folder2/']
+  batch_size: 4
+  PatchPerBuffer: 100
+  epoch_shuffle: 50
+  NumWorkers: 1
+  Transforms: ["RR", 'RF', 'RI', 'RN']
+
+validation:
+  metric: default
+  leaveout: [0, 3, 5]
+  OutputCh: 1
+  validate_every_n_epoch: 200
