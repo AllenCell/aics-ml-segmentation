@@ -12,8 +12,8 @@ This is a detailed description of the configuration for training a DL model in *
 ********************************************************************
 Here is a list of example yaml configuration files:
 - [basic](../configs/train_config.yaml)
-- [unet_xy_zoom_0pad using tensorboard]()
-- [TBA]()
+- [unet_xy_zoom_0pad using tensorboard + learning rate scheduler](../configs/unet_xy_zoom_0pad.yaml)
+- [MONAI model](../configs/monai_train_config.yaml)
 - [TBA]()
 - [TBA]()
 - [TBA]()
@@ -104,6 +104,8 @@ loss:
   loss_weight: [1, 1, 1]
   ignore_index: null
 ```
+`learning_rate` specifies the initial learning rate. If a scheduler is provided, this will change over the course of training. `weight_decay` specifies the weight decay parameter for the Adam Optimizer. With the custom `unet_xy` and `unet_xy_soom` as well as some of the MONAI models, deep supervision heads are used during training, resulting in the ouput of several images on which loss is calculated. `loss weight` determines how the loss calculated on each of these heads should be weighted. Several loss functions are currently supported: Dice, Generalized Dice, Focal, Masked Dice, MSE,  Element Angular MSE, Masked MSE,Cross Entropy, and Masked Cross Entropy. Any two of these losses can be combined by writing the loss `name` as `loss1+loss2`. Additionally, if deep supervision heads are used, appending "Aux" to the start of the loss `name` will result in a final loss that is a weighted sum (as specified by `loss_weight`) across the deep supervision heads. Compatibility of all losses with all models is currently under construction. 
+
 
 2. Learning Rate Scheduler
 ```yaml
@@ -182,14 +184,14 @@ Tensorboard can be used to track the progression of training and compare experim
 ```yaml
 loader:
   name: default
-  datafolder: '/home/data/train/'
+  datafolder: ['/home/data/train/']
   batch_size: 8
   PatchPerBuffer: 200
   epoch_shuffle: 5
   NumWorkers: 1
   Transforms: ['RR']
 ```
-`datafolder` (:warning:) and `PatchPerBuffer` (:pushpin:) need to be specified for each problem. `datafolder` is the directory of training data. `PatchPerBuffer` is the number of sample patches randomly drawn in each epoch, which can be set as *number of patches to draw from each data* **x** *number of training data*. `name`, `epoch_shuffle` and `NumWorkers` (:ok:) are fixed by default. `batch_size` is related to GPU memory and patch size (see values presented with patch size).
+`datafolder` (:warning:) and `PatchPerBuffer` (:pushpin:) need to be specified for each problem. `datafolder` is the directory of training data. Multiple directories can be combined by specifying a list of paths. `PatchPerBuffer` is the number of sample patches randomly drawn in each epoch, which can be set as *number of patches to draw from each data* **x** *number of training data*. `name`, `epoch_shuffle` and `NumWorkers` (:ok:) are fixed by default. `batch_size` is related to GPU memory and patch size (see values presented with patch size).
 `Transforms` is a list of random transformations to apply to the training data. 
 
 |    Transform Name    |          Description                       |
