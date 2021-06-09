@@ -2,7 +2,7 @@
 # model settings
 ##########################################################################################################
 model: 
-  name: unet_xy_zoom_0pad
+  name: unet_xy_zoom_0pad_dropout
   zoom_ratio: 3
   nchannel: 1
   nclass: [2,2,2]

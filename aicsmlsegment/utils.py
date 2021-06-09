@@ -108,6 +108,10 @@ MODEL_PARAMETERS = {
         "Optional": [],
         "Required": ["nchannel", "nclass", "size_in", "size_out", "zoom_ratio"],
     },
+    "unet_xy_zoom_0pad_dropout": {
+        "Optional": [],
+        "Required": ["nchannel", "nclass", "size_in", "size_out", "zoom_ratio"],
+    },
     "unet_xy_zoom_0pad_stridedconv": {
         "Optional": [],
         "Required": ["nchannel", "nclass", "size_in", "size_out", "zoom_ratio"],

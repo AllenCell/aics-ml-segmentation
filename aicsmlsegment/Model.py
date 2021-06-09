@@ -335,17 +335,31 @@ class Model(pytorch_lightning.LightningModule):
         if self.aggregate_img is not None:
             to_numpy = False  # prevent excess gpu->cpu data transfer
 
-        output_img, _, uncertaintymap = apply_on_image(
-            self.model,
-            img,
-            args_inference,
-            squeeze=False,
-            to_numpy=to_numpy,
-            softmax=True,
-            model_name=self.model_name,
-            extract_output_ch=True,
-            maximum_softmax=True,
-        )
+        # enable dropout layer during inference
+        self.model.train()
+        for m in self.model.modules():
+            if isinstance(m, torch.nn.BatchNorm3d):
+                m.eval()
+
+        output_img_list = []
+        for i in range(15):
+            output_img, _, uncertaintymap_softmax = apply_on_image(
+                self.model,
+                img,
+                args_inference,
+                squeeze=False,
+                to_numpy=to_numpy,
+                softmax=True,
+                model_name=self.model_name,
+                extract_output_ch=True,
+                maximum_softmax=True,
+            )
+            output_img_list.append(output_img)
+
+        output_img_list = np.array(output_img_list)
+        output_img = output_img_list.mean(axis=0)
+        # entropy code adapted from https://github.com/tanyanair/segmentation_uncertainty
+        uncertaintymap_entropy = -np.sum(np.mean(output_img_list, 0) * np.log(np.mean(output_img_list, 0) + 1e-5), 0)
 
         if self.aggregate_img is not None:
             # initialize the aggregate img
@@ -407,11 +421,11 @@ class Model(pytorch_lightning.LightningModule):
                     out = out.astype(np.uint8)
                     out[out > 0] = 255
             out = np.squeeze(out, 0)  # remove N dimension
-            if uncertaintymap is not None: uncertaintymap = np.squeeze(uncertaintymap, 0)
-            path = self.config["OutputDir"] + os.sep + pathlib.PurePosixPath(fn).stem
+            if uncertaintymap_softmax is not None: uncertaintymap_softmax = np.squeeze(uncertaintymap_softmax, 0)
+            original_path = self.config["OutputDir"] + os.sep + pathlib.PurePosixPath(fn).stem
             if tt != -1:
                 path = path + "_T_" + f"{tt:03}"
-            path += "_struct_segmentation.tiff"
+            path = original_path+"_struct_segmentation.tiff"
             with OmeTiffWriter(path, overwrite_file=True) as writer:
                 writer.save(
                     data=out,
@@ -420,10 +434,17 @@ class Model(pytorch_lightning.LightningModule):
                 )
             
             # save uncertainty map
-            path += "_uncertainty.tiff"
+            path = original_path+"_uncertaintymap_softmax.tiff"
             with OmeTiffWriter(path, overwrite_file=True) as writer:
                 writer.save(
-                    data=uncertaintymap,
+                    data=uncertaintymap_softmax,
+                    channel_names=['uncertainty'],
+                    dimension_order="CZYX",
+                )
+            path = original_path+"_uncertaintymap_entropy.tiff"
+            with OmeTiffWriter(path, overwrite_file=True) as writer:
+                writer.save(
+                    data=uncertaintymap_entropy,
                     channel_names=['uncertainty'],
                     dimension_order="CZYX",
                 )
