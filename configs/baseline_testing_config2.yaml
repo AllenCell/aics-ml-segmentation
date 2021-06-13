@@ -16,7 +16,7 @@ model_path: '/allen/aics/assay-dev/users/Dewen/project/baseline_models/run_2/che
 ##########################################################################################################
 InputCh: [0]
 OutputCh: [0, 1, 1, 1, 2, 1]
-OutputDir: '/allen/aics/assay-dev/users/Dewen/project/test_data/test/outputs'
+OutputDir: '/allen/aics/assay-dev/users/Dewen/project/test_data/same_domain/outputs'
 # the ratio to resize the image
 ResizeRatio: [1.0, 1.0, 1.0]
 # the method to normalize your data
@@ -35,7 +35,7 @@ gpus: 1
 mode:
   name: folder
   # paths to the file
-  InputDir: '/allen/aics/assay-dev/users/Dewen/project/test_data/test/images'
+  InputDir: '/allen/aics/assay-dev/users/Dewen/project/test_data/same_domain/images'
   # the type of images to be processed in this folder
   DataType: .tif
 
@@ -44,4 +44,6 @@ validation:
   leaveout: [0.02]
   OutputCh: [0, 1, 1, 1, 2, 1]
   validate_every_n_epoch: 10
-  
+
+
+

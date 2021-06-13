@@ -207,7 +207,10 @@ def model_inference(
     if to_numpy:
         result = result.detach().cpu().numpy()
         if uncertainty_map is not None: uncertainty_map = uncertainty_map.detach().cpu().numpy()
-    return result, vae_loss, uncertainty_map
+    if uncertainty_map is not None:
+        return result, vae_loss, uncertainty_map
+    else:
+        return result, vae_loss
 
 
 def weights_init(m):

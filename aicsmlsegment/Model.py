@@ -342,7 +342,7 @@ class Model(pytorch_lightning.LightningModule):
                 m.eval()
 
         output_img_list = []
-        for i in range(15):
+        for i in range(10):
             output_img, _, uncertaintymap_softmax = apply_on_image(
                 self.model,
                 img,
@@ -356,10 +356,17 @@ class Model(pytorch_lightning.LightningModule):
             )
             output_img_list.append(output_img)
 
+        # dimension of the output_img_list would be [15,1,1,Z,Y,X]
         output_img_list = np.array(output_img_list)
         output_img = output_img_list.mean(axis=0)
         # entropy code adapted from https://github.com/tanyanair/segmentation_uncertainty
-        uncertaintymap_entropy = -np.sum(np.mean(output_img_list, 0) * np.log(np.mean(output_img_list, 0) + 1e-5), 0)
+        uncertaintymap_variance = (np.mean(np.square(output_img_list), 0) - np.square(np.mean(output_img_list, 0))).squeeze((0,1))
+        output_img_list = np.repeat(output_img_list, 2, 2) # expand the class dimension
+        output_img_list[:,:,0,...] = 1 - output_img_list[:,:,1,...]
+        entropy = -np.sum(np.mean(output_img_list, 0) * np.log(np.mean(output_img_list, 0) + 1e-5), 1)
+        expected_entropy = -np.mean(np.sum(output_img_list * np.log(output_img_list + 1e-5), 2), 0)
+        uncertaintymap_entropy = entropy.squeeze(0)
+        uncertaintymap_mi = (entropy - expected_entropy).squeeze(0)
 
         if self.aggregate_img is not None:
             # initialize the aggregate img
@@ -421,7 +428,7 @@ class Model(pytorch_lightning.LightningModule):
                     out = out.astype(np.uint8)
                     out[out > 0] = 255
             out = np.squeeze(out, 0)  # remove N dimension
-            if uncertaintymap_softmax is not None: uncertaintymap_softmax = np.squeeze(uncertaintymap_softmax, 0)
+            if uncertaintymap_softmax is not None: uncertaintymap_softmax = 1 - np.squeeze(uncertaintymap_softmax, 0)
             original_path = self.config["OutputDir"] + os.sep + pathlib.PurePosixPath(fn).stem
             if tt != -1:
                 path = path + "_T_" + f"{tt:03}"
@@ -448,3 +455,19 @@ class Model(pytorch_lightning.LightningModule):
                     channel_names=['uncertainty'],
                     dimension_order="CZYX",
                 )
+            path = original_path+"_uncertaintymap_variance.tiff"
+            with OmeTiffWriter(path, overwrite_file=True) as writer:
+                writer.save(
+                    data=uncertaintymap_variance,
+                    channel_names=['uncertainty'],
+                    dimension_order="CZYX",
+                )
+            path = original_path+"_uncertaintymap_mi.tiff"
+            with OmeTiffWriter(path, overwrite_file=True) as writer:
+                writer.save(
+                    data=uncertaintymap_mi,
+                    channel_names=['uncertainty'],
+                    dimension_order="CZYX",
+                )
+
+                
