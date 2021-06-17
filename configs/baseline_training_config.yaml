@@ -1,10 +1,10 @@
 model: 
-  name: unet_xy_zoom_0pad_dropout
+  name: unet_xy_zoom_0pad_predvar
   zoom_ratio: 3
   nchannel: 1
   nclass: [2,2,2]
-  size_in: [65, 384, 384] 
-  size_out: [65, 384, 384]
+  size_in: [65, 256, 256] 
+  size_out: [65, 256, 256]
 checkpoint_dir: '/allen/aics/assay-dev/users/Dewen/project/baseline_models/'
 
 # resume: '/allen/aics/assay-dev/users/Dewen/project/baseline_models/run_2/checkpoint_epoch=99.ckpt'
@@ -16,10 +16,11 @@ scheduler:
   verbose: True
 
 weight_decay: 0.005
-epochs: 800
+epochs: 400
 save_every_n_epoch: 20
 loss:
-  name: Aux # MaskedCrossEntropy
+  # name: Aux # MaskedCrossEntropy
+  name: MultiAuxillaryUncertaintyCrossEntropy
   loss_weight: [1, 1, 1]
   ignore_index: null
 tensorboard: '/allen/aics/assay-dev/users/Dewen/project/lightning_logs'

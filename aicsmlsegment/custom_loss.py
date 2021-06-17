@@ -86,6 +86,17 @@ SUPPORTED_LOSSES = {
             "to_long": True,
         },
     },
+    "MultiAuxillaryUncertaintyCrossEntropy": {
+        "source": "aicsmlsegment.custom_loss",
+        "args": ["weight", "num_class"],
+        "wrapper_args": {
+            "n_label_ch": 1,
+            "accepts_costmap": True,
+            "cmap_unsqueeze": True,
+            "label_squeeze": True,
+            "to_long": True,
+        },
+    },
 }
 
 
@@ -220,7 +231,7 @@ class MaskedCrossEntropyLoss(torch.nn.Module):
 
     def forward(self, input, target, cmap):
         """
-        expects input, target, cmap in NCZYX with input channels=2, target_channels=1
+        expects input, target, cmap in NCZYX with input channels=2, target channels=1
         """
         loss = self.loss(self.log_softmax(input), target)
         loss = torch.mean(torch.mul(loss.view(loss.numel()), cmap.view(cmap.numel())))
@@ -242,6 +253,33 @@ class MultiAuxillaryCrossEntropyLoss(torch.nn.Module):
 
         return total_loss
 
+# refer here https://github.com/tanyanair/segmentation_uncertainty/blob/master/bunet/utils/tf_metrics.py for incorporating uncertainty during training
+class MultiAuxillaryUncertaintyCrossEntropyLoss(torch.nn.Module):
+    def __init__(self, weight, num_class):
+        super(MultiAuxillaryUncertaintyCrossEntropyLoss, self).__init__()
+        self.weight = weight
+        self.loss_fn = MaskedCrossEntropyLoss()
+
+    def forward(self, input, target, cmap, num_mc=10):
+        # input[0], cmap:  NCZYX, target: NZYX, input[1]: N1ZYX
+        if not isinstance(input, list):  # custom model validation
+            input = [input]
+        # print(f'input[0]:{input[0].shape}, input[1]:{input[1].shape}, target:{target.shape}, cmap:{cmap.shape}')
+        tile_dims = [1 for i in range(input[0].unsqueeze(-1).dim())]
+        tile_dims[-1] = num_mc
+        input_mc = torch.tile(input[0].unsqueeze(-1),tuple(tile_dims))
+        std = torch.exp(input[1]).unsqueeze(-1)
+        noise = torch.randn(list(input[1].shape)+[num_mc]).to(std.device) * std
+        # input_mc: NCZYXM, now we only add noise on one dimension
+        input_mc[:,-1,...] = input_mc[:,-1,...] + noise.squeeze(dim=1)
+        target_mc = torch.tile(target.unsqueeze(-1),tuple(tile_dims[1:]))
+        cmap_mc = torch.tile(cmap.unsqueeze(-1),tuple(tile_dims))
+        # print(f'input_mc:{input_mc.shape}, target_mc:{target_mc.shape}, cmap_mc:{cmap_mc.shape}')
+        total_loss = self.weight[0] * self.loss_fn(input_mc, target_mc, cmap_mc)
+        for n in np.arange(2, len(input)):
+            total_loss += self.weight[n] * self.loss_fn(input[n], target, cmap)
+
+        return total_loss
 
 class ElementNLLLoss(torch.nn.Module):
     def __init__(self, num_class):
