@@ -1,11 +1,11 @@
 model: 
-  name: unet_xy_zoom_0pad_predvar
+  name: unet_xy_zoom_0pad_dropout
   zoom_ratio: 2
   nchannel: 1
   nclass: [2,2,2]
-  size_in: [65, 320, 320] 
-  size_out: [65, 320, 320]
-checkpoint_dir: '/allen/aics/assay-dev/users/Dewen/project/baseline_models/'
+  size_in: [65, 384, 384] 
+  size_out: [65, 384, 384]
+checkpoint_dir: '/allen/aics/assay-dev/users/Dewen/project/experiment_results/all_runs'
 
 # resume: '/allen/aics/assay-dev/users/Dewen/project/baseline_models/run_2/checkpoint_epoch=99.ckpt'
 learning_rate: 0.00001 
@@ -19,11 +19,11 @@ weight_decay: 0.005
 epochs: 400
 save_every_n_epoch: 20
 loss:
-  # name: Aux # MaskedCrossEntropy
-  name: MultiAuxillaryUncertaintyCrossEntropy
-  loss_weight: [1, 1, 1, 1]
+  name: Aux # MaskedCrossEntropy
+  # name: MultiAuxillaryUncertaintyCrossEntropy
+  loss_weight: [1, 1, 1]
   ignore_index: null
-tensorboard: '/allen/aics/assay-dev/users/Dewen/project/lightning_logs'
+tensorboard: '/allen/aics/assay-dev/users/Dewen/project/experiment_results/logs'
 gpus: -1 
 dist_backend:  ddp 
 precision: 16
@@ -31,10 +31,10 @@ precision: 16
 loader:
   name: default
   datafolder: '//allen/aics/assay-dev/users/Benji/h2b_undersegmentation_fix/curriculum_training/round3'
-  batch_size: 2
+  batch_size: 1
   PatchPerBuffer: 80
   epoch_shuffle: 20
-  NumWorkers: 1
+  NumWorkers: 2
   Transforms: ['RR', 'RF']
 
 validation:

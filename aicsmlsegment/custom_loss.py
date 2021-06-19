@@ -264,21 +264,25 @@ class MultiAuxillaryUncertaintyCrossEntropyLoss(torch.nn.Module):
         # input[0], cmap:  NCZYX, target: NZYX, input[1]: N1ZYX
         if not isinstance(input, list):  # custom model validation
             input = [input]
+            return self.weight[0] * self.loss_fn(input[0], target, cmap)
         # print(f'input[0]:{input[0].shape}, input[1]:{input[1].shape}, target:{target.shape}, cmap:{cmap.shape}')
         tile_dims = [1 for i in range(input[0].unsqueeze(-1).dim())]
         tile_dims[-1] = num_mc
         input_mc = torch.tile(input[0].unsqueeze(-1),tuple(tile_dims))
-        std = torch.exp(input[1]).unsqueeze(-1)
+        # people usually use exp because the noise could be positive or negative, but we face INF issue here.
+        # std = torch.exp(input[1]).unsqueeze(-1)
+        std = input[1].unsqueeze(-1)
         noise = torch.randn(list(input[1].shape)+[num_mc]).to(std.device) * std
         # input_mc: NCZYXM, now we only add noise on one dimension
         input_mc[:,-1,...] = input_mc[:,-1,...] + noise.squeeze(dim=1)
         target_mc = torch.tile(target.unsqueeze(-1),tuple(tile_dims[1:]))
         cmap_mc = torch.tile(cmap.unsqueeze(-1),tuple(tile_dims))
-        # print(f'input_mc:{input_mc.shape}, target_mc:{target_mc.shape}, cmap_mc:{cmap_mc.shape}')
+        print(f'input_mc:{input_mc.max()}, target_mc:{target_mc.max()}, cmap_mc:{cmap_mc.max()}')
         total_loss = self.weight[0] * self.loss_fn(input_mc, target_mc, cmap_mc)
+        print(f'total_loss 1:{total_loss}')
         for n in np.arange(2, len(input)):
             total_loss += self.weight[n] * self.loss_fn(input[n], target, cmap)
-
+        print(f'total_loss 2:{total_loss}')
         return total_loss
 
 class ElementNLLLoss(torch.nn.Module):

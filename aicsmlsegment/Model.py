@@ -308,6 +308,44 @@ class Model(pytorch_lightning.LightningModule):
         outputs = torch.nn.Softmax(dim=1)(outputs)
         val_metric = compute_iou(outputs > 0.5, label, torch.unsqueeze(costmap, dim=1))
         self.log_and_return("val_iou", val_metric)
+        
+        # save all validation result in the given epoch, for quality control network training
+        if self.current_epoch % 50 == 0:
+            # compute uncertainty
+            with torch.no_grad:
+                output_img_list = []
+                for i in range(10):
+                    outputs, vae_loss = model_inference(
+                        self.model,
+                        input_img,
+                        self.args_inference,
+                        squeeze=True,
+                        extract_output_ch=False,
+                        model_name=self.model_name,
+                        softmax=False,
+                    )
+                    outputs = torch.nn.Softmax(dim=1)(outputs)
+                    output_img_list.append(outputs.detach().cpu().numpy())
+            # dimension of the output_img_list would be [mc,N,C,Z,Y,X]
+            output_img_list = np.array(output_img_list)
+            output_img = output_img_list.mean(axis=0)
+            uncertaintymap_variance = np.mean(np.square(output_img_list), 0) - np.square(np.mean(output_img_list, 0))[:,-1,...]
+            entropy = -np.sum(np.mean(output_img_list, 0) * np.log(np.mean(output_img_list, 0) + 1e-5), dim=1) # entropy sum on the C dimension
+            expected_entropy = -np.mean(np.sum(output_img_list * np.log(output_img_list + 1e-5), 2), 0)
+            uncertaintymap_entropy = entropy
+            uncertaintymap_mi = entropy - expected_entropy
+            for i in range(input_img.shape[0]):
+                # save original image
+                imsave(self.config["checkpoint_dir"]+os.sep+"validation_results"+os.sep+fn[i]+".tiff", input_img[i,0,:,:,:].detach().cpu().numpy())
+                # save the prediction
+                imsave(self.config["checkpoint_dir"]+os.sep+"validation_results"+os.sep+fn[i]+"_prediction.tiff", output_img[i, 1, :, :, :])
+                # save the ground truth
+                imsave(self.config["checkpoint_dir"]+os.sep+"validation_results"+os.sep+fn[i]+"_gt.tiff", label[i, :, :, :].detach().cpu().numpy())
+                # save uncertainty
+                imsave(self.config["checkpoint_dir"]+os.sep+"validation_results"+os.sep+fn[i]+"_uncertainty_entropy.tiff", uncertaintymap_variance[i, :, :, :])
+                imsave(self.config["checkpoint_dir"]+os.sep+"validation_results"+os.sep+fn[i]+"_uncertainty_variance.tiff", uncertaintymap_entropy[i, :, :, :])
+                imsave(self.config["checkpoint_dir"]+os.sep+"validation_results"+os.sep+fn[i]+"_uncertainty_mi.tiff", uncertaintymap_mi[i, :, :, :])
+        """
         # save first validation image result
         if batch_idx == 0:
             imsave(
@@ -324,6 +362,7 @@ class Model(pytorch_lightning.LightningModule):
                 + ".tiff",
                 outputs[0, 1, :, :, :].detach().cpu().numpy(),
             )
+        """
 
     def test_step(self, batch, batch_idx):
         img = batch["img"]
