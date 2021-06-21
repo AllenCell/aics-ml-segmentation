@@ -1,6 +1,6 @@
 model: 
   name: unet_xy_zoom_0pad_dropout
-  zoom_ratio: 2
+  zoom_ratio: 3
   nchannel: 1
   nclass: [2,2,2]
   size_in: [65, 384, 384] 
@@ -16,7 +16,7 @@ scheduler:
   verbose: True
 
 weight_decay: 0.005
-epochs: 400
+epochs: 100
 save_every_n_epoch: 20
 loss:
   name: Aux # MaskedCrossEntropy
@@ -34,7 +34,7 @@ loader:
   batch_size: 1
   PatchPerBuffer: 80
   epoch_shuffle: 20
-  NumWorkers: 2
+  NumWorkers: 1
   Transforms: ['RR', 'RF']
 
 validation:

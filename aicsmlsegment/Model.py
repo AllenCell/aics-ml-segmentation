@@ -291,7 +291,7 @@ class Model(pytorch_lightning.LightningModule):
         input_img = batch[0]
         label = batch[1]
         costmap = batch[2]
-        # fn = batch[3]
+        fn = batch[3]
 
         outputs, vae_loss = model_inference(
             self.model,
@@ -310,9 +310,9 @@ class Model(pytorch_lightning.LightningModule):
         self.log_and_return("val_iou", val_metric)
         
         # save all validation result in the given epoch, for quality control network training
-        if self.current_epoch % 50 == 0:
+        if self.current_epoch == 79 or self.current_epoch == 99:
             # compute uncertainty
-            with torch.no_grad:
+            with torch.no_grad():
                 output_img_list = []
                 for i in range(10):
                     outputs, vae_loss = model_inference(
@@ -330,21 +330,23 @@ class Model(pytorch_lightning.LightningModule):
             output_img_list = np.array(output_img_list)
             output_img = output_img_list.mean(axis=0)
             uncertaintymap_variance = np.mean(np.square(output_img_list), 0) - np.square(np.mean(output_img_list, 0))[:,-1,...]
-            entropy = -np.sum(np.mean(output_img_list, 0) * np.log(np.mean(output_img_list, 0) + 1e-5), dim=1) # entropy sum on the C dimension
+            entropy = -np.sum(np.mean(output_img_list, 0) * np.log(np.mean(output_img_list, 0) + 1e-5), 1) # entropy sum on the C dimension
             expected_entropy = -np.mean(np.sum(output_img_list * np.log(output_img_list + 1e-5), 2), 0)
             uncertaintymap_entropy = entropy
             uncertaintymap_mi = entropy - expected_entropy
             for i in range(input_img.shape[0]):
                 # save original image
-                imsave(self.config["checkpoint_dir"]+os.sep+"validation_results"+os.sep+fn[i]+".tiff", input_img[i,0,:,:,:].detach().cpu().numpy())
+                imsave(self.config["checkpoint_dir"]+os.sep+"validation_results"+os.sep+pathlib.PurePosixPath(fn[i]).stem+".tiff", input_img[i,0,:,:,:].detach().cpu().numpy())
                 # save the prediction
-                imsave(self.config["checkpoint_dir"]+os.sep+"validation_results"+os.sep+fn[i]+"_prediction.tiff", output_img[i, 1, :, :, :])
+                imsave(self.config["checkpoint_dir"]+os.sep+"validation_results"+os.sep+pathlib.PurePosixPath(fn[i]).stem+"_prediction.tiff", output_img[i, 1, :, :, :])
+                # save cmap
+                imsave(self.config["checkpoint_dir"]+os.sep+"validation_results"+os.sep+pathlib.PurePosixPath(fn[i]).stem+"_cmap.tiff", costmap[i, :, :, :].detach().cpu().numpy())
                 # save the ground truth
-                imsave(self.config["checkpoint_dir"]+os.sep+"validation_results"+os.sep+fn[i]+"_gt.tiff", label[i, :, :, :].detach().cpu().numpy())
+                imsave(self.config["checkpoint_dir"]+os.sep+"validation_results"+os.sep+pathlib.PurePosixPath(fn[i]).stem+"_gt.tiff", label[i, :, :, :].detach().cpu().numpy())
                 # save uncertainty
-                imsave(self.config["checkpoint_dir"]+os.sep+"validation_results"+os.sep+fn[i]+"_uncertainty_entropy.tiff", uncertaintymap_variance[i, :, :, :])
-                imsave(self.config["checkpoint_dir"]+os.sep+"validation_results"+os.sep+fn[i]+"_uncertainty_variance.tiff", uncertaintymap_entropy[i, :, :, :])
-                imsave(self.config["checkpoint_dir"]+os.sep+"validation_results"+os.sep+fn[i]+"_uncertainty_mi.tiff", uncertaintymap_mi[i, :, :, :])
+                imsave(self.config["checkpoint_dir"]+os.sep+"validation_results"+os.sep+pathlib.PurePosixPath(fn[i]).stem+"_uncertainty_entropy.tiff", uncertaintymap_variance[i, :, :, :])
+                imsave(self.config["checkpoint_dir"]+os.sep+"validation_results"+os.sep+pathlib.PurePosixPath(fn[i]).stem+"_uncertainty_variance.tiff", uncertaintymap_entropy[i, :, :, :])
+                imsave(self.config["checkpoint_dir"]+os.sep+"validation_results"+os.sep+pathlib.PurePosixPath(fn[i]).stem+"_uncertainty_mi.tiff", uncertaintymap_mi[i, :, :, :])
         """
         # save first validation image result
         if batch_idx == 0:
@@ -382,26 +384,27 @@ class Model(pytorch_lightning.LightningModule):
 
         output_img_list = []
         for i in range(10):
-            output_img, _, uncertaintymap_softmax = apply_on_image(
+            output_img, _ = apply_on_image(
                 self.model,
                 img,
                 args_inference,
-                squeeze=False,
+                squeeze=True,
                 to_numpy=to_numpy,
                 softmax=True,
                 model_name=self.model_name,
-                extract_output_ch=True,
-                maximum_softmax=True,
+                extract_output_ch=False,
             )
             output_img_list.append(output_img)
 
-        # dimension of the output_img_list would be [15,1,1,Z,Y,X]
+        # just use the first maximum softmax as teh uncertaintymap_softmax
+        uncertaintymap_softmax = np.max(output_img_list[0], 1)
+        # dimension of the output_img_list would be [10,1,C,Z,Y,X]
         output_img_list = np.array(output_img_list)
-        output_img = output_img_list.mean(axis=0)
+        output_img = output_img_list.mean(axis=0)[:,-1,...]
         # entropy code adapted from https://github.com/tanyanair/segmentation_uncertainty
-        uncertaintymap_variance = (np.mean(np.square(output_img_list), 0) - np.square(np.mean(output_img_list, 0))).squeeze((0,1))
-        output_img_list = np.repeat(output_img_list, 2, 2) # expand the class dimension
-        output_img_list[:,:,0,...] = 1 - output_img_list[:,:,1,...]
+        uncertaintymap_variance = (np.mean(np.square(output_img_list), 0) - np.square(np.mean(output_img_list, 0))).squeeze(0)[-1,...]
+        # output_img_list = np.repeat(output_img_list, 2, 2) # expand the class dimension
+        # output_img_list[:,:,0,...] = 1 - output_img_list[:,:,1,...]
         entropy = -np.sum(np.mean(output_img_list, 0) * np.log(np.mean(output_img_list, 0) + 1e-5), 1)
         expected_entropy = -np.mean(np.sum(output_img_list * np.log(output_img_list + 1e-5), 2), 0)
         uncertaintymap_entropy = entropy.squeeze(0)
