@@ -16,7 +16,7 @@ scheduler:
   verbose: True
 
 weight_decay: 0.005
-epochs: 60
+epochs: 20
 save_every_n_epoch: 20
 loss:
   name: Aux # MaskedCrossEntropy
@@ -24,8 +24,8 @@ loss:
   loss_weight: [1, 1, 1]
   ignore_index: null
 tensorboard: '/allen/aics/assay-dev/users/Dewen/project/experiment_results/logs'
-gpus: 1
-# dist_backend:  ddp 
+gpus: -1
+dist_backend:  ddp 
 precision: 16
 
 loader:
@@ -33,7 +33,7 @@ loader:
   datafolder: '//allen/aics/assay-dev/users/Benji/h2b_undersegmentation_fix/curriculum_training/round3'
   batch_size: 2
   PatchPerBuffer: 80
-  epoch_shuffle: 20
+  epoch_shuffle: 21
   NumWorkers: 1
   Transforms: ['RR', 'RF']
 

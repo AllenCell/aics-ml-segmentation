@@ -308,7 +308,7 @@ class Model(pytorch_lightning.LightningModule):
         outputs = torch.nn.Softmax(dim=1)(outputs)
         val_metric = compute_iou(outputs > 0.5, label, torch.unsqueeze(costmap, dim=1))
         self.log_and_return("val_iou", val_metric)
-        
+        """
         # save all validation result in the given epoch, for quality control network training
         if self.current_epoch == 79 or self.current_epoch == 99:
             # compute uncertainty
@@ -364,7 +364,7 @@ class Model(pytorch_lightning.LightningModule):
                 + ".tiff",
                 outputs[0, 1, :, :, :].detach().cpu().numpy(),
             )
-        """
+        
 
     def test_step(self, batch, batch_idx):
         img = batch["img"]
@@ -382,25 +382,35 @@ class Model(pytorch_lightning.LightningModule):
             if isinstance(m, torch.nn.BatchNorm3d):
                 m.eval()
 
+        mc_num = 10
         output_img_list = []
-        for i in range(10):
+        uncertaintymap_predvariance_list = []
+        print(f'now predicting file:{fn}')
+        for i in range(mc_num):
+            print(f'now predicting the {i}/{mc_num} mc sample...')
             output_img, _ = apply_on_image(
                 self.model,
                 img,
                 args_inference,
                 squeeze=True,
-                to_numpy=to_numpy,
-                softmax=True,
+                to_numpy=False,
+                softmax=False,
                 model_name=self.model_name,
                 extract_output_ch=False,
             )
-            output_img_list.append(output_img)
+            # if the model name is unet_xy_zoom_0pad_predvar, the last feature map of dimension 1 should be the predicted uncertainty map
+            if self.model_name == 'unet_xy_zoom_0pad_predvar':
+                output_img_list.append(torch.nn.Softmax(dim=1)(output_img[:,:-1,...]).detach().cpu().numpy())
+                uncertaintymap_predvariance_list.append(output_img[:,-1,...].detach().cpu().numpy())
+            else:
+                output_img_list.append(torch.nn.Softmax(dim=1)(output_img).detach().cpu().numpy())
 
-        # just use the first maximum softmax as teh uncertaintymap_softmax
-        uncertaintymap_softmax = np.max(output_img_list[0], 1)
+        print('now calculating uncertainty...')
         # dimension of the output_img_list would be [10,1,C,Z,Y,X]
         output_img_list = np.array(output_img_list)
         output_img = output_img_list.mean(axis=0)[:,-1,...]
+        # just use the first maximum softmax as teh uncertaintymap_softmax
+        uncertaintymap_softmax = np.max(output_img_list[0], 1)
         # entropy code adapted from https://github.com/tanyanair/segmentation_uncertainty
         uncertaintymap_variance = (np.mean(np.square(output_img_list), 0) - np.square(np.mean(output_img_list, 0))).squeeze(0)[-1,...]
         # output_img_list = np.repeat(output_img_list, 2, 2) # expand the class dimension
@@ -409,6 +419,17 @@ class Model(pytorch_lightning.LightningModule):
         expected_entropy = -np.mean(np.sum(output_img_list * np.log(output_img_list + 1e-5), 2), 0)
         uncertaintymap_entropy = entropy.squeeze(0)
         uncertaintymap_mi = (entropy - expected_entropy).squeeze(0)
+        uncertaintymap_predvariance = None
+        if len(uncertaintymap_predvariance_list):
+            uncertaintymap_predvariance = np.mean(np.array(uncertaintymap_predvariance_list),0).squeeze(0)
+
+        # Here, we compute the mutual iou of each mc sample and save the result in a numpy
+        # mutual_iou_list = []
+        # volume_list = [np.count_nonzero(output_img_list[i]>0.5) for i in range(output_img_list.shape[0])]
+        # for i in range(output_img_list.shape[0]-1):
+        #     for j in range(i,output_img_list.shape[0]):
+        #         current_iou = compute_iou(output_img_list[i] > 0.5, output_img_list[j] > 0.5, None)
+        #         mutual_iou_list.append(current_iou)
 
         if self.aggregate_img is not None:
             # initialize the aggregate img
@@ -470,10 +491,11 @@ class Model(pytorch_lightning.LightningModule):
                     out = out.astype(np.uint8)
                     out[out > 0] = 255
             out = np.squeeze(out, 0)  # remove N dimension
-            if uncertaintymap_softmax is not None: uncertaintymap_softmax = 1 - np.squeeze(uncertaintymap_softmax, 0)
             original_path = self.config["OutputDir"] + os.sep + pathlib.PurePosixPath(fn).stem
             if tt != -1:
                 path = path + "_T_" + f"{tt:03}"
+
+            print('now saving predictions...')
             path = original_path+"_struct_segmentation.tiff"
             with OmeTiffWriter(path, overwrite_file=True) as writer:
                 writer.save(
@@ -481,8 +503,8 @@ class Model(pytorch_lightning.LightningModule):
                     channel_names=[self.config["segmentation_name"]],
                     dimension_order="CZYX",
                 )
-            
             # save uncertainty map
+            if uncertaintymap_softmax is not None: uncertaintymap_softmax = 1 - np.squeeze(uncertaintymap_softmax, 0)
             path = original_path+"_uncertaintymap_softmax.tiff"
             with OmeTiffWriter(path, overwrite_file=True) as writer:
                 writer.save(
@@ -511,5 +533,17 @@ class Model(pytorch_lightning.LightningModule):
                     channel_names=['uncertainty'],
                     dimension_order="CZYX",
                 )
-
-                
+            # if uncertaintymap_predvariance is not None:
+            #     path = original_path+"_uncertaintymap_predvariance.tiff"
+            #     with OmeTiffWriter(path, overwrite_file=True) as writer:
+            #         writer.save(
+            #             data=uncertaintymap_predvariance,
+            #             channel_names=['uncertainty'],
+            #             dimension_order="CZYX",
+            #         )
+            # # save iou agreement in mc samples
+            # path = original_path+"_iou_mc.npy"
+            # np.save(path,np.array(mutual_iou_list))
+            # # save mc volume variance
+            # path = original_path+"_volume_mc.npy"
+            # np.save(path, volume_list)

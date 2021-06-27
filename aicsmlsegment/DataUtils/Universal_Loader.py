@@ -806,7 +806,7 @@ def patchize(
 
 # TODO deal with timelapse images
 class TestDataset(IterableDataset):
-    def __init__(self, config: Dict):
+    def __init__(self, config: Dict, fns=List[str]):
         """
         Dataset to load, resize, normalize, and return testing images when needed for
         inference
@@ -839,6 +839,10 @@ class TestDataset(IterableDataset):
             if "timelapse" in self.inf_config and self.inf_config["timelapse"]:
                 self.load_type = "timelapse"
                 self.timelapse = True
+        elif self.inf_config["name"] == "cv":
+            filenames = []
+            for fn in fns:
+                filenames.append(fn + ".ome.tif")
         else:
             from glob import glob
 

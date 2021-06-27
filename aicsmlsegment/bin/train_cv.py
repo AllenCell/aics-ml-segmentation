@@ -20,7 +20,7 @@ def main(config=None, model_config=None):
         # create logger
         config, model_config = load_config(args.config, train=True)
 
-    logger = get_logger("ModelTrainer")
+    # logger = get_logger("ModelTrainer")
 
     checkpoint_dir = create_unique_run_directory(config, train=True)
     # for now, just hard code it, maybe move it to the config file in the future.
@@ -49,7 +49,7 @@ def main(config=None, model_config=None):
             os.mkdir(config["checkpoint_dir"])
         if not os.path.exists(os.path.join(config["checkpoint_dir"], "validation_results")):
             os.mkdir(os.path.join(config["checkpoint_dir"], "validation_results"))
-        logger.info(config)
+        print(config)
 
         # save model checkpoint every n epochs
         MC = ModelCheckpoint(

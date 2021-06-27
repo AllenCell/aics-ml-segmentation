@@ -86,6 +86,49 @@ class DataModule_CV(pytorch_lightning.LightningDataModule):
                 self.size_in = model_config["patch_size"]
                 self.size_out = self.size_in
                 self.nchannel = model_config["in_channels"]
+        else:
+            loader_config = config["mode"]
+             # during testing, we need to get the same validation data to get their predictions.
+            if type(loader_config["InputDir"]) == str:
+                loader_config["InputDir"] = [loader_config["InputDir"]]
+
+            filenames = []
+            for folder in loader_config["InputDir"]:
+                fns = glob(folder + "/*_GT.ome.tif")
+                fns.sort()
+                filenames += fns
+
+            total_num = len(filenames)
+            all_idx = np.arange(total_num)
+            kf = KFold(n_splits=config["total_cross_vali_num"], shuffle=True, random_state=12345)
+            splits = kf.split(all_idx)
+            for i, (this_train_idx, this_test_idx) in enumerate(splits):
+                train_idx = this_train_idx
+                valid_idx = this_test_idx
+                if i == config["current_cross_vali_fold"]:
+                    break
+                
+            valid_filenames = []
+            train_filenames = []
+            # remove file extensions from filenames
+            for fi, fn in enumerate(valid_idx):
+                valid_filenames.append(filenames[fn][:-11])
+            for fi, fn in enumerate(train_idx):
+                train_filenames.append(filenames[fn][:-11])
+
+            self.valid_filenames = valid_filenames
+            self.train_filenames = train_filenames
+            # we should copy the image and ground truth to the output dir if it does not exist
+            import shutil
+            import pathlib
+            import os
+            for fn in self.valid_filenames:
+                file_name_stem = pathlib.PurePath(fn).stem
+                if not os.path.exists(config['OutputDir']+os.sep+file_name_stem+'.ome.tif'):
+                    shutil.copy(fn+'.ome.tif', config['OutputDir']+os.sep+file_name_stem+'.ome.tif')
+                if not os.path.exists(config['OutputDir']+os.sep+file_name_stem+'_GT.ome.tif'):
+                    shutil.copy(fn+'_GT.ome.tif', config['OutputDir']+os.sep+file_name_stem+'_GT.ome.tif')
+                
 
     def prepare_data(self):
         pass
@@ -103,7 +146,8 @@ class DataModule_CV(pytorch_lightning.LightningDataModule):
 
         Return: None
         """
-        if stage == "fit":  # no setup is required for testing
+        print('in setup')
+        if stage == "fit":
             # load settings #
             config = self.config
 
@@ -262,7 +306,7 @@ class DataModule_CV(pytorch_lightning.LightningDataModule):
         Return: DataLoader test_set_loader
         """
         test_set_loader = DataLoader(
-            TestDataset(self.config),
+            TestDataset(self.config, fns=self.valid_filenames),
             batch_size=1,
             shuffle=False,
             num_workers=self.config["NumWorkers"],

@@ -9,14 +9,14 @@ model:
   size_in: [65, 384, 384] 
   size_out: [65, 384, 384]
 # path to the trained model
-model_path: '/allen/aics/assay-dev/users/Dewen/project/baseline_models/run_4/checkpoint_epoch=239.ckpt'
+model_path: '/allen/aics/assay-dev/users/Dewen/project/experiment_results/all_runs/run_12'
 
 ##########################################################################################################
 # Data Info
 ##########################################################################################################
 InputCh: [0]
 OutputCh: [0, 1, 1, 1, 2, 1]
-OutputDir: '/allen/aics/assay-dev/users/Dewen/project/test_data/same_domain/outputs'
+OutputDir: '/allen/aics/assay-dev/users/Dewen/project/experiment_results/all_runs/run_12/validation_results'
 # the ratio to resize the image
 ResizeRatio: [1.0, 1.0, 1.0]
 # the method to normalize your data
@@ -33,9 +33,9 @@ gpus: 1
 # Execution mode: all files of specific type within a directory
 ##########################################################################################################
 mode:
-  name: folder
+  name: cv
   # paths to the file
-  InputDir: '/allen/aics/assay-dev/users/Dewen/project/test_data/same_domain/images'
+  InputDir: '//allen/aics/assay-dev/users/Benji/h2b_undersegmentation_fix/curriculum_training/round3'
   # the type of images to be processed in this folder
   DataType: .tif
 

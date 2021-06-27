@@ -2,21 +2,21 @@
 # model settings
 ##########################################################################################################
 model: 
-  name: unet_xy_zoom_0pad_dropout
-  zoom_ratio: 3
+  name: unet_xy_zoom_0pad_predvar
+  zoom_ratio: 2
   nchannel: 1
   nclass: [2,2,2]
-  size_in: [65, 384, 384] 
-  size_out: [65, 384, 384]
+  size_in: [65, 320, 320] 
+  size_out: [65, 320, 320]
 # path to the trained model
-model_path: '/allen/aics/assay-dev/users/Dewen/project/baseline_models/run_4/checkpoint_epoch=239.ckpt'
+model_path: '/allen/aics/assay-dev/users/Dewen/project/baseline_models/run_9/checkpoint_epoch=139-v1.ckpt'
 
 ##########################################################################################################
 # Data Info
 ##########################################################################################################
 InputCh: [0]
 OutputCh: [0, 1, 1, 1, 2, 1]
-OutputDir: '/allen/aics/assay-dev/users/Dewen/project/test_data/same_domain/outputs'
+OutputDir: '/allen/aics/assay-dev/users/Dewen/project/test_data/test/outputs'
 # the ratio to resize the image
 ResizeRatio: [1.0, 1.0, 1.0]
 # the method to normalize your data
@@ -35,7 +35,7 @@ gpus: 1
 mode:
   name: folder
   # paths to the file
-  InputDir: '/allen/aics/assay-dev/users/Dewen/project/test_data/same_domain/images'
+  InputDir: '/allen/aics/assay-dev/users/Dewen/project/test_data/test/images'
   # the type of images to be processed in this folder
   DataType: .tif
 

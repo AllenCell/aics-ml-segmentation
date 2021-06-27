@@ -271,7 +271,8 @@ class UNet3D(nn.Module):
         predict03 = self.predict3(d0)
         # predict00 = F.pad(predict00, (-30, -30, -30, -30, -5, -5))
         if self.test_mode:
-            return [predict00, predict03]
+            # in order to not modify the prediction code designed before, I'm just gonna concat the uncertainty map with the prediction result here
+            return [torch.cat((predict00, predict03), 1)]
 
         p1a = self.predict1a(self.conv1a(self.up1a(u1)))
         p2a = self.predict2a(self.conv2a(self.up2a(u2)))  # fix +5
