@@ -68,6 +68,7 @@ OPTIONAL_CONFIG_FIELDS = {
         "large_image_resize": None,
         "precision": None,
         "segmentation_name": None,
+        "uncertainty": None,
     },
 }
 
@@ -105,7 +106,7 @@ MODEL_PARAMETERS = {
         "Required": ["nchannel", "nclass", "size_in", "size_out", "zoom_ratio"],
     },
     "unet_xy_zoom_0pad": {
-        "Optional": [],
+        "Optional": ["dropout"],
         "Required": ["nchannel", "nclass", "size_in", "size_out", "zoom_ratio"],
     },
     "unet_xy_zoom_0pad_stridedconv": {
@@ -313,7 +314,7 @@ def create_unique_run_directory(config, train):
             for sub in subfolders
             if subdir_names[train][1:] in sub
         ]
-        if len(subfolders) > 0:
+        if len(run_numbers) > 0:
             most_recent_run_number = max(run_numbers)
             most_recent_run_dir = (
                 dir_name + subdir_names[train] + str(most_recent_run_number)
