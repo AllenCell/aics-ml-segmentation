@@ -4,11 +4,18 @@ import torch.nn as nn
 
 class UNet3D(nn.Module):
     def __init__(
-        self, in_channel, n_classes, down_ratio, test_mode=True, batchnorm_flag=True
+        self,
+        in_channel,
+        n_classes,
+        down_ratio,
+        test_mode=True,
+        batchnorm_flag=True,
+        dropout=0,
     ):
         self.in_channel = in_channel
         self.n_classes = n_classes
         self.test_mode = test_mode
+        self.dropout = dropout
         super(UNet3D, self).__init__()
 
         k = down_ratio
@@ -129,6 +136,7 @@ class UNet3D(nn.Module):
         padding=0,
         bias=True,
         batchnorm=False,
+        dropout=0,
     ):
         if batchnorm:
             layer = nn.Sequential(
@@ -142,6 +150,7 @@ class UNet3D(nn.Module):
                 ),
                 nn.BatchNorm3d(out_channels, affine=False),
                 nn.ReLU(),
+                nn.Dropout3d(p=dropout),
                 nn.Conv3d(
                     out_channels,
                     2 * out_channels,
@@ -152,6 +161,7 @@ class UNet3D(nn.Module):
                 ),
                 nn.BatchNorm3d(2 * out_channels, affine=False),
                 nn.ReLU(),
+                nn.Dropout3d(p=dropout),
             )
         else:
             layer = nn.Sequential(
@@ -164,6 +174,7 @@ class UNet3D(nn.Module):
                     bias=bias,
                 ),
                 nn.ReLU(),
+                nn.Dropout3d(p=dropout),
                 nn.Conv3d(
                     out_channels,
                     2 * out_channels,
@@ -173,6 +184,7 @@ class UNet3D(nn.Module):
                     bias=bias,
                 ),
                 nn.ReLU(),
+                nn.Dropout3d(p=dropout),
             )
         return layer
 
@@ -185,6 +197,7 @@ class UNet3D(nn.Module):
         padding=0,
         bias=True,
         batchnorm=False,
+        dropout=0,
     ):
         if batchnorm:
             layer = nn.Sequential(
@@ -198,6 +211,7 @@ class UNet3D(nn.Module):
                 ),
                 nn.BatchNorm3d(out_channels, affine=False),
                 nn.ReLU(),
+                nn.Dropout3d(p=dropout),
                 nn.Conv3d(
                     out_channels,
                     out_channels,
@@ -208,6 +222,7 @@ class UNet3D(nn.Module):
                 ),
                 nn.BatchNorm3d(out_channels, affine=False),
                 nn.ReLU(),
+                nn.Dropout3d(p=dropout),
             )
         else:
             layer = nn.Sequential(
@@ -220,6 +235,7 @@ class UNet3D(nn.Module):
                     bias=bias,
                 ),
                 nn.ReLU(),
+                nn.Dropout3d(p=dropout),
                 nn.Conv3d(
                     out_channels,
                     out_channels,
@@ -229,6 +245,7 @@ class UNet3D(nn.Module):
                     bias=bias,
                 ),
                 nn.ReLU(),
+                nn.Dropout3d(p=dropout),
             )
         return layer
 
