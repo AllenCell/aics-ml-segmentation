@@ -204,12 +204,6 @@ def model_inference(
         if args["size_in"] == args["size_out"]:
             dims_max = [0] + args["size_in"]
             overlaps = [int(0.1 * dim) for dim in dims_max]
-            result = predict_piecewise(
-                model,
-                input_img[0],
-                dims_max=dims_max,
-                overlaps=overlaps,
-            )
             for j in range(input_img.shape[0]):  # validation only, no uncertainty used
                 output = predict_piecewise(
                     model,
