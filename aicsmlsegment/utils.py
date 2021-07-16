@@ -11,6 +11,7 @@ import torch
 from monai.networks.layers import Norm, Act
 import os
 import datetime
+from aicsimageio.writers.ome_tiff_writer import OmeTiffWriter
 
 
 REQUIRED_CONFIG_FIELDS = {
@@ -85,6 +86,7 @@ DEFAULT_CONFIG = {
     "large_image_resize": [1, 1, 1],
     "epoch_shuffle": None,
     "segmentation_name": "segmentation",
+    "uncertainty": None,
 }
 
 MODEL_PARAMETERS = {
@@ -595,3 +597,21 @@ def get_logger(name, level=logging.INFO):
     logger.addHandler(stream_handler)
 
     return logger
+
+
+def save_image(
+    path: str,
+    img: np.ndarray,
+    channel_names: List,
+    dimension_order: str = "CZYX",
+    overwrite: bool = True,
+):
+    with OmeTiffWriter(
+        path,
+        overwrite_file=overwrite,
+    ) as writer:
+        writer.save(
+            data=img,
+            channel_names=channel_names,
+            dimension_order=dimension_order,
+        )
