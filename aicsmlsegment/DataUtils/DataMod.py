@@ -226,6 +226,23 @@ class DataModule(pytorch_lightning.LightningDataModule):
         Return: DataLoader val_set_loader
         """
         loader_config = self.loader_config
+        # val_set_loader = DataLoader(
+        #     UniversalDataset(
+        #         self.valid_filenames,
+        #         loader_config["PatchPerBuffer"],
+        #         self.size_in,
+        #         self.size_out,
+        #         self.nchannel,
+        #         transforms=[],  # no transforms for validation data
+        #         use_costmap=self.accepts_costmap,
+        #         patchize=False,  # validate on entire image
+        #     ),
+        #     batch_size=loader_config["batch_size"],
+        #     shuffle=False,
+        #     num_workers=loader_config["NumWorkers"],
+        #     pin_memory=True,
+        # )
+        # return val_set_loader
         val_set_loader = DataLoader(
             UniversalDataset(
                 self.valid_filenames,
@@ -235,7 +252,8 @@ class DataModule(pytorch_lightning.LightningDataModule):
                 self.nchannel,
                 transforms=[],  # no transforms for validation data
                 use_costmap=self.accepts_costmap,
-                patchize=False,  # validate on entire image
+                patchize=True,  # validate on patch image
+                check_crop=self.check_crop,
             ),
             batch_size=loader_config["batch_size"],
             shuffle=False,

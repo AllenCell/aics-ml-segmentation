@@ -23,11 +23,11 @@ def main():
 
         # load model from cross validation
         config["total_cross_vali_num"] = 5
-        for fold_id in range(3):
+        for fold_id in range(config["total_cross_vali_num"]):
             config["current_cross_vali_fold"] = fold_id
 
             # load the trained model instance
-            model_path = os.path.join(config["model_path"], 'cross_vali_'+str(fold_id), 'checkpoint_epoch=19.ckpt')
+            model_path = os.path.join(config["model_path"], 'cross_vali_'+str(fold_id), 'checkpoint_epoch=59.ckpt')
             print(f"Loading model from {model_path}...")
             try:
                 model = Model.load_from_checkpoint(

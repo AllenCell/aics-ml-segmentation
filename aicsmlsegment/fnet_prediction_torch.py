@@ -37,7 +37,10 @@ def _predict_piecewise_recurse(
     """Performs piecewise prediction recursively."""
     if tuple(ar_in.shape[1:]) == tuple(dims_max[1:]):
         ar_in = torch.unsqueeze(ar_in, dim=0)
-        ar_out = predictor.forward(ar_in, **predict_kwargs)
+        if type(predictor).__name__ == "ProbabilisticUnet":
+            ar_out = predictor.forward(ar_in, segm=None, training=False, use_prior_latent=True)
+        else:
+            ar_out = predictor.forward(ar_in, **predict_kwargs)
         if isinstance(ar_out, list):
             ar_out = ar_out[0]
         ar_out = torch.squeeze(

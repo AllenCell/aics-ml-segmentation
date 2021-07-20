@@ -35,7 +35,7 @@ SUPPORTED_LOSSES = {
     "MSE": {
         "source": "torch.nn",
         "args": [],
-        "wrapper_args": {"n_label_ch": 2, "accepts_costmap": False},
+        "wrapper_args": {"n_label_ch": 1, "accepts_costmap": False},
     },
     "CrossEntropy": {
         "source": "torch.nn",

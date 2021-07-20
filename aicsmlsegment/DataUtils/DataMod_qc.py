@@ -1,6 +1,8 @@
 from aicsmlsegment.DataUtils.Universal_Loader import (
     UniversalDataset,
     TestDataset,
+    QCDataset,
+    QCTestDataset,
     load_img,
 )
 import random
@@ -12,7 +14,6 @@ import numpy as np
 import torch
 from math import ceil
 from typing import Dict
-from sklearn.model_selection import KFold
 
 
 def init_worker(worker_id: int):
@@ -33,8 +34,8 @@ def init_worker(worker_id: int):
     dataset.start = worker_info.id * per_worker
     dataset.end = min(len(dataset.filenames), (worker_info.id + 1) * per_worker) - 1
 
-# cross validation version of DataModule, just don't want to corrupt the original DataModule file.
-class DataModule_CV(pytorch_lightning.LightningDataModule):
+
+class DataModule_qc(pytorch_lightning.LightningDataModule):
     def __init__(self, config: Dict, train: bool = True):
         """
         Initialize Datamodule variable based on config
@@ -50,11 +51,6 @@ class DataModule_CV(pytorch_lightning.LightningDataModule):
         super().__init__()
         self.config = config
 
-        try:  # monai
-            self.nchannel = self.config["model"]["nchannel"]
-        except KeyError:  # custom model
-            self.nchannel = self.config["model"]["in_channels"]
-
         if train:
             self.loader_config = config["loader"]
 
@@ -62,10 +58,8 @@ class DataModule_CV(pytorch_lightning.LightningDataModule):
             if name not in ["default", "focus"]:
                 print("other loaders are under construction")
                 quit()
-            if name == "focus":
-                self.check_crop = True
-            else:
-                self.check_crop = False
+
+            self.check_crop = False
             self.transforms = []
             if "Transforms" in self.loader_config:
                 self.transforms = self.loader_config["Transforms"]
@@ -77,58 +71,8 @@ class DataModule_CV(pytorch_lightning.LightningDataModule):
                 self.init_only = True
 
             model_config = config["model"]
-            if "unet_xy" in config["model"]["name"]:
-                self.size_in = model_config["size_in"]
-                self.size_out = model_config["size_out"]
-                self.nchannel = model_config["nchannel"]
-
-            else:
-                self.size_in = model_config["patch_size"]
-                self.size_out = self.size_in
-                self.nchannel = model_config["in_channels"]
-        else:
-            loader_config = config["mode"]
-             # during testing, we need to get the same validation data to get their predictions.
-            if type(loader_config["InputDir"]) == str:
-                loader_config["InputDir"] = [loader_config["InputDir"]]
-
-            filenames = []
-            for folder in loader_config["InputDir"]:
-                fns = glob(folder + "/*_GT.ome.tif")
-                fns.sort()
-                filenames += fns
-
-            total_num = len(filenames)
-            all_idx = np.arange(total_num)
-            kf = KFold(n_splits=config["total_cross_vali_num"], shuffle=True, random_state=12345)
-            splits = kf.split(all_idx)
-            for i, (this_train_idx, this_test_idx) in enumerate(splits):
-                train_idx = this_train_idx
-                valid_idx = this_test_idx
-                if i == config["current_cross_vali_fold"]:
-                    break
-                
-            valid_filenames = []
-            train_filenames = []
-            # remove file extensions from filenames
-            for fi, fn in enumerate(valid_idx):
-                valid_filenames.append(filenames[fn][:-11])
-            for fi, fn in enumerate(train_idx):
-                train_filenames.append(filenames[fn][:-11])
-
-            self.valid_filenames = valid_filenames
-            self.train_filenames = train_filenames
-            # we should copy the image and ground truth to the output dir if it does not exist
-            import shutil
-            import pathlib
-            import os
-            for fn in self.valid_filenames:
-                file_name_stem = pathlib.PurePath(fn).stem
-                if not os.path.exists(config['OutputDir']+os.sep+file_name_stem+'.ome.tif'):
-                    shutil.copy(fn+'.ome.tif', config['OutputDir']+os.sep+file_name_stem+'.ome.tif')
-                if not os.path.exists(config['OutputDir']+os.sep+file_name_stem+'_GT.ome.tif'):
-                    shutil.copy(fn+'_GT.ome.tif', config['OutputDir']+os.sep+file_name_stem+'_GT.ome.tif')
-                
+            self.size_in = model_config["size_in"]
+            self.nchannel = 1   # set to 1 because the image is one channel
 
     def prepare_data(self):
         pass
@@ -146,8 +90,7 @@ class DataModule_CV(pytorch_lightning.LightningDataModule):
 
         Return: None
         """
-        print('in setup')
-        if stage == "fit":
+        if stage == "fit":  # no setup is required for testing
             # load settings #
             config = self.config
 
@@ -167,15 +110,21 @@ class DataModule_CV(pytorch_lightning.LightningDataModule):
 
                 total_num = len(filenames)
                 LeaveOut = validation_config["leaveout"]
-
-                all_idx = np.arange(total_num)
-                kf = KFold(n_splits=config["total_cross_vali_num"], shuffle=True, random_state=12345)
-                splits = kf.split(all_idx)
-                for i, (this_train_idx, this_test_idx) in enumerate(splits):
-                    train_idx = this_train_idx
-                    valid_idx = this_test_idx
-                    if i == config["current_cross_vali_fold"]:
-                        break
+                if len(LeaveOut) == 1:
+                    if LeaveOut[0] > 0 and LeaveOut[0] < 1:
+                        num_train = int(np.floor((1 - LeaveOut[0]) * total_num))
+                        shuffled_idx = np.arange(total_num)
+                        # make sure validation sets are same across gpus
+                        random.seed(0)
+                        random.shuffle(shuffled_idx)
+                        train_idx = shuffled_idx[:num_train]
+                        valid_idx = shuffled_idx[num_train:]
+                        rand = True
+                    else:
+                        valid_idx = [int(LeaveOut[0])]
+                        train_idx = list(
+                            set(range(total_num)) - set(map(int, LeaveOut))
+                        )
                 valid_filenames = []
                 train_filenames = []
                 # remove file extensions from filenames
@@ -201,17 +150,17 @@ class DataModule_CV(pytorch_lightning.LightningDataModule):
         """
         loader_config = self.loader_config
         train_set_loader = DataLoader(
-            UniversalDataset(
+            QCDataset(
                 self.train_filenames,
                 loader_config["PatchPerBuffer"],
                 self.size_in,
-                self.size_out,
                 self.nchannel,
-                use_costmap=self.accepts_costmap,
+                use_uncertaintymap=True,
                 transforms=self.transforms,
                 patchize=True,
-                check_crop=self.check_crop,
                 init_only=self.init_only,  # first call of train_dataloader is just to get dataset params if init_only is true  # noqa E501
+                uncertainty_type=loader_config["uncertainty_type"],
+                threshold=loader_config["threshold"],
             ),
             batch_size=loader_config["batch_size"],
             shuffle=True,
@@ -230,15 +179,16 @@ class DataModule_CV(pytorch_lightning.LightningDataModule):
         """
         loader_config = self.loader_config
         val_set_loader = DataLoader(
-            UniversalDataset(
+            QCDataset(
                 self.valid_filenames,
                 loader_config["PatchPerBuffer"],
                 self.size_in,
-                self.size_out,
                 self.nchannel,
-                transforms=[],  # no transforms for validation data
-                use_costmap=self.accepts_costmap,
-                patchize=True,  # validate on entire image
+                use_uncertaintymap=True,
+                transforms=[],
+                patchize=True,
+                uncertainty_type=loader_config["uncertainty_type"],
+                threshold=loader_config["threshold"],
             ),
             batch_size=loader_config["batch_size"],
             shuffle=False,
@@ -253,8 +203,41 @@ class DataModule_CV(pytorch_lightning.LightningDataModule):
         Parameters: None
         Return: DataLoader test_set_loader
         """
+        # maybe you want to do the test on your validation set, let's get all the files of the validation set
+        filenames = []
+        config = self.config
+        valid_filenames = None
+        if config["mode"]["name"] == 'cv':
+            folder = config["mode"]["InputDir"]
+            fns = glob(folder + "/*_GT.ome.tif")
+            fns.sort()
+            filenames += fns
+            total_num = len(filenames)
+            LeaveOut = config["validation"]["leaveout"]
+            if len(LeaveOut) == 1:
+                if LeaveOut[0] > 0 and LeaveOut[0] < 1:
+                    num_train = int(np.floor((1 - LeaveOut[0]) * total_num))
+                    shuffled_idx = np.arange(total_num)
+                    # make sure validation sets are same across gpus
+                    random.seed(0)
+                    random.shuffle(shuffled_idx)
+                    train_idx = shuffled_idx[:num_train]
+                    valid_idx = shuffled_idx[num_train:]
+                else:
+                    valid_idx = [int(LeaveOut[0])]
+                    train_idx = list(
+                        set(range(total_num)) - set(map(int, LeaveOut))
+                    )
+            valid_filenames = []
+            train_filenames = []
+            # remove file extensions from filenames
+            for fi, fn in enumerate(valid_idx):
+                valid_filenames.append(filenames[fn][:-11])
+            for fi, fn in enumerate(train_idx):
+                train_filenames.append(filenames[fn][:-11])
+            # print(f'valid_filenames:{valid_filenames}')
         test_set_loader = DataLoader(
-            TestDataset(self.config, fns=self.valid_filenames),
+            QCTestDataset(self.config, fns=valid_filenames),
             batch_size=1,
             shuffle=False,
             num_workers=self.config["NumWorkers"],
@@ -262,3 +245,13 @@ class DataModule_CV(pytorch_lightning.LightningDataModule):
             worker_init_fn=init_worker,
         )
         return test_set_loader
+
+        # test_set_loader = DataLoader(
+        #     QCTestDataset(self.config, fns=None),
+        #     batch_size=1,
+        #     shuffle=False,
+        #     num_workers=self.config["NumWorkers"],
+        #     pin_memory=True,
+        #     worker_init_fn=init_worker,
+        # )
+        # return test_set_loader

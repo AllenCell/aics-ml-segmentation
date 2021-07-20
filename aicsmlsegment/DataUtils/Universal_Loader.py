@@ -1,5 +1,7 @@
 import numpy as np
 import random
+import pathlib
+import os
 from torch import from_numpy
 import torch
 from aicsimageio import AICSImage
@@ -204,6 +206,7 @@ def load_img(
         "costmap": "_CM.ome.tif",
         "test": "",
         "timelapse": "",
+        "general": "",
     }
     reader = AICSImage(filename + extension_dict[img_type])
     args_dict, correct_shape = validate_shape(
@@ -966,5 +969,331 @@ class TestDataset(IterableDataset):
                     tt,
                     self.timelapse,
                 )
+            self.current_index += 1  # next iteration load the next file
+        return self.all_img_info.pop()  # pop patch/tp
+
+class QCDataset(Dataset):
+    """
+    Quality Control Dataset, the ground truth is different from Universial Dataset.
+    Therefore, we create this seperate Dataset class.
+    """
+
+    def __init__(
+        self,
+        filenames: Sequence[str],
+        num_patch: int,
+        size_in: Sequence[int],
+        n_channel: int,
+        use_uncertaintymap: bool = True,
+        transforms: Sequence[str] = [],
+        patchize: bool = True,
+        check_crop: bool = False,
+        init_only: bool = False,
+        uncertainty_type: str = '',
+        threshold: int = 0.5,
+    ):
+        """
+        input:
+            filenames: path to images
+            num_patch: number of random crops to be produced
+            size_in: size of input to model
+            n_channel: number of iput channels expected by model
+            transforms: list of strings specifying transforms
+            patchize: whether to divide image into patches
+            check_crop: whether to check
+        """
+        self.patchize = patchize
+        self.img = []
+        self.gt = []
+        self.prediction = []
+        self.uncertaintymap = []
+        self.transforms = transforms
+        self.parameters = {
+            "filenames": filenames,
+            "num_patch": num_patch,
+            "size_in": size_in,
+            "n_channel": n_channel,
+            "use_uncertaintymap": use_uncertaintymap,
+            "transforms": transforms,
+            "patchize": patchize,
+            "check_crop": check_crop,
+            "uncertainty_type": uncertainty_type,
+            "threshold": threshold,
+        }
+        self.num_patch = num_patch
+        self.init_only = init_only
+        if init_only:
+            num_patch = 1
+        num_data = len(filenames)
+        shuffle(filenames)
+        self.filenames = None
+        if not patchize:
+            print("Validating on", filenames)
+            self.filenames = filenames
+        num_patch_per_img = np.zeros((num_data,), dtype=int)
+        if num_data >= num_patch:
+            # take one patch from each image
+            num_patch_per_img[:num_patch] = 1
+        else:  # assign how many patches to take from each img
+            basic_num = num_patch // num_data
+            # assign each image the same number of patches to extract
+            num_patch_per_img[:] = basic_num
+
+            # assign 1 more patch to the first few images to get the total patch number
+            num_patch_per_img[: (num_patch - basic_num * num_data)] = (
+                num_patch_per_img[: (num_patch - basic_num * num_data)] + 1
+            )
+
+        # extract patches from images until num_patch reached
+        # print('preloading images...')
+        for img_idx, fn in enumerate(filenames):
+            # if we're not dividing into patches, don't break before transforming imgs
+            if patchize and len(self.img) == num_patch:
+                break
+            
+            label = load_img(fn, img_type="label", n_channel=n_channel)
+            # notice that the prediction is the softmax output, not binary result
+            prediction = load_img(fn+".ome_softmax_segmentation.tiff", img_type="general", n_channel=n_channel)
+            # now we convert the softmax result to binary according to the threshold
+            prediction = (prediction>threshold).astype(np.uint8)
+            input_img = load_img(fn, img_type="input", n_channel=n_channel)
+            if use_uncertaintymap:
+                if uncertainty_type == 'maximum_softmax':
+                    uncertaintymap = load_img(fn+".ome_uncertaintymap_softmax.tiff", img_type="general", n_channel=n_channel)
+                elif uncertainty_type == 'entropy':
+                    uncertaintymap = load_img(fn+".ome_uncertaintymap_entropy.tiff", img_type="general", n_channel=n_channel)
+                elif uncertainty_type == 'mutual_information':
+                    uncertaintymap = load_img(fn+".ome_uncertaintymap_mi.tiff", img_type="general", n_channel=n_channel)
+                elif uncertainty_type == 'variance':
+                    uncertaintymap = load_img(fn+".ome_uncertaintymap_variance.tiff", img_type="general", n_channel=n_channel)
+                # else:
+                #     uncertaintymap = load_img(fn+".ome_uncertaintymap_softmax.tiff", img_type="general", n_channel=n_channel)
+
+            raw = input_img
+
+            if "RF" in transforms:
+                # random flip
+                flip_flag = random.random()
+                if flip_flag < 0.5:
+                    raw = np.flip(
+                        raw, axis=-1
+                    ).copy()  # avoid negative stride error when converting to tensor
+                    label = np.flip(label, axis=-1).copy()
+                    prediction = np.flip(prediction, axis=-1).copy()
+                    if use_uncertaintymap:
+                        uncertaintymap = np.flip(
+                            uncertaintymap, axis=-1
+                        ).copy()
+
+            if "RR" in transforms:
+                # random rotation
+                deg = random.randrange(1, 180)
+                trans = RandomAffine(
+                    scales=(1.0, 1.0, 1.0, 1.0, 1.0, 1.0),
+                    degrees=(0, 0, 0, 0, deg, deg),
+                    default_pad_value=0,
+                    image_interpolation="bspline",
+                    center="image",
+                )
+
+                # rotate the raw image
+                out_img = trans(np.transpose(raw, (0, 3, 2, 1)))
+                raw = np.transpose(out_img, (0, 3, 2, 1))
+                if use_uncertaintymap:
+                    out_map = trans(np.transpose(raw, (0, 3, 2, 1)))
+                    uncertaintymap = np.transpose(out_img, (0, 3, 2, 1))
+
+                trans_label = RandomAffine(
+                    scales=(1.0, 1.0, 1.0, 1.0, 1.0, 1.0),
+                    degrees=(0, 0, 0, 0, deg, deg),
+                    default_pad_value=0,
+                    image_interpolation="nearest",
+                    center="image",
+                )
+                # rotate label and uncertaintymap
+                out_label = trans_label(np.transpose(label, (0, 3, 2, 1)))
+                label = np.transpose(out_label, (0, 3, 2, 1))
+                out_prediction = trans_label(np.transpose(prediction, (0, 3, 2, 1)))
+                prediction = np.transpose(out_prediction, (0, 3, 2, 1))
+                
+            if "RBF" in transforms:
+                random_bias_field = RandomBiasField()
+                raw = random_bias_field(raw)
+            if "RN" in transforms:
+                random_noise = RandomNoise()
+                raw = random_noise(raw)
+
+            if "RI" in transforms:
+                random_intensity = RandShiftIntensity(offsets=0.15, prob=0.2)
+                raw = random_intensity(raw)
+
+            if patchize:
+                # take specified number of patches from current image
+                new_patch_num = 0
+                num_fail = 0
+                while new_patch_num < num_patch_per_img[img_idx]:
+                    pz = random.randint(0, label.shape[1] - size_in[0])
+                    py = random.randint(0, label.shape[2] - size_in[1])
+                    px = random.randint(0, label.shape[3] - size_in[2])
+
+                    # if use_uncertaintymap:
+                    #     # check if this is a good crop
+                    #     ref_patch_uncertaintymap = uncertaintymap[
+                    #         pz : pz + size_in[0],
+                    #         py : py + size_in[1],
+                    #         px : px + size_in[2],
+                    #     ]
+                    #     if check_crop:
+                    #         if np.count_nonzero(ref_patch_uncertaintymap > 1e-5) < 1000:
+                    #             num_fail += 1
+                    #             if num_fail > 50:
+                    #                 print("Failed to generate valid crops")
+                    #                 break
+                    #             continue
+                        # confirmed good crop
+                    (self.img).append(
+                        raw[
+                            :,
+                            pz : pz + size_in[0],
+                            py : py + size_in[1],
+                            px : px + size_in[2],
+                        ]
+                    )
+                    (self.gt).append(
+                        label[
+                            :,
+                            pz : pz + size_in[0],
+                            py : py + size_in[1],
+                            px : px + size_in[2],
+                        ]
+                    )
+                    (self.prediction).append(
+                        prediction[
+                            :,
+                            pz : pz + size_in[0],
+                            py : py + size_in[1],
+                            px : px + size_in[2],
+                        ]
+                    )
+                    if use_uncertaintymap:
+                        (self.uncertaintymap).append(
+                            uncertaintymap[
+                                :,
+                                pz : pz + size_in[0],
+                                py : py + size_in[1],
+                                px : px + size_in[2],
+                            ]
+                        )
+
+                    new_patch_num += 1
+                    # print(f'label:{raw[:,pz : pz + size_in[0],py : py + size_in[1],px : px + size_in[2]].shape}')
+                    # print(f'prediction:{prediction[:,pz : pz + size_in[0],py : py + size_in[1],px : px + size_in[2]].shape}')
+                    # print(f'input_img:{raw[:,pz : pz + size_in[0],py : py + size_in[1],px : px + size_in[2]].shape}')
+                    # if use_uncertaintymap:
+                    #     print(f'uncertaintymap:{uncertaintymap[:,pz : pz + size_in[0],py : py + size_in[1],px : px + size_in[2]].shape}')
+            else:
+                (self.img).append(raw)
+                (self.gt).append(label)
+                (self.prediction).append(prediction)
+                (self.uncertaintymap).append(uncertaintymap)
+        # print('dataset loaded...')
+
+    def __getitem__(self, index):
+        if self.init_only:
+            return torch.zeros(0)
+        if self.filenames is not None:
+            fn = self.filenames[index]
+        else:
+            fn = ""
+        img_tensor = from_numpy(self.img[index]).float()
+        # gt_tensor = from_numpy(self.gt[index]).float()
+        prediction_tensor = from_numpy(self.prediction[index]).float()
+        uncertaintymap_tensor = from_numpy(self.uncertaintymap[index]).float()
+        from medpy.metric import binary
+        iou = binary.jc((self.gt[index]).squeeze(), (self.prediction[index]).squeeze())
+        iou_tensor = torch.Tensor([iou]).unsqueeze(0)
+
+        return (img_tensor, prediction_tensor, uncertaintymap_tensor, fn, iou_tensor)
+
+    def __len__(self):
+        if self.init_only:
+            return self.num_patch
+        return len(self.img)
+
+    def get_params(self):
+        return self.parameters
+
+class QCTestDataset(IterableDataset):
+    def __init__(self, config: Dict, fns: List[str]):
+        """
+        Quality Control TestDataset, just read the image, prediction and uncertainty map, no patch thing
+        The testdata is usually changable, so this class may not to be user defined.
+        """
+        self.config = config
+        self.inf_config = config["mode"]
+        self.model_config = config["model"]
+        self.load_type = "general"
+
+        self.size_in = self.model_config["size_in"]
+        self.nchannel = 1
+        # self.gt_dir = '/allen/aics/assay-dev/users/Dewen/project/test_data/new_domain_larger/pseudo_ground_truth'
+        # self.prediction_dir = '/allen/aics/assay-dev/users/Dewen/project/test_data/new_domain_larger/outputs/prediction_2'
+        self.gt_dir = '/allen/aics/assay-dev/users/Dewen/project/test_data/same_domain_larger/pseudo_ground_truth'
+        self.prediction_dir = '/allen/aics/assay-dev/users/Dewen/project/test_data/same_domain_larger/outputs/prediction_1'
+
+        # do not use file now, use the folder option
+        if self.inf_config["name"] == "file":
+            filenames = [self.inf_config["InputFile"]]
+        elif self.inf_config["name"] == "cv":
+            filenames = []
+            for fn in fns:
+                filenames.append(fn + ".ome.tif")
+            self.gt_dir = config["mode"]["InputDir"]
+            self.prediction_dir = config["mode"]["InputDir"]
+        else:
+            from glob import glob
+
+            if type(self.inf_config["InputDir"]) == str:
+                self.inf_config["InputDir"] = [self.inf_config["InputDir"]]
+
+            filenames = []
+            for folder in self.inf_config["InputDir"]:
+                fns = glob(folder + "/*" + self.inf_config["DataType"])
+                fns.sort()
+                filenames += fns
+            # also need to read the ground truth, prediction, and uncertaintymap, hard code
+            
+        print("Predicting on", len(filenames), "files")
+        print(f'filenames:{filenames}')
+
+        self.filenames = filenames
+        self.start = None
+        self.end = None
+        self.all_img_info = []
+
+    def __iter__(self):
+        self.current_index = self.start
+        return self
+
+    def __next__(self):
+        if self.current_index > self.end and len(self.all_img_info) == 0:
+            raise StopIteration
+        if len(self.all_img_info) == 0:  # load new image if no images have been loaded
+            fn = self.filenames[self.current_index]
+            file_name_stem = pathlib.PurePath(fn).stem
+            img = load_img(fn, self.load_type, self.nchannel, self.config["InputCh"]).astype(np.float)
+            img = resize(img, self.config)
+            img = image_normalization(img, self.config["Normalization"])
+            # gt = load_img(self.gt_dir+os.sep+file_name_stem[:-4]+'_GT.ome.tif', self.load_type, self.nchannel, self.config["InputCh"])
+            gt = load_img(self.gt_dir+os.sep+file_name_stem[:-4]+'_GT.tiff', self.load_type, self.nchannel, self.config["InputCh"]).astype(np.int16)
+            prediction = load_img(self.prediction_dir+os.sep+file_name_stem+'_softmax_segmentation.tiff', self.load_type, self.nchannel, self.config["InputCh"]).astype(np.float)
+            uncertaintymap = load_img(self.prediction_dir+os.sep+file_name_stem+'_uncertaintymap_entropy.tiff', self.load_type, self.nchannel, self.config["InputCh"]).astype(np.float)
+            self.all_img_info.append({
+                "fn": fn,
+                "img": img,
+                "gt": gt,
+                "prediction": prediction,
+                "uncertaintymap": uncertaintymap,
+            })
             self.current_index += 1  # next iteration load the next file
         return self.all_img_info.pop()  # pop patch/tp

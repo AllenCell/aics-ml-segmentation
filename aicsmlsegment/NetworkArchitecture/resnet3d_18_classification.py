@@ -68,7 +68,6 @@ class ResNet3d_18(nn.Module):
         self.layer31 = BasicBlock(256)
         self.layer40 = DownsampleBlock(256, 512)
         self.layer41 = BasicBlock(512)
-        self.sigmoid = nn.Sigmoid()
 
         # self.avgpool = nn.AvgPool3d(
         #     (math.ceil(clip_length // 8), math.ceil(crop_shape[1] / 32), math.ceil(crop_shape[0] / 32)))
@@ -103,12 +102,11 @@ class ResNet3d_18(nn.Module):
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
-        x = self.sigmoid(x)
 
         return x
 
 if __name__ == "__main__":
     x = torch.randn(1,3,10,224,224)
-    model = ResNet3d_18(in_channel=3, num_classes=1)
+    model = ResNet3d_18(in_channel=3, num_classes=2)
     y = model(x)
     print(f'y:{y.shape}')

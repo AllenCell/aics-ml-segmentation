@@ -116,6 +116,10 @@ MODEL_PARAMETERS = {
         "Optional": [],
         "Required": ["nchannel", "nclass", "size_in", "size_out", "zoom_ratio"],
     },
+    "probablistic_unet_xy": {
+        "Optional": [],
+        "Required": ["nchannel", "nclass", "size_in", "size_out", "num_filters", "latent_dim", "num_convs_fcomb", "beta"],
+    },
     "unet_xy_zoom_0pad_stridedconv": {
         "Optional": [],
         "Required": ["nchannel", "nclass", "size_in", "size_out", "zoom_ratio"],
@@ -219,6 +223,22 @@ MODEL_PARAMETERS = {
             "in_channels",
             "out_channels",
             "patch_size",
+        ],
+    },
+    "resnet3d_18": {
+        "Optional": [],
+        "Required": [
+            "nchannel",
+            "nclass",
+            "size_in",
+        ],
+    },
+    "resnet3d_18_classification": {
+        "Optional": [],
+        "Required": [
+            "nchannel",
+            "nclass",
+            "size_in",
         ],
     },
 }
@@ -589,8 +609,7 @@ def compute_iou(prediction, gt, cmap):
     area_u = np.logical_or(prediction, gt)
     area_u[cmap == 0] = False
 
-    return np.count_nonzero(area_i) / np.count_nonzero(area_u)
-
+    return np.count_nonzero(area_i) / (np.count_nonzero(area_u) + 1e-6)
 
 def get_logger(name, level=logging.INFO):
     logger = logging.getLogger(name)
@@ -604,3 +623,39 @@ def get_logger(name, level=logging.INFO):
     logger.addHandler(stream_handler)
 
     return logger
+
+from typing import Dict, List, Sequence, Tuple
+def compute_steps_for_sliding_window(patch_size: Tuple[int, ...], image_size: Tuple[int, ...], step_size: float) -> \
+List[List[int]]:
+    assert [i >= j for i, j in zip(image_size, patch_size)], "image size must be as large or larger than patch_size"
+    assert 0 < step_size <= 1, 'step_size must be larger than 0 and smaller or equal to 1'
+
+    # our step width is patch_size*step_size at most, but can be narrower. For example if we have image size of
+    # 110, patch size of 32 and step_size of 0.5, then we want to make 4 steps starting at coordinate 0, 27, 55, 78
+    target_step_sizes_in_voxels = [i * step_size for i in patch_size]
+
+    num_steps = [int(np.ceil((i - k) / j)) + 1 for i, j, k in zip(image_size, target_step_sizes_in_voxels, patch_size)]
+
+    steps = []
+    for dim in range(len(patch_size)):
+        # the highest step value for this dimension is
+        max_step_value = image_size[dim] - patch_size[dim]
+        if num_steps[dim] > 1:
+            actual_step_size = max_step_value / (num_steps[dim] - 1)
+        else:
+            actual_step_size = 99999999999  # does not matter because there is only one step at 0
+
+        steps_here = [int(np.round(actual_step_size * i)) for i in range(num_steps[dim])]
+
+        steps.append(steps_here)
+    return steps
+
+def l2_regularisation(m):
+    l2_reg = None
+
+    for W in m.parameters():
+        if l2_reg is None:
+            l2_reg = W.norm(2)
+        else:
+            l2_reg = l2_reg + W.norm(2)
+    return l2_reg

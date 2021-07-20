@@ -2,27 +2,25 @@
 # model settings
 ##########################################################################################################
 model: 
-  name: unet_xy_zoom_0pad_dropout
-  zoom_ratio: 3
-  nchannel: 1
-  nclass: [2,2,2]
+  name: resnet3d_18
+  nchannel: 3
+  nclass: 1
   size_in: [65, 384, 384] 
-  size_out: [65, 384, 384]
 # path to the trained model
-model_path: '/allen/aics/assay-dev/users/Dewen/project/experiment_results/all_runs/run_22'
+model_path: '/allen/aics/assay-dev/users/Dewen/project/experiment_results/all_runs/run_26/checkpoint_epoch=199.ckpt'
 
 ##########################################################################################################
 # Data Info
 ##########################################################################################################
 InputCh: [0]
 OutputCh: [0, 1, 1, 1, 2, 1]
-OutputDir: '/allen/aics/assay-dev/users/Dewen/project/experiment_results/all_runs/run_22/validation_results'
+OutputDir: '/allen/aics/assay-dev/users/Dewen/project/test_data/test/outputs/'
 # the ratio to resize the image
 ResizeRatio: [1.0, 1.0, 1.0]
 # the method to normalize your data
 Normalization: 22
 # the threshold to be applied on your data
-Threshold: 0.5 #0.5 # 0.3
+Threshold: 0.7
 # whether to use run time augmentation (may improve the accuracy, but takes much longer to run)
 RuntimeAug: False
 batch_size: 1
@@ -35,15 +33,15 @@ gpus: 1
 mode:
   name: cv
   # paths to the file
-  InputDir: '//allen/aics/assay-dev/users/Benji/h2b_undersegmentation_fix/curriculum_training/round3'
+  InputDir: '/allen/aics/assay-dev/users/Dewen/project/experiment_results/all_runs/run_12/validation_results'
   # the type of images to be processed in this folder
   DataType: .tif
 
 validation:
   metric: default
-  leaveout: [0.02]
+  leaveout: [0.1]
   OutputCh: [0, 1, 1, 1, 2, 1]
   validate_every_n_epoch: 10
 
-
-
+# uncertainty_type can be: maximum_softmax, entropy, mutual_information, variance
+uncertainty_type: variance

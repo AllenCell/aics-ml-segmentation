@@ -42,7 +42,6 @@ def get_metric(config):
     elif metric == "AveragePrecision":
         return AveragePrecision()
 
-
 class DiceCoefficient:
     """Computes Dice Coefficient.
     Generalized to multiple channels by computing per-channel Dice Score

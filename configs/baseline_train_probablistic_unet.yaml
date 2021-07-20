@@ -1,0 +1,46 @@
+SWA: null
+callbacks:
+  name: null
+checkpoint_dir: /allen/aics/assay-dev/users/Dewen/project/baseline_models/
+dist_backend: ddp
+epochs: 400
+gpus: -1
+learning_rate: 0.0005
+loader:
+  NumWorkers: 2
+  PatchPerBuffer: 80
+  Transforms: [RR,  RF]
+  batch_size: 1
+  datafolder: //allen/aics/assay-dev/users/Benji/h2b_undersegmentation_fix/curriculum_training/round3
+  # datafolder: //allen/aics/assay-dev/users/Dewen/project/training_data/h2b
+  epoch_shuffle: null
+  name: default
+loss:
+  ignore_index: null
+  loss_weight: [1,1,1]
+  name: MaskedCrossEntropy
+model:
+  name: probablistic_unet_xy
+  nchannel: 1
+  nclass: 2
+  size_in: [40, 256, 256]
+  size_out: [40, 256, 256]
+  num_filters: [32, 64, 128, 192]
+  latent_dim: 2
+  num_convs_fcomb: 4
+  beta: 10.0
+
+precision: 16
+resume: null
+save_every_n_epoch: 50
+scheduler:
+  gamma: 0.942
+  name: ExponentialLR
+  verbose: true
+tensorboard: /allen/aics/assay-dev/users/Dewen/project/lightning_logs
+validation:
+  OutputCh: [0,1,1,1,2,1]
+  leaveout: [0.08]
+  metric: default
+  validate_every_n_epoch: 20
+weight_decay: 0.005

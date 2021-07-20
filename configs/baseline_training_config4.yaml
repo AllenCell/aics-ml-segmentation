@@ -1,10 +1,8 @@
 model: 
-  name: unet_xy_zoom_0pad_dropout
-  zoom_ratio: 3
-  nchannel: 1
-  nclass: [2,2,2]
-  size_in: [65, 384, 384] 
-  size_out: [65, 384, 384]
+  name: resnet3d_18
+  nchannel: 3
+  nclass: 1
+  size_in: [40, 256, 256] 
 checkpoint_dir: '/allen/aics/assay-dev/users/Dewen/project/experiment_results/all_runs'
 
 # resume: '/allen/aics/assay-dev/users/Dewen/project/baseline_models/run_2/checkpoint_epoch=99.ckpt'
@@ -16,29 +14,33 @@ scheduler:
   verbose: True
 
 weight_decay: 0.005
-epochs: 100
+epochs: 200
 save_every_n_epoch: 20
 loss:
-  name: Aux # MaskedCrossEntropy
+  name: MSE # MaskedCrossEntropy
   # name: MultiAuxillaryUncertaintyCrossEntropy
   loss_weight: [1, 1, 1]
-  ignore_index: null
+  # ignore_index: null
 tensorboard: '/allen/aics/assay-dev/users/Dewen/project/experiment_results/logs'
-gpus: -1
-dist_backend:  ddp 
+gpus: 1
+# dist_backend:  ddp 
 precision: 16
 
 loader:
   name: default
-  datafolder: '//allen/aics/assay-dev/users/Benji/h2b_undersegmentation_fix/curriculum_training/round3'
-  batch_size: 2
+  datafolder: '/allen/aics/assay-dev/users/Dewen/project/experiment_results/all_runs/run_22/validation_results'
+  batch_size: 6
   PatchPerBuffer: 80
-  epoch_shuffle: 50
+  epoch_shuffle: 100
   NumWorkers: 1
   Transforms: ['RR', 'RF']
+  threshold: 0.7
+  # uncertainty_type can be: maximum_softmax, entropy, mutual_information, variance
+  uncertainty_type: entropy
 
 validation:
   metric: default
-  leaveout: [0.02]
+  leaveout: [0.1]
   OutputCh: [0, 1, 1, 1, 2, 1]
-  validate_every_n_epoch: 100
+  validate_every_n_epoch: 20
+
