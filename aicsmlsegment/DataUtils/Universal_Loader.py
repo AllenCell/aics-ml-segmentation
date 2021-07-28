@@ -244,7 +244,6 @@ class UniversalDataset(Dataset):
         transforms: Sequence[str] = [],
         patchize: bool = True,
         check_crop: bool = False,
-        init_only: bool = False,
     ):
         """
         input:
@@ -262,21 +261,8 @@ class UniversalDataset(Dataset):
         self.gt = []
         self.cmap = []
         self.transforms = transforms
-        self.parameters = {
-            "filenames": filenames,
-            "num_patch": num_patch,
-            "size_in": size_in,
-            "size_out": size_out,
-            "n_channel": n_channel,
-            "use_costmap": use_costmap,
-            "transforms": transforms,
-            "patchize": patchize,
-            "check_crop": check_crop,
-        }
+
         self.num_patch = num_patch
-        self.init_only = init_only
-        if init_only:
-            num_patch = 1
         num_data = len(filenames)
         shuffle(filenames)
         self.filenames = None
@@ -426,8 +412,6 @@ class UniversalDataset(Dataset):
                 (self.cmap).append(costmap)
 
     def __getitem__(self, index):
-        if self.init_only:
-            return torch.zeros(0)
         if self.filenames is not None:
             fn = self.filenames[index]
         else:
@@ -439,12 +423,7 @@ class UniversalDataset(Dataset):
         return (img_tensor, gt_tensor, cmap_tensor, fn)
 
     def __len__(self):
-        if self.init_only:
-            return self.num_patch
         return len(self.img)
-
-    def get_params(self):
-        return self.parameters
 
 
 from monai.transforms import (
@@ -596,7 +575,6 @@ class UniversalDataset_redo_transforms(Dataset):
         transforms: Sequence[str] = [],
         patchize: bool = True,
         check_crop: bool = False,
-        init_only: bool = False,
     ):
         """
         input:
@@ -612,20 +590,7 @@ class UniversalDataset_redo_transforms(Dataset):
         self.data = {"img": [], "label": []}
         if use_costmap:
             self.data["costmap"] = []
-        self.parameters = {
-            "filenames": filenames,
-            "num_patch": num_patch,
-            "size_in": size_in,
-            "size_out": size_out,
-            "n_channel": n_channel,
-            "use_costmap": use_costmap,
-            "transforms": transforms,
-            "patchize": patchize,
-            "check_crop": check_crop,
-        }
-        self.init_only = init_only
-        if init_only:
-            num_patch = 1
+
         num_data = len(filenames)
         shuffle(filenames)
         self.filenames = None
@@ -634,7 +599,6 @@ class UniversalDataset_redo_transforms(Dataset):
             self.filenames = filenames
         num_patch_per_img = np.zeros((num_data,), dtype=int)
         print(filenames)
-        print(num_data, num_patch)
         if num_data >= num_patch:
             # take one patch from each image
             num_patch_per_img[:num_patch] = 1
@@ -701,8 +665,6 @@ class UniversalDataset_redo_transforms(Dataset):
         return Compose(transform_fns)
 
     def __getitem__(self, index):
-        if self.init_only:
-            return torch.zeros(0)
         if self.filenames is not None:
             fn = self.filenames[index]
         else:
@@ -716,12 +678,7 @@ class UniversalDataset_redo_transforms(Dataset):
         return (self.data["img"][index], self.data["label"][index], costmap, fn)
 
     def __len__(self):
-        if self.init_only:
-            return self.num_patch
         return len(self.data["img"])
-
-    def get_params(self):
-        return self.parameters
 
 
 def patchize(

@@ -44,7 +44,7 @@ def main(config=None, model_config=None):
     MC = ModelCheckpoint(
         dirpath=checkpoint_dir,
         filename="checkpoint_{epoch}",
-        period=config["save_every_n_epoch"],
+        every_n_epochs=config["save_every_n_epoch"],
         save_top_k=-1,
     )
     callbacks = [MC]
@@ -112,10 +112,9 @@ def main(config=None, model_config=None):
         gpus=gpu_config,
         max_epochs=config["epochs"],
         check_val_every_n_epoch=config["validation"]["validate_every_n_epoch"],
-        num_sanity_val_steps=0,
+        num_sanity_val_steps=1,
         callbacks=callbacks,
-        reload_dataloaders_every_epoch=False,  # check https://github.com/PyTorchLightning/pytorch-lightning/pull/5043 for updates on pull request  # noqa E501
-        # reload_dataloaders_every_n_epoch = config['loader']['epoch_shuffle']
+        reload_dataloaders_every_n_epochs=config["loader"]["epoch_shuffle"],
         distributed_backend=accelerator,
         logger=logger,
         precision=config["precision"],

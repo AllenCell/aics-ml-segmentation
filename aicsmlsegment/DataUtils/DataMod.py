@@ -71,10 +71,6 @@ class DataModule(pytorch_lightning.LightningDataModule):
 
             _, self.accepts_costmap = get_loss_criterion(config)
 
-            self.init_only = False
-            if self.loader_config["epoch_shuffle"] is not None:
-                self.init_only = True
-
             model_config = config["model"]
             if "unet_xy" in config["model"]["name"]:
                 self.size_in = model_config["size_in"]
@@ -208,7 +204,6 @@ class DataModule(pytorch_lightning.LightningDataModule):
                 transforms=self.transforms,
                 patchize=True,
                 check_crop=self.check_crop,
-                init_only=self.init_only,  # first call of train_dataloader is just to get dataset params if init_only is true  # noqa E501
             ),
             batch_size=loader_config["batch_size"],
             shuffle=True,

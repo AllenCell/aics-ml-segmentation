@@ -7,11 +7,7 @@ from aicsmlsegment.model_utils import (
     model_inference,
     apply_on_image,
 )
-from aicsmlsegment.DataUtils.Universal_Loader import (
-    minmax,
-    undo_resize,
-    UniversalDataset,
-)
+from aicsmlsegment.DataUtils.Universal_Loader import minmax, undo_resize
 from aicsmlsegment.utils import compute_iou, save_image
 
 import numpy as np
@@ -19,7 +15,6 @@ from skimage.io import imsave
 from skimage.morphology import remove_small_objects
 import os
 import pathlib
-from torch.utils.data import DataLoader
 
 
 class Model(pytorch_lightning.LightningModule):
@@ -222,24 +217,6 @@ class Model(pytorch_lightning.LightningModule):
             print("no scheduler is used")
             return optims
 
-    # HACK until pytorch lightning includes reload_dataloaders_every_n_epochs
-    def on_train_epoch_start(self):
-        if self.epoch_shuffle is not None:
-            if self.current_epoch == 0 and self.dataset_params is None:
-                self.dataset_params = self.train_dataloader().dataset.get_params()
-
-            if self.current_epoch % self.epoch_shuffle == 0:
-                if self.global_rank == 0 and self.current_epoch > 0:
-                    print("Reloading dataloader...")
-                self.DATALOADER = DataLoader(
-                    UniversalDataset(**self.dataset_params),
-                    batch_size=self.config["loader"]["batch_size"],
-                    shuffle=True,
-                    num_workers=self.config["loader"]["NumWorkers"],
-                    pin_memory=True,
-                )
-            self.iter_dataloader = iter(self.DATALOADER)
-
     def log_and_return(self, name, value):
         # sync_dist on_epoch=True ensures that results will be averaged across gpus
         self.log(
@@ -253,16 +230,9 @@ class Model(pytorch_lightning.LightningModule):
         return {"loss": value}  # return val only used in train step
 
     def training_step(self, batch, batch_idx):
-        if self.epoch_shuffle is not None:
-            # ignore dataloader provided by pytorch lightning
-            batch = next(self.iter_dataloader)
-            inputs = batch[0].half().to(self.device)
-            targets = batch[1].to(self.device)
-            cmap = batch[2].to(self.device)
-        else:
-            inputs = batch[0]
-            targets = batch[1]
-            cmap = batch[2]
+        inputs = batch[0]
+        targets = batch[1]
+        cmap = batch[2]
         outputs = self(inputs)
         vae_loss = 0
         if self.model_name == "segresnetvae":
@@ -283,7 +253,6 @@ class Model(pytorch_lightning.LightningModule):
         label = batch[1]
         costmap = batch[2]
         # fn = batch[3]
-
         outputs, vae_loss, _ = model_inference(
             self.model,
             input_img,
