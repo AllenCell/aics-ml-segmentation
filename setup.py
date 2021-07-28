@@ -50,8 +50,9 @@ requirements = [
     "tqdm",
     "pyyaml",
     "monai>=0.4.0",
-    "pytorch-lightning",
+    "pytorch-lightning>=1.4.0",
     "torchio",
+    "torch=1.8.1",
 ]
 
 extra_requirements = {
