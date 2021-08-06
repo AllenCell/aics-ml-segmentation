@@ -53,6 +53,7 @@ setup(name=PACKAGE_NAME,
           'aicsimageio>3.3.0',
           'tqdm',
           'pyyaml',
+          'aicssegmentation',
           #'pytorch=1.0.0'
       ],
 
