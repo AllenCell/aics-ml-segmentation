@@ -1,6 +1,8 @@
 from aicsmlsegment.DataUtils.Universal_Loader import (
     UniversalDataset,
     TestDataset,
+    QCDataset,
+    QCTestDataset,
     load_img,
 )
 import random
@@ -33,7 +35,7 @@ def init_worker(worker_id: int):
     dataset.end = min(len(dataset.filenames), (worker_info.id + 1) * per_worker) - 1
 
 
-class DataModule(pytorch_lightning.LightningDataModule):
+class DataModule_qc(pytorch_lightning.LightningDataModule):
     def __init__(self, config: Dict, train: bool = True):
         """
         Initialize Datamodule variable based on config
@@ -49,11 +51,6 @@ class DataModule(pytorch_lightning.LightningDataModule):
         super().__init__()
         self.config = config
 
-        try:  # monai
-            self.nchannel = self.config["model"]["nchannel"]
-        except KeyError:  # custom model
-            self.nchannel = self.config["model"]["in_channels"]
-
         if train:
             self.loader_config = config["loader"]
 
@@ -61,10 +58,8 @@ class DataModule(pytorch_lightning.LightningDataModule):
             if name not in ["default", "focus"]:
                 print("other loaders are under construction")
                 quit()
-            if name == "focus":
-                self.check_crop = True
-            else:
-                self.check_crop = False
+
+            self.check_crop = False
             self.transforms = []
             if "Transforms" in self.loader_config:
                 self.transforms = self.loader_config["Transforms"]
@@ -76,15 +71,8 @@ class DataModule(pytorch_lightning.LightningDataModule):
                 self.init_only = True
 
             model_config = config["model"]
-            if "unet_xy" in config["model"]["name"]:
-                self.size_in = model_config["size_in"]
-                self.size_out = model_config["size_out"]
-                self.nchannel = model_config["nchannel"]
-
-            else:
-                self.size_in = model_config["patch_size"]
-                self.size_out = self.size_in
-                self.nchannel = model_config["in_channels"]
+            self.size_in = model_config["size_in"]
+            self.nchannel = 1   # set to 1 because the image is one channel
 
     def prepare_data(self):
         pass
@@ -115,74 +103,54 @@ class DataModule(pytorch_lightning.LightningDataModule):
                     loader_config["datafolder"] = [loader_config["datafolder"]]
 
                 filenames = []
+                pseudo_labels = []
                 for folder in loader_config["datafolder"]:
-                    fns = glob(folder + "/*_GT.ome.tif")
+                    fns = glob(folder + "/positive/*_img.tiff")
                     fns.sort()
                     filenames += fns
+                    pseudo_labels += [1 for _ in fns]
+                    fns = glob(folder + "/negative/*_img.tiff")
+                    fns.sort()
+                    filenames += fns
+                    pseudo_labels += [0 for _ in fns]
 
                 total_num = len(filenames)
                 LeaveOut = validation_config["leaveout"]
-
-                all_same_size = False
-                rand = False
-                it = 0
-                max_it = 10
-                while not all_same_size and it < max_it:
-                    if rand and it > 0:
-                        print("Validation images not all same size. Reshuffling...")
-                    elif not rand and it > 0:
-                        print(
-                            "Validation images must be the same size. Please choose"
-                            " different validation img indices"
+                if len(LeaveOut) == 1:
+                    if LeaveOut[0] > 0 and LeaveOut[0] < 1:
+                        num_train = int(np.floor((1 - LeaveOut[0]) * total_num))
+                        shuffled_idx = np.arange(total_num)
+                        # make sure validation sets are same across gpus
+                        random.seed(0)
+                        random.shuffle(shuffled_idx)
+                        train_idx = shuffled_idx[:num_train]
+                        valid_idx = shuffled_idx[num_train:]
+                        rand = True
+                    else:
+                        valid_idx = [int(LeaveOut[0])]
+                        train_idx = list(
+                            set(range(total_num)) - set(map(int, LeaveOut))
                         )
-                        quit()
-
-                    if len(LeaveOut) == 1:
-                        if LeaveOut[0] > 0 and LeaveOut[0] < 1:
-                            num_train = int(np.floor((1 - LeaveOut[0]) * total_num))
-                            shuffled_idx = np.arange(total_num)
-                            # make sure validation sets are same across gpus
-                            random.seed(0)
-                            random.shuffle(shuffled_idx)
-                            train_idx = shuffled_idx[:num_train]
-                            valid_idx = shuffled_idx[num_train:]
-                            rand = True
-                        else:
-                            valid_idx = [int(LeaveOut[0])]
-                            train_idx = list(
-                                set(range(total_num)) - set(map(int, LeaveOut))
-                            )
-                    elif LeaveOut:
-                        valid_idx = list(map(int, LeaveOut))
-                        train_idx = list(set(range(total_num)) - set(valid_idx))
-
-                    img_shapes = [
-                        load_img(
-                            filenames[fn][:-11],
-                            img_type="label",
-                            n_channel=self.nchannel,
-                            shape_only=True,
-                        )
-                        for fn in valid_idx
-                    ]
-                    all_same_size = img_shapes.count(img_shapes[0]) == len(img_shapes)
-                    it += 1
-                    if loader_config["batch_size"] == 1:
-                        all_same_size = True
-                if it == max_it:
-                    assert (
-                        all_same_size
-                    ), "Could not find val images with all same size, please try again."
                 valid_filenames = []
                 train_filenames = []
+                valid_labels = []
+                train_labels = []
                 # remove file extensions from filenames
                 for fi, fn in enumerate(valid_idx):
-                    valid_filenames.append(filenames[fn][:-11])
+                    valid_filenames.append(filenames[fn][:-9])
+                    valid_labels.append(pseudo_labels[fn])
                 for fi, fn in enumerate(train_idx):
-                    train_filenames.append(filenames[fn][:-11])
+                    train_filenames.append(filenames[fn][:-9])
+                    train_labels.append(pseudo_labels[fn])
 
                 self.valid_filenames = valid_filenames
                 self.train_filenames = train_filenames
+                self.valid_labels = valid_labels
+                self.train_labels = train_labels
+                print(f'train_filenames:{self.train_filenames[:10]}')
+                print(f'train_labels:{self.train_labels[:10]}')
+                print(f'valid_filenames:{self.valid_filenames[:10]}')
+                print(f'valid_labels:{self.valid_labels[:10]}')
 
             else:
                 print("need validation in config file")
@@ -198,17 +166,18 @@ class DataModule(pytorch_lightning.LightningDataModule):
         """
         loader_config = self.loader_config
         train_set_loader = DataLoader(
-            UniversalDataset(
+            QCDataset(
                 self.train_filenames,
+                self.train_labels,
                 loader_config["PatchPerBuffer"],
                 self.size_in,
-                self.size_out,
                 self.nchannel,
-                use_costmap=self.accepts_costmap,
+                use_uncertaintymap=True,
                 transforms=self.transforms,
-                patchize=True,
-                check_crop=self.check_crop,
+                patchize=False,
                 init_only=self.init_only,  # first call of train_dataloader is just to get dataset params if init_only is true  # noqa E501
+                uncertainty_type=loader_config["uncertainty_type"],
+                threshold=loader_config["threshold"],
             ),
             batch_size=loader_config["batch_size"],
             shuffle=True,
@@ -227,15 +196,17 @@ class DataModule(pytorch_lightning.LightningDataModule):
         """
         loader_config = self.loader_config
         val_set_loader = DataLoader(
-            UniversalDataset(
+            QCDataset(
                 self.valid_filenames,
+                self.valid_labels,
                 loader_config["PatchPerBuffer"],
                 self.size_in,
-                self.size_out,
                 self.nchannel,
-                transforms=[],  # no transforms for validation data
-                use_costmap=self.accepts_costmap,
-                patchize=False,  # validate on entire image
+                use_uncertaintymap=True,
+                transforms=[],
+                patchize=False,
+                uncertainty_type=loader_config["uncertainty_type"],
+                threshold=loader_config["threshold"],
             ),
             batch_size=loader_config["batch_size"],
             shuffle=False,
@@ -243,24 +214,6 @@ class DataModule(pytorch_lightning.LightningDataModule):
             pin_memory=True,
         )
         return val_set_loader
-        # val_set_loader = DataLoader(
-        #     UniversalDataset(
-        #         self.valid_filenames,
-        #         loader_config["PatchPerBuffer"],
-        #         self.size_in,
-        #         self.size_out,
-        #         self.nchannel,
-        #         transforms=[],  # no transforms for validation data
-        #         use_costmap=self.accepts_costmap,
-        #         patchize=True,  # validate on patch image
-        #         check_crop=self.check_crop,
-        #     ),
-        #     batch_size=loader_config["batch_size"],
-        #     shuffle=False,
-        #     num_workers=loader_config["NumWorkers"],
-        #     pin_memory=True,
-        # )
-        # return val_set_loader
 
     def test_dataloader(self):
         """
@@ -268,8 +221,63 @@ class DataModule(pytorch_lightning.LightningDataModule):
         Parameters: None
         Return: DataLoader test_set_loader
         """
+        """
+        # maybe you want to do the test on your validation set, let's get all the files of the validation set
+        filenames = []
+        config = self.config
+        valid_filenames = None
+        if config["mode"]["name"] == 'cv':
+            folder = config["mode"]["InputDir"]
+            fns = glob(folder + "/*_GT.ome.tif")
+            fns.sort()
+            filenames += fns
+            total_num = len(filenames)
+            LeaveOut = config["validation"]["leaveout"]
+            if len(LeaveOut) == 1:
+                if LeaveOut[0] > 0 and LeaveOut[0] < 1:
+                    num_train = int(np.floor((1 - LeaveOut[0]) * total_num))
+                    shuffled_idx = np.arange(total_num)
+                    # make sure validation sets are same across gpus
+                    random.seed(0)
+                    random.shuffle(shuffled_idx)
+                    train_idx = shuffled_idx[:num_train]
+                    valid_idx = shuffled_idx[num_train:]
+                else:
+                    valid_idx = [int(LeaveOut[0])]
+                    train_idx = list(
+                        set(range(total_num)) - set(map(int, LeaveOut))
+                    )
+            valid_filenames = []
+            train_filenames = []
+            # remove file extensions from filenames
+            for fi, fn in enumerate(valid_idx):
+                valid_filenames.append(filenames[fn][:-11])
+            for fi, fn in enumerate(train_idx):
+                train_filenames.append(filenames[fn][:-11])
+            # print(f'valid_filenames:{valid_filenames}')
         test_set_loader = DataLoader(
-            TestDataset(self.config),
+            QCTestDataset(self.config, fns=valid_filenames),
+            batch_size=1,
+            shuffle=False,
+            num_workers=self.config["NumWorkers"],
+            pin_memory=True,
+            worker_init_fn=init_worker,
+        )
+        return test_set_loader
+        """
+        filenames = []
+        pseudo_labels = []
+        folder = self.config["mode"]["InputDir"]
+        fns = glob(folder + "/positive/*_img.tiff")
+        fns.sort()
+        filenames += fns
+        pseudo_labels += [1 for _ in fns]
+        fns = glob(folder + "/negative/*_img.tiff")
+        fns.sort()
+        filenames += fns
+        pseudo_labels += [0 for _ in fns]
+        test_set_loader = DataLoader(
+            QCTestDataset(self.config, fns=filenames, pseudo_labels=pseudo_labels),
             batch_size=1,
             shuffle=False,
             num_workers=self.config["NumWorkers"],

@@ -267,3 +267,9 @@ class UNet3D(nn.Module):
         )  # fix +5
 
         return [predict00, p1a, p2a]
+
+if __name__ == "__main__":
+    x = torch.randn(1,1,52,480,480)
+    model = UNet3D(in_channel=1, n_classes=[2,2,2], down_ratio=3, test_mode=True)
+    y = model(x)
+    print(f'y:{y.shape}')

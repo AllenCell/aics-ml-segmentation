@@ -104,7 +104,7 @@ class DataModule_qc(pytorch_lightning.LightningDataModule):
 
                 filenames = []
                 for folder in loader_config["datafolder"]:
-                    fns = glob(folder + "/*_GT.ome.tif")
+                    fns = glob(folder + "/*_GT.tiff")
                     fns.sort()
                     filenames += fns
 
@@ -129,13 +129,13 @@ class DataModule_qc(pytorch_lightning.LightningDataModule):
                 train_filenames = []
                 # remove file extensions from filenames
                 for fi, fn in enumerate(valid_idx):
-                    valid_filenames.append(filenames[fn][:-11])
+                    valid_filenames.append(filenames[fn][:-8])
                 for fi, fn in enumerate(train_idx):
-                    train_filenames.append(filenames[fn][:-11])
+                    train_filenames.append(filenames[fn][:-8])
 
                 self.valid_filenames = valid_filenames
                 self.train_filenames = train_filenames
-
+                print(f"total number of training data:{len(self.train_filenames)}")
             else:
                 print("need validation in config file")
                 quit()
@@ -237,7 +237,7 @@ class DataModule_qc(pytorch_lightning.LightningDataModule):
                 train_filenames.append(filenames[fn][:-11])
             # print(f'valid_filenames:{valid_filenames}')
         test_set_loader = DataLoader(
-            QCTestDataset(self.config, fns=valid_filenames),
+            QCTestDataset(self.config, fns=valid_filenames, pseudo_labels=None),
             batch_size=1,
             shuffle=False,
             num_workers=self.config["NumWorkers"],
@@ -245,13 +245,3 @@ class DataModule_qc(pytorch_lightning.LightningDataModule):
             worker_init_fn=init_worker,
         )
         return test_set_loader
-
-        # test_set_loader = DataLoader(
-        #     QCTestDataset(self.config, fns=None),
-        #     batch_size=1,
-        #     shuffle=False,
-        #     num_workers=self.config["NumWorkers"],
-        #     pin_memory=True,
-        #     worker_init_fn=init_worker,
-        # )
-        # return test_set_loader

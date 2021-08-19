@@ -246,7 +246,7 @@ class Model(pytorch_lightning.LightningModule):
         # print(f'inputs:{inputs.shape}, targets:{targets.shape}')
         output, prior_latent_space, posterior_latent_space = self(inputs, targets, training=True, use_prior_latent=False)
         # print(f'output:{output.shape}')
-        elbo = self.model.elbo(self.loss_function, output, targets, cmap, prior_latent_space, posterior_latent_space)
+        elbo = self.model.elbo(self.loss_function, output, targets, None, prior_latent_space, posterior_latent_space)
         reg_loss = l2_regularisation(self.model.posterior) + l2_regularisation(self.model.prior) + l2_regularisation(self.model.fcomb.layers)
         loss = -elbo + 1e-5 * reg_loss
         # print(f'training loss:{loss}')
@@ -261,13 +261,13 @@ class Model(pytorch_lightning.LightningModule):
         # print(f'inputs:{input_img.shape}, targets:{label.shape}')
         outputs, prior_latent_space, posterior_latent_space = self(input_img, label, training=True, use_prior_latent=True)
         # print(f'outputs:{outputs.shape}')
-        elbo = self.model.elbo(self.loss_function, outputs, label, costmap, prior_latent_space, posterior_latent_space)
+        elbo = self.model.elbo(self.loss_function, outputs, label, None, prior_latent_space, posterior_latent_space)
         reg_loss = l2_regularisation(self.model.posterior) + l2_regularisation(self.model.prior) + l2_regularisation(self.model.fcomb.layers)
         val_loss = -elbo + 1e-5 * reg_loss
         # print(f'val loss:{val_loss}')
         self.log_and_return("val_loss", val_loss)
         outputs = torch.nn.Softmax(dim=1)(outputs)
-        val_metric = compute_iou(outputs > 0.7, label, torch.unsqueeze(costmap, dim=1))
+        val_metric = compute_iou(outputs > 0.7, label, None)
         self.log_and_return("val_iou", val_metric)
         # save first validation image result
         if batch_idx == 0:

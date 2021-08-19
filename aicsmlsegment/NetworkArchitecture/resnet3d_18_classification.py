@@ -106,7 +106,7 @@ class ResNet3d_18(nn.Module):
         return x
 
 if __name__ == "__main__":
-    x = torch.randn(1,3,10,224,224)
+    x = torch.randn(1,3,10,150,150)
     model = ResNet3d_18(in_channel=3, num_classes=2)
     y = model(x)
     print(f'y:{y.shape}')

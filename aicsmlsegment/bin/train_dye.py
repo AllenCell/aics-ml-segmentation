@@ -1,10 +1,9 @@
 import pytorch_lightning
 import argparse
 from aicsmlsegment.utils import load_config, get_logger, create_unique_run_directory
-from aicsmlsegment.Model_probablistic import Model
+from aicsmlsegment.Model_dye import Model
 from aicsmlsegment.DataUtils.DataMod_dye import DataModule
 from pytorch_lightning.callbacks import ModelCheckpoint
-
 
 def main(config=None, model_config=None):
 
@@ -36,6 +35,10 @@ def main(config=None, model_config=None):
         print("Training new model from scratch")
         model = Model(config, model_config, train=True)
 
+    # if we wanna to finetune an existing model and generate uncertainty map
+    # if config["uncertainty"] is not None:
+    #     from aicsmlsegment.model_utils import add_dropout_layer
+    #     model.model = add_dropout_layer(model.model, dropout_rate=0.5, batchnorm_flag=True)
     checkpoint_dir = create_unique_run_directory(config, train=True)
     config["checkpoint_dir"] = checkpoint_dir
     logger.info(config)
@@ -90,7 +93,7 @@ def main(config=None, model_config=None):
         from pytorch_lightning.plugins import DDPPlugin
 
         # reduces multi-gpu model memory, removes unecessary backwards pass
-        plugins = ["ddp_sharded", DDPPlugin(find_unused_parameters=True)]
+        plugins = ["ddp_sharded", DDPPlugin(find_unused_parameters=False)]
 
     # it is possible to use tensorboard to track the experiment by adding
     # a "tensorboard" option in the configuration yaml

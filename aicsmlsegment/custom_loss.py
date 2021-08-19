@@ -37,6 +37,11 @@ SUPPORTED_LOSSES = {
         "args": [],
         "wrapper_args": {"n_label_ch": 1, "accepts_costmap": False},
     },
+    "BCEWithLogits": {
+        "source": "torch.nn",
+        "args": [],
+        "wrapper_args": {"n_label_ch": 1, "accepts_costmap": False},
+    },
     "CrossEntropy": {
         "source": "torch.nn",
         "args": [],
@@ -82,6 +87,16 @@ SUPPORTED_LOSSES = {
             "n_label_ch": 1,
             "accepts_costmap": True,
             "cmap_unsqueeze": True,
+            "label_squeeze": True,
+            "to_long": True,
+        },
+    },
+    "AuxillaryCrossEntropy": {
+        "source": "aicsmlsegment.custom_loss",
+        "args": ["weight", "num_class"],
+        "wrapper_args": {
+            "n_label_ch": 1,
+            "accepts_costmap": False,
             "label_squeeze": True,
             "to_long": True,
         },
@@ -237,6 +252,21 @@ class MaskedCrossEntropyLoss(torch.nn.Module):
         loss = torch.mean(torch.mul(loss.view(loss.numel()), cmap.view(cmap.numel())))
         return loss
 
+class AuxillaryCrossEntropyLoss(torch.nn.Module):
+
+    def __init__(self, weight, num_class):
+        super(AuxillaryCrossEntropyLoss, self).__init__()
+        self.weight = weight
+        self.loss_fn = torch.nn.CrossEntropyLoss()
+
+    def forward(self, input, target):
+        if not isinstance(input, list):  # custom model validation
+            input = [input]
+        total_loss = self.weight[0] * self.loss_fn(input[0], target)
+        for n in np.arange(1, len(input)):
+            total_loss += self.weight[n] * self.loss_fn(input[n], target)
+
+        return total_loss
 
 class MultiAuxillaryCrossEntropyLoss(torch.nn.Module):
     def __init__(self, weight, num_class):

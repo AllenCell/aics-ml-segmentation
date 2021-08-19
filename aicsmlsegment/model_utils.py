@@ -238,9 +238,43 @@ def load_checkpoint(checkpoint_path, model):
             for key in state["model_state_dict"]:
                 new_state_dict["model." + key] = state["model_state_dict"][key]
             model.load_state_dict(new_state_dict)
+    elif "state_dict" in state:
+        try:
+            model.load_state_dict(state["state_dict"])
+        except RuntimeError:
+            # HACK all keys need "model." appended to them sometimes
+            new_state_dict = {}
+            for key in state["state_dict"]:
+                new_state_dict["model." + key] = state["state_dict"][key]
+            model.load_state_dict(new_state_dict)
     else:
         model.load_state_dict(state)
 
     # TODO: add an option to load training status
 
     return state
+
+def add_dropout_layer(model, dropout_rate, batchnorm_flag):
+    """
+    Add dropout out layer in an existing model
+    Args:
+        model: existing model, can only be unet at this moment
+        dropout_rate: dropout rate, 0 means no dropout
+        batchnorm_flag: whether the existing model has batchnorm_flag, this will affect where to insert the dropout layer
+    Returns:
+        modified model
+    """
+    target_modules = ['ec3', 'ec4', 'dc3', 'dc2']
+    # we want to add dropout layer to the ec3, ec4 and dc3, dc4 module
+    for module_name in target_modules:
+        module = getattr(model, module_name)
+        layers = list(module.children())
+        if batchnorm_flag:
+            layers.insert(3, torch.nn.Dropout3d(p=dropout_rate, inplace=True))
+            layers.insert(7, torch.nn.Dropout3d(p=dropout_rate, inplace=True))
+        else:
+            layers.insert(2, torch.nn.Dropout3d(p=dropout_rate, inplace=True))
+            layers.insert(5, torch.nn.Dropout3d(p=dropout_rate, inplace=True))
+        module = torch.nn.Sequential(*layers)
+        setattr(model, module_name, module)
+    return model

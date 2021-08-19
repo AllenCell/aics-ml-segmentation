@@ -122,57 +122,33 @@ class DataModule(pytorch_lightning.LightningDataModule):
 
                 total_num = len(filenames)
                 LeaveOut = validation_config["leaveout"]
-
-                all_same_size = False
-                rand = False
-                it = 0
-                max_it = 10
-                while not all_same_size and it < max_it:
-                    if rand and it > 0:
-                        print("Validation images not all same size. Reshuffling...")
-                    elif not rand and it > 0:
-                        print(
-                            "Validation images must be the same size. Please choose"
-                            " different validation img indices"
+                if len(LeaveOut) == 1:
+                    if LeaveOut[0] > 0 and LeaveOut[0] < 1:
+                        num_train = int(np.floor((1 - LeaveOut[0]) * total_num))
+                        shuffled_idx = np.arange(total_num)
+                        # make sure validation sets are same across gpus
+                        random.seed(0)
+                        random.shuffle(shuffled_idx)
+                        train_idx = shuffled_idx[:num_train]
+                        valid_idx = shuffled_idx[num_train:]
+                    else:
+                        valid_idx = [int(LeaveOut[0])]
+                        train_idx = list(
+                            set(range(total_num)) - set(map(int, LeaveOut))
                         )
-                        quit()
+                elif LeaveOut:
+                    valid_idx = list(map(int, LeaveOut))
+                    train_idx = list(set(range(total_num)) - set(valid_idx))
 
-                    if len(LeaveOut) == 1:
-                        if LeaveOut[0] > 0 and LeaveOut[0] < 1:
-                            num_train = int(np.floor((1 - LeaveOut[0]) * total_num))
-                            shuffled_idx = np.arange(total_num)
-                            # make sure validation sets are same across gpus
-                            random.seed(0)
-                            random.shuffle(shuffled_idx)
-                            train_idx = shuffled_idx[:num_train]
-                            valid_idx = shuffled_idx[num_train:]
-                            rand = True
-                        else:
-                            valid_idx = [int(LeaveOut[0])]
-                            train_idx = list(
-                                set(range(total_num)) - set(map(int, LeaveOut))
-                            )
-                    elif LeaveOut:
-                        valid_idx = list(map(int, LeaveOut))
-                        train_idx = list(set(range(total_num)) - set(valid_idx))
-
-                    img_shapes = [
-                        load_img(
-                            filenames[fn][:-11],
-                            img_type="label",
-                            n_channel=self.nchannel,
-                            shape_only=True,
-                        )
-                        for fn in valid_idx
-                    ]
-                    all_same_size = img_shapes.count(img_shapes[0]) == len(img_shapes)
-                    it += 1
-                    if loader_config["batch_size"] == 1:
-                        all_same_size = True
-                if it == max_it:
-                    assert (
-                        all_same_size
-                    ), "Could not find val images with all same size, please try again."
+                img_shapes = [
+                    load_img(
+                        filenames[fn][:-11],
+                        img_type="label",
+                        n_channel=self.nchannel,
+                        shape_only=True,
+                    )
+                    for fn in valid_idx
+                ]
                 valid_filenames = []
                 train_filenames = []
                 # remove file extensions from filenames
@@ -183,6 +159,9 @@ class DataModule(pytorch_lightning.LightningDataModule):
 
                 self.valid_filenames = valid_filenames
                 self.train_filenames = train_filenames
+
+                print(f'training data size:{len(self.train_filenames)}')
+                print(f'validation data size:{len(self.valid_filenames)}')
 
             else:
                 print("need validation in config file")
@@ -235,7 +214,8 @@ class DataModule(pytorch_lightning.LightningDataModule):
                 self.nchannel,
                 transforms=[],  # no transforms for validation data
                 use_costmap=self.accepts_costmap,
-                patchize=False,  # validate on entire image
+                patchize=True,  # validate on patch image
+                check_crop=self.check_crop,
             ),
             batch_size=loader_config["batch_size"],
             shuffle=False,
@@ -243,24 +223,6 @@ class DataModule(pytorch_lightning.LightningDataModule):
             pin_memory=True,
         )
         return val_set_loader
-        # val_set_loader = DataLoader(
-        #     UniversalDataset(
-        #         self.valid_filenames,
-        #         loader_config["PatchPerBuffer"],
-        #         self.size_in,
-        #         self.size_out,
-        #         self.nchannel,
-        #         transforms=[],  # no transforms for validation data
-        #         use_costmap=self.accepts_costmap,
-        #         patchize=True,  # validate on patch image
-        #         check_crop=self.check_crop,
-        #     ),
-        #     batch_size=loader_config["batch_size"],
-        #     shuffle=False,
-        #     num_workers=loader_config["NumWorkers"],
-        #     pin_memory=True,
-        # )
-        # return val_set_loader
 
     def test_dataloader(self):
         """

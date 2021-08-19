@@ -6,6 +6,7 @@ from aicsmlsegment.Model import Model
 from aicsmlsegment.DataUtils.DataMod import DataModule
 import pytorch_lightning
 import torch.autograd.profiler as profiler
+from torch.nn.modules import dropout
 
 
 def main():
@@ -14,10 +15,8 @@ def main():
         # load config
         parser = argparse.ArgumentParser()
         parser.add_argument("--config", required=True)
-        # parser.add_argument("--config2", required=True)
         args = parser.parse_args()
         config, model_config = load_config(args.config, train=False)
-        # config2, model_config2 = load_config(args.config2, train=False)
 
         # load the trained model instance
         model_path = config["model_path"]
@@ -27,24 +26,10 @@ def main():
                 model_path, config=config, model_config=model_config, train=False
             )
         except KeyError:  # backwards compatibility for old .pytorch checkpoints
-            from aicsmlsegment.model_utils import load_checkpoint
+            from aicsmlsegment.model_utils import load_checkpoint, add_dropout_layer
 
             model = Model(config, model_config, train=False)
             load_checkpoint(model_path, model)
-
-        # model2 = Model(config2, model_config2, train=False)
-        # model_dict = model.state_dict()
-        # state_dict = {}
-        # for k, v in model_dict.items():
-        #     if 'ec' in k or 'dc' in k:
-        #         number = int(k[10])
-        #         if number > 1:
-        #             number = number + 1
-        #         corrected_k = k[0:10]+str(number)+k[11:]
-        #         state_dict[corrected_k] = v
-        #     else:
-        #         state_dict[k] = v
-        # model2.load_state_dict(state_dict)
 
         # set up GPU
         gpu_config = config["gpus"]
@@ -69,29 +54,6 @@ def main():
         data_module = DataModule(config, train=False)
         with profiler.record_function("inference"):
             trainer.test(model, datamodule=data_module)
-
-        # gpu_config = config2["gpus"]
-        # if gpu_config < -1:
-        #     print("Number of GPUs must be -1 or > 0")
-        #     quit()
-
-        # # prepare output directory
-        # output_dir = create_unique_run_directory(config2, train=False)
-        # config2["OutputDir"] = output_dir
-
-        # print(config2)
-
-        # # ddp is the default unless only one gpu is requested
-        # accelerator = config2["dist_backend"]
-        # trainer = pytorch_lightning.Trainer(
-        #     gpus=gpu_config,
-        #     num_sanity_val_steps=0,
-        #     distributed_backend=accelerator,
-        #     precision=config2["precision"],
-        # )
-        # data_module = DataModule(config2, train=False)
-        # with profiler.record_function("inference"):
-        #     trainer.test(model2, datamodule=data_module)
 
     # print usage profile
     print(prof.key_averages().table())

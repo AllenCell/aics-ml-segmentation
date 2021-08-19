@@ -595,7 +595,7 @@ def compute_iou(prediction, gt, cmap):
     if type(gt) == torch.Tensor:
         gt = gt.detach().cpu().numpy()
     if cmap is None:
-        cmap = np.ones_like(prediction)
+        cmap = np.ones_like(gt)
     if type(cmap) == torch.Tensor:
         cmap = cmap.detach().cpu().numpy()
     if prediction.shape[1] == 2:  # take foreground channel

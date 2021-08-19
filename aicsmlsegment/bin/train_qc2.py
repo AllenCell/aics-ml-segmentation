@@ -1,10 +1,23 @@
 import pytorch_lightning
 import argparse
 from aicsmlsegment.utils import load_config, get_logger, create_unique_run_directory
-from aicsmlsegment.Model_probablistic import Model
-from aicsmlsegment.DataUtils.DataMod_dye import DataModule
+from aicsmlsegment.Model_qc2 import Model
+from aicsmlsegment.DataUtils.DataMod_qc2 import DataModule_qc
 from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import Callback
+import numpy as np
+import os
 
+# define custom Callback
+class MyCustomCallback(Callback):
+    
+    def __init__(self, dirpath, filename):
+        super().__init__()
+        self.dirpath = dirpath
+        self.filename = filename
+
+    def on_fit_end(self, trainer, pl_module):
+        np.save(os.path.join(self.dirpath, self.filename), np.array(pl_module.iou_distribution))
 
 def main(config=None, model_config=None):
 
@@ -49,6 +62,10 @@ def main(config=None, model_config=None):
     )
     callbacks = [MC]
 
+    # save the iou distribution on the training data on fit end
+    # myCustomCallback = MyCustomCallback(dirpath=checkpoint_dir, filename="iou_distribution")
+    # callbacks.append(myCustomCallback)
+
     callbacks_config = config["callbacks"]
 
     # it is possible to use early stopping by adding callback config
@@ -90,7 +107,7 @@ def main(config=None, model_config=None):
         from pytorch_lightning.plugins import DDPPlugin
 
         # reduces multi-gpu model memory, removes unecessary backwards pass
-        plugins = ["ddp_sharded", DDPPlugin(find_unused_parameters=True)]
+        plugins = ["ddp_sharded", DDPPlugin(find_unused_parameters=False)]
 
     # it is possible to use tensorboard to track the experiment by adding
     # a "tensorboard" option in the configuration yaml
@@ -123,8 +140,8 @@ def main(config=None, model_config=None):
     )
 
     # define the data module
-    data_module = DataModule(config)
-
+    data_module = DataModule_qc(config)
+    
     # starts training
     trainer.fit(model, data_module)
 
@@ -133,7 +150,6 @@ def main(config=None, model_config=None):
         "The best performing checkpoint is",
         MC.best_model_path,
     )
-
 
 if __name__ == "__main__":
     main()

@@ -91,6 +91,8 @@ class Model(pytorch_lightning.LightningModule):
                 self.count_map = {}
                 self.batch_count = {}
         self.save_hyperparameters()
+        self.out_list = []
+        self.gt_list = []
 
     def forward(self, x):
         """
@@ -235,24 +237,19 @@ class Model(pytorch_lightning.LightningModule):
             inputs = batch[0].half().to(self.device)
             predictions = batch[1].to(self.device)
             uncertaintymap = batch[2].half().to(self.device)
-            iou = batch[4].to(self.device)
+            label = batch[4].to(self.device)
         else:
             inputs = batch[0]
             predictions = batch[1]
             uncertaintymap = batch[2]
-            iou = batch[4]
+            label = batch[4]
 
-        if self.model_name == 'resnet3d_18_classification':
-            # convert to a classification problem
-            # self.iou_distribution += iou.cpu().numpy().tolist()
-            iou = (iou > 0.8).long()
-        iou = iou.squeeze(dim=1)
-        # print(f'inputs:{inputs.shape}, predictions:{predictions.shape}, uncertaintymap:{uncertaintymap.shape}, iou:{iou.shape}')
+        # print(f'inputs:{inputs.shape}, predictions:{predictions.shape}, uncertaintymap:{uncertaintymap.shape}, label:{label.shape}')
         inputs = torch.cat([inputs, predictions, uncertaintymap], dim=1)
         outputs = self(inputs)
         # print(f'outputs:{outputs.shape}')
 
-        loss = self.loss_function(outputs, iou)
+        loss = self.loss_function(outputs, label.unsqueeze(dim=1).long())
         return self.log_and_return("epoch_train_loss", loss)
 
     def validation_step(self, batch, batch_idx):
@@ -260,12 +257,7 @@ class Model(pytorch_lightning.LightningModule):
         predictions = batch[1]
         uncertaintymap = batch[2]
         fn = batch[3]
-        iou = batch[4]
-
-        if self.model_name == 'resnet3d_18_classification':
-            # convert to a classification problem
-            iou = (iou > 0.8).long()
-        iou = iou.squeeze(dim=1)
+        label = batch[4]
 
         inputs = torch.cat([inputs, predictions, uncertaintymap], dim=1)
 
@@ -273,7 +265,7 @@ class Model(pytorch_lightning.LightningModule):
             outputs = self.model.forward(inputs)
         
             # from https://arxiv.org/pdf/1810.11654.pdf, # mode = 'validation'
-            val_loss = self.loss_function(outputs, iou)
+            val_loss = self.loss_function(outputs, label.unsqueeze(dim=1).long())
             self.log_and_return("val_loss", val_loss)
         # outputs = torch.nn.Softmax(dim=1)(outputs)
         # val_metric = compute_iou(outputs > 0.5, label, torch.unsqueeze(costmap, dim=1))
@@ -291,39 +283,41 @@ class Model(pytorch_lightning.LightningModule):
         # print(f'prediction:{prediction.shape}')
         # print(f'uncertaintymap:{uncertaintymap.shape}')
         inputs = torch.cat([img.float(), prediction.float(), uncertaintymap.float()], dim=1)
-        patch_size = self.args_inference["size_in"]
-        print(f'patch_size:{patch_size}')
-        steps = compute_steps_for_sliding_window(patch_size, img.shape[2:], 1)
-        print(f'steps:{steps}')
-        estimated_iou_list = []
-        gt_iou_list = []
-        num_predicted_pixels_list = []
+        # patch_size = self.args_inference["size_in"]
+        # print(f'patch_size:{patch_size}')
+        # steps = compute_steps_for_sliding_window(patch_size, img.shape[2:], 1)
+        # print(f'steps:{steps}')
         with torch.no_grad():
-            for z in steps[0]:
-                lb_z = z
-                ub_z = z + patch_size[0]
-                for y in steps[1]:
-                    lb_y = y
-                    ub_y = y + patch_size[1]
-                    for x in steps[2]:
-                        lb_x = x
-                        ub_x = x + patch_size[2]
-                        estimated_iou = self.model.forward(inputs[:,:,lb_z:ub_z,lb_y:ub_y,lb_x:ub_x])
-                        gt_iou = compute_iou(gt[:,:,lb_z:ub_z,lb_y:ub_y,lb_x:ub_x], prediction[:,:,lb_z:ub_z,lb_y:ub_y,lb_x:ub_x], None)
-                        if self.model_name == 'resnet3d_18_classification':
-                            print(f'estimated_iou:{torch.nn.Softmax(dim=1)(estimated_iou).cpu().numpy()}, gt_iou:{gt_iou}')
-                            estimated_iou_list.append(torch.nn.Softmax(dim=1)(estimated_iou).cpu().numpy()[0])
-                        else:
-                            print(f'estimated_iou:{estimated_iou.cpu().numpy()}, gt_iou:{gt_iou}')
-                            estimated_iou_list.append(estimated_iou.cpu().numpy()[0,0])
-                        gt_iou_list.append(gt_iou)
-                        num_predicted_pixels_list.append((prediction[:,:,lb_z:ub_z,lb_y:ub_y,lb_x:ub_x].cpu().numpy()>0).astype(np.uint8).sum())
-        original_path = self.config["OutputDir"] + os.sep + pathlib.PurePosixPath(fn).stem
-        path = original_path+"_estimated_iou.npy"
-        np.save(path, np.array(estimated_iou_list))
-        path = original_path+"_gt_iou.npy"
-        np.save(path, np.array(gt_iou_list))
-        path = original_path+"_num_predicted_pixels.npy"
-        np.save(path, np.array(num_predicted_pixels_list))
+            out = self.model.forward(inputs)
+            print(f'out:{torch.nn.Softmax(dim=1)(out).cpu().numpy()}, gt:{gt.cpu().numpy()}')
+            self.out_list.append(torch.nn.Softmax(dim=1)(out).cpu().numpy())
+            self.gt_list.append(gt.cpu().numpy())
+        # with torch.no_grad():
+        #     for z in steps[0]:
+        #         lb_z = z
+        #         ub_z = z + patch_size[0]
+        #         for y in steps[1]:
+        #             lb_y = y
+        #             ub_y = y + patch_size[1]
+        #             for x in steps[2]:
+        #                 lb_x = x
+        #                 ub_x = x + patch_size[2]
+        #                 # estimated_iou = self.model.forward(inputs[:,:,lb_z:ub_z,lb_y:ub_y,lb_x:ub_x])
+        #                 out = self.model.forward(inputs[:,:,lb_z:ub_z,lb_y:ub_y,lb_x:ub_x])
+        #                 print(f'estimated_iou:{torch.nn.Softmax(dim=1)(estimated_iou).cpu().numpy()}, gt:{gt.cpu().numpy()}')
+        #                 self.out_list.append(torch.nn.Softmax(dim=1)(out).cpu().numpy())
+        #                 self.gt_list.append(gt.cpu().numpy())
+                        # gt_iou = compute_iou(gt[:,:,lb_z:ub_z,lb_y:ub_y,lb_x:ub_x] > self.args_inference["Threshold"], prediction[:,:,lb_z:ub_z,lb_y:ub_y,lb_x:ub_x] > self.args_inference["Threshold"], None)
+                        # if self.model_name == 'resnet3d_18_classification':
+                        #     print(f'estimated_iou:{torch.nn.Softmax(dim=1)(estimated_iou).cpu().numpy()}, gt_iou:{gt_iou}')
+                        #     estimated_iou_list.append(torch.nn.Softmax(dim=1)(estimated_iou).cpu().numpy()[0])
+                        # else:
+                        #     print(f'estimated_iou:{estimated_iou.cpu().numpy()}, gt_iou:{gt_iou}')
+                        #     estimated_iou_list.append(estimated_iou.cpu().numpy()[0,0])
+                        # gt_iou_list.append(gt_iou)
+        # original_path = self.config["OutputDir"] + os.sep + pathlib.PurePosixPath(fn).stem
+        # path = original_path+"_estimated_iou.npy"
+        # np.save(path, np.array(estimated_iou_list))
+        # path = original_path+"_gt_iou.npy"
+        # np.save(path, np.array(gt_iou_list))
         # print(f'finished')
-

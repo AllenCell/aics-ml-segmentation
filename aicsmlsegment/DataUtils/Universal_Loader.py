@@ -310,6 +310,7 @@ class UniversalDataset(Dataset):
 
             label = load_img(fn, img_type="label", n_channel=n_channel)
             input_img = load_img(fn, img_type="input", n_channel=n_channel)
+            # print(f'input_img:{input_img.shape}')
             if use_costmap:
                 costmap = load_img(fn, img_type="costmap", n_channel=n_channel)
             else:
@@ -377,6 +378,9 @@ class UniversalDataset(Dataset):
                 raw = random_intensity(raw)
 
             if patchize:
+                # skip this image if the original image is smaller than the patch size
+                if label.shape[1] < size_out[0] or label.shape[2] < size_out[1] or label.shape[3] < size_out[2]:
+                    continue
                 # take specified number of patches from current image
                 new_patch_num = 0
                 num_fail = 0
@@ -972,6 +976,7 @@ class TestDataset(IterableDataset):
             self.current_index += 1  # next iteration load the next file
         return self.all_img_info.pop()  # pop patch/tp
 
+import pathlib
 class QCDataset(Dataset):
     """
     Quality Control Dataset, the ground truth is different from Universial Dataset.
@@ -981,6 +986,7 @@ class QCDataset(Dataset):
     def __init__(
         self,
         filenames: Sequence[str],
+        # labels: Sequence[str],
         num_patch: int,
         size_in: Sequence[int],
         n_channel: int,
@@ -995,6 +1001,7 @@ class QCDataset(Dataset):
         """
         input:
             filenames: path to images
+            # labels: class labels of these images
             num_patch: number of random crops to be produced
             size_in: size of input to model
             n_channel: number of iput channels expected by model
@@ -1007,9 +1014,12 @@ class QCDataset(Dataset):
         self.gt = []
         self.prediction = []
         self.uncertaintymap = []
+        # self.label = []
         self.transforms = transforms
+        self.size_in = size_in
         self.parameters = {
             "filenames": filenames,
+            # "labels": labels,
             "num_patch": num_patch,
             "size_in": size_in,
             "n_channel": n_channel,
@@ -1028,7 +1038,6 @@ class QCDataset(Dataset):
         shuffle(filenames)
         self.filenames = None
         if not patchize:
-            print("Validating on", filenames)
             self.filenames = filenames
         num_patch_per_img = np.zeros((num_data,), dtype=int)
         if num_data >= num_patch:
@@ -1051,23 +1060,33 @@ class QCDataset(Dataset):
             if patchize and len(self.img) == num_patch:
                 break
             
-            label = load_img(fn, img_type="label", n_channel=n_channel)
-            # notice that the prediction is the softmax output, not binary result
-            prediction = load_img(fn+".ome_softmax_segmentation.tiff", img_type="general", n_channel=n_channel)
-            # now we convert the softmax result to binary according to the threshold
-            prediction = (prediction>threshold).astype(np.uint8)
-            input_img = load_img(fn, img_type="input", n_channel=n_channel)
+            # you might want to change how to load the images if you are using your own dataset
+            # input_img = load_img(fn+"_img.tiff", img_type="general", n_channel=n_channel)
+            # prediction = load_img(fn+"_seg.tiff", img_type="general", n_channel=n_channel)
+            # file_name_stem = pathlib.PurePath(fn).stem
+            # label = load_img(fn, img_type="label", n_channel=n_channel)
+            # input_img = load_img(fn, img_type="input", n_channel=n_channel)
+            # prediction = load_img("//allen/aics/assay-dev/users/Dewen/project_presentation/test_full/outputs/prediction_8/"+file_name_stem+'.ome.ome_struct_segmentation.tiff', img_type="general", n_channel=n_channel)
+            # normally the prediction is [0,255], we need to convert it to [0,1]
+            # if use_uncertaintymap:
+            #     uncertaintymap = load_img("//allen/aics/assay-dev/users/Dewen/project_presentation/test_full/outputs/prediction_8/"+file_name_stem+'.ome.ome_uncertaintymap_softmax.tiff', img_type="general", n_channel=n_channel)
+            # # notice that the prediction is the softmax output, not binary result
+            input_img = load_img(fn+".tiff", img_type="general", n_channel=n_channel)
+            label = load_img(fn+"_GT.tiff", img_type="general", n_channel=n_channel)
+            label = (label > 0).astype(np.uint8)
+            prediction = load_img(fn+"_prediction.tiff", img_type="general", n_channel=n_channel)
+            prediction = (prediction > 0).astype(np.uint8)
+            # # now we convert the softmax result to binary according to the threshold
+            # prediction = (prediction>threshold).astype(np.uint8)
             if use_uncertaintymap:
                 if uncertainty_type == 'maximum_softmax':
-                    uncertaintymap = load_img(fn+".ome_uncertaintymap_softmax.tiff", img_type="general", n_channel=n_channel)
+                    uncertaintymap = load_img(fn+"_uncertainty_softmax.tiff", img_type="general", n_channel=n_channel)
                 elif uncertainty_type == 'entropy':
-                    uncertaintymap = load_img(fn+".ome_uncertaintymap_entropy.tiff", img_type="general", n_channel=n_channel)
+                    uncertaintymap = load_img(fn+"_uncertainty_entropy.tiff", img_type="general", n_channel=n_channel)
                 elif uncertainty_type == 'mutual_information':
-                    uncertaintymap = load_img(fn+".ome_uncertaintymap_mi.tiff", img_type="general", n_channel=n_channel)
+                    uncertaintymap = load_img(fn+"_uncertainty_mi.tiff", img_type="general", n_channel=n_channel)
                 elif uncertainty_type == 'variance':
-                    uncertaintymap = load_img(fn+".ome_uncertaintymap_variance.tiff", img_type="general", n_channel=n_channel)
-                # else:
-                #     uncertaintymap = load_img(fn+".ome_uncertaintymap_softmax.tiff", img_type="general", n_channel=n_channel)
+                    uncertaintymap = load_img(fn+"_uncertainty_variance.tiff", img_type="general", n_channel=n_channel)
 
             raw = input_img
 
@@ -1127,6 +1146,8 @@ class QCDataset(Dataset):
                 random_intensity = RandShiftIntensity(offsets=0.15, prob=0.2)
                 raw = random_intensity(raw)
 
+            # we preload a 'bigger' patch in memory and do the cropping on-the-fly to create different 'smaller patches' for training
+            # patch_size = [label.shape[1]-10,label.shape[2],label.shape[3]]
             if patchize:
                 # take specified number of patches from current image
                 new_patch_num = 0
@@ -1135,22 +1156,6 @@ class QCDataset(Dataset):
                     pz = random.randint(0, label.shape[1] - size_in[0])
                     py = random.randint(0, label.shape[2] - size_in[1])
                     px = random.randint(0, label.shape[3] - size_in[2])
-
-                    # if use_uncertaintymap:
-                    #     # check if this is a good crop
-                    #     ref_patch_uncertaintymap = uncertaintymap[
-                    #         pz : pz + size_in[0],
-                    #         py : py + size_in[1],
-                    #         px : px + size_in[2],
-                    #     ]
-                    #     if check_crop:
-                    #         if np.count_nonzero(ref_patch_uncertaintymap > 1e-5) < 1000:
-                    #             num_fail += 1
-                    #             if num_fail > 50:
-                    #                 print("Failed to generate valid crops")
-                    #                 break
-                    #             continue
-                        # confirmed good crop
                     (self.img).append(
                         raw[
                             :,
@@ -1184,19 +1189,14 @@ class QCDataset(Dataset):
                                 px : px + size_in[2],
                             ]
                         )
-
                     new_patch_num += 1
-                    # print(f'label:{raw[:,pz : pz + size_in[0],py : py + size_in[1],px : px + size_in[2]].shape}')
-                    # print(f'prediction:{prediction[:,pz : pz + size_in[0],py : py + size_in[1],px : px + size_in[2]].shape}')
-                    # print(f'input_img:{raw[:,pz : pz + size_in[0],py : py + size_in[1],px : px + size_in[2]].shape}')
-                    # if use_uncertaintymap:
-                    #     print(f'uncertaintymap:{uncertaintymap[:,pz : pz + size_in[0],py : py + size_in[1],px : px + size_in[2]].shape}')
             else:
                 (self.img).append(raw)
                 (self.gt).append(label)
                 (self.prediction).append(prediction)
                 (self.uncertaintymap).append(uncertaintymap)
-        # print('dataset loaded...')
+                # (self.label).append(labels[img_idx])
+        print(f'dataset length:{len(self.img)}')
 
     def __getitem__(self, index):
         if self.init_only:
@@ -1205,12 +1205,29 @@ class QCDataset(Dataset):
             fn = self.filenames[index]
         else:
             fn = ""
-        img_tensor = from_numpy(self.img[index]).float()
-        # gt_tensor = from_numpy(self.gt[index]).float()
-        prediction_tensor = from_numpy(self.prediction[index]).float()
-        uncertaintymap_tensor = from_numpy(self.uncertaintymap[index]).float()
+        # # we do the random cropping on-the-fly
+        # continue_crop = True
+        # while(continue_crop):
+        #     pz = random.randint(0, self.gt[index].shape[1] - self.size_in[0])
+        #     py = random.randint(0, self.gt[index].shape[2] - self.size_in[1])
+        #     px = random.randint(0, self.gt[index].shape[3] - self.size_in[2])
+        #     img = self.img[index][:,pz : pz + self.size_in[0], py : py + self.size_in[1],px : px + self.size_in[2]]
+        #     gt = self.gt[index][:,pz : pz + self.size_in[0], py : py + self.size_in[1],px : px + self.size_in[2]]
+        #     prediction = self.prediction[index][:,pz : pz + self.size_in[0], py : py + self.size_in[1],px : px + self.size_in[2]]
+        #     uncertainty = self.uncertaintymap[index][:,pz : pz + self.size_in[0], py : py + self.size_in[1],px : px + self.size_in[2]]
+        #     if prediction.sum() > 20000:
+        #         continue_crop = False
+        # just load the image
+        img_tensor = from_numpy(self.img[index].astype(np.float)).float()
+        gt_tensor = from_numpy(self.gt[index]).float()
+        prediction_tensor = from_numpy(self.prediction[index].astype(np.float)).float()
+        uncertaintymap_tensor = from_numpy(self.uncertaintymap[index].astype(np.float)).float()
+        # label = self.label[index]
         from medpy.metric import binary
-        iou = binary.jc((self.gt[index]).squeeze(), (self.prediction[index]).squeeze())
+        # if gt.max() == 0  and prediction.max() == 0:
+        #     iou = 1
+        # else:
+        iou = binary.jc(self.gt[index].squeeze(), self.prediction[index].squeeze())
         iou_tensor = torch.Tensor([iou]).unsqueeze(0)
 
         return (img_tensor, prediction_tensor, uncertaintymap_tensor, fn, iou_tensor)
@@ -1224,7 +1241,7 @@ class QCDataset(Dataset):
         return self.parameters
 
 class QCTestDataset(IterableDataset):
-    def __init__(self, config: Dict, fns: List[str]):
+    def __init__(self, config: Dict, fns: List[str], pseudo_labels: List[np.int32]):
         """
         Quality Control TestDataset, just read the image, prediction and uncertainty map, no patch thing
         The testdata is usually changable, so this class may not to be user defined.
@@ -1238,8 +1255,8 @@ class QCTestDataset(IterableDataset):
         self.nchannel = 1
         # self.gt_dir = '/allen/aics/assay-dev/users/Dewen/project/test_data/new_domain_larger/pseudo_ground_truth'
         # self.prediction_dir = '/allen/aics/assay-dev/users/Dewen/project/test_data/new_domain_larger/outputs/prediction_2'
-        self.gt_dir = '/allen/aics/assay-dev/users/Dewen/project/test_data/same_domain_larger/pseudo_ground_truth'
-        self.prediction_dir = '/allen/aics/assay-dev/users/Dewen/project/test_data/same_domain_larger/outputs/prediction_1'
+        self.gt_dir = '/allen/aics/assay-dev/users/Dewen/project_presentation/test_full/validation/ground_truths'
+        self.prediction_dir = '/allen/aics/assay-dev/users/Dewen/project_presentation/test_full/validation/predictions'
 
         # do not use file now, use the folder option
         if self.inf_config["name"] == "file":
@@ -1250,9 +1267,11 @@ class QCTestDataset(IterableDataset):
                 filenames.append(fn + ".ome.tif")
             self.gt_dir = config["mode"]["InputDir"]
             self.prediction_dir = config["mode"]["InputDir"]
+        elif self.inf_config["name"] == "qc":
+            filenames = fns
+            self.pseudo_labels = pseudo_labels
         else:
             from glob import glob
-
             if type(self.inf_config["InputDir"]) == str:
                 self.inf_config["InputDir"] = [self.inf_config["InputDir"]]
 
@@ -1264,7 +1283,7 @@ class QCTestDataset(IterableDataset):
             # also need to read the ground truth, prediction, and uncertaintymap, hard code
             
         print("Predicting on", len(filenames), "files")
-        print(f'filenames:{filenames}')
+        # print(f'filenames:{filenames}')
 
         self.filenames = filenames
         self.start = None
@@ -1284,10 +1303,14 @@ class QCTestDataset(IterableDataset):
             img = load_img(fn, self.load_type, self.nchannel, self.config["InputCh"]).astype(np.float)
             img = resize(img, self.config)
             img = image_normalization(img, self.config["Normalization"])
-            # gt = load_img(self.gt_dir+os.sep+file_name_stem[:-4]+'_GT.ome.tif', self.load_type, self.nchannel, self.config["InputCh"])
-            gt = load_img(self.gt_dir+os.sep+file_name_stem[:-4]+'_GT.tiff', self.load_type, self.nchannel, self.config["InputCh"]).astype(np.int16)
-            prediction = load_img(self.prediction_dir+os.sep+file_name_stem+'_softmax_segmentation.tiff', self.load_type, self.nchannel, self.config["InputCh"]).astype(np.float)
+            gt = load_img(self.gt_dir+os.sep+file_name_stem[:-4]+'_GT.ome.tif', self.load_type, self.nchannel, self.config["InputCh"])
+            # gt = load_img(self.gt_dir+os.sep+file_name_stem[:-4]+'_GT.tiff', self.load_type, self.nchannel, self.config["InputCh"]).astype(np.int8)
+            prediction = load_img(self.prediction_dir+os.sep+file_name_stem+'_struct_segmentation.tiff', self.load_type, self.nchannel, self.config["InputCh"])
+            # convert prediction to [0,1]
+            prediction = (prediction > 0).astype(np.float)
             uncertaintymap = load_img(self.prediction_dir+os.sep+file_name_stem+'_uncertaintymap_entropy.tiff', self.load_type, self.nchannel, self.config["InputCh"]).astype(np.float)
+            # prediction = load_img(fn[:-8]+'seg.tiff', self.load_type, self.nchannel, self.config["InputCh"]).astype(np.float)
+            # uncertaintymap = load_img(fn[:-8]+'uncertainty.tiff', self.load_type, self.nchannel, self.config["InputCh"]).astype(np.float)
             self.all_img_info.append({
                 "fn": fn,
                 "img": img,

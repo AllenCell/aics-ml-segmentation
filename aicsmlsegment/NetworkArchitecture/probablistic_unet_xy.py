@@ -503,7 +503,10 @@ class ProbabilisticUnet(nn.Module):
         kl = torch.mean(self.kl_divergence(prior_latent_space, posterior_latent_space, analytic=analytic_kl, z_posterior=z_posterior))
 
         #Here we use the posterior sample sampled above
-        reconstruction_loss = criterion(output, segm, cmap)
+        if cmap is None:
+            reconstruction_loss = criterion(output, segm)
+        else:
+            reconstruction_loss = criterion(output, segm, cmap)
         reconstruction_loss = torch.sum(reconstruction_loss)
         mean_reconstruction_loss = torch.mean(reconstruction_loss)
 
