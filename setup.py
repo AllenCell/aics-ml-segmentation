@@ -46,13 +46,13 @@ requirements = [
     "scipy>=1.1.0",
     "scikit-image",
     "pandas>=0.23.4",
-    "aicsimageio=3.3.3",
+    "aicsimageio==3.3.3",
     "tqdm",
     "pyyaml",
     "monai>=0.4.0",
     "pytorch-lightning>=1.4.0",
     "torchio",
-    "torch=1.8.1",
+    "torch==1.8.1",
 ]
 
 extra_requirements = {
