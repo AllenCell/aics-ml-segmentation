@@ -33,7 +33,7 @@ ResizeRatio: [1,1,1] #ratio to resize image
 Normalization: 18 # normalization 'recipe', should match training data
 Threshold:  -1 # whether to binarize output images. Either -1 or an integer between 0 and 1
 RuntimeAug: False # run prediction on four flipped versions of the image - increases quality, takes ~4x longer
-
+uncertainty: 'entropy' # one of 'variance', 'entropy', 'mutual_information', or 'softmax'. increases inference time and outputs an uncertainty map. only used with dropout models
 mode:
   name: file # whether to predict on individual file or entire folder of images
   InputFile: "path/to/input/input/img"
