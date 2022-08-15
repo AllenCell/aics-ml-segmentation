@@ -109,7 +109,7 @@ class UNet3D(nn.Module):
                     padding=padding,
                     bias=bias,
                 ),
-                nn.BatchNorm3d(out_channels, affine=False),
+                nn.BatchNorm3d(out_channels),
                 nn.ReLU(),
                 nn.Conv3d(
                     out_channels,
@@ -119,7 +119,7 @@ class UNet3D(nn.Module):
                     padding=padding,
                     bias=bias,
                 ),
-                nn.BatchNorm3d(2 * out_channels, affine=False),
+                nn.BatchNorm3d(2 * out_channels),
                 nn.ReLU(),
             )
         else:
@@ -165,7 +165,7 @@ class UNet3D(nn.Module):
                     padding=padding,
                     bias=bias,
                 ),
-                nn.BatchNorm3d(out_channels, affine=False),
+                nn.BatchNorm3d(out_channels),
                 nn.ReLU(),
                 nn.Conv3d(
                     out_channels,
@@ -175,7 +175,7 @@ class UNet3D(nn.Module):
                     padding=padding,
                     bias=bias,
                 ),
-                nn.BatchNorm3d(out_channels, affine=False),
+                nn.BatchNorm3d(out_channels),
                 nn.ReLU(),
             )
         else:
