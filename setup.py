@@ -46,7 +46,7 @@ requirements = [
     "scipy>=1.1.0",
     "scikit-image",
     "pandas>=0.23.4",
-    "aicsimageio>3.3.0",
+    "aicsimageio=3.3.3",
     "tqdm",
     "pyyaml",
     "monai>=0.4.0",

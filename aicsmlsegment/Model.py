@@ -12,7 +12,7 @@ from aicsmlsegment.DataUtils.Universal_Loader import (
     undo_resize,
     UniversalDataset,
 )
-from aicsmlsegment.utils import compute_iou
+from aicsmlsegment.utils import compute_iou, save_image
 
 import numpy as np
 from skimage.io import imsave
@@ -118,6 +118,7 @@ class Model(pytorch_lightning.LightningModule):
             self.args_inference["inference_batch_size"] = config["batch_size"]
             self.args_inference["mode"] = config["mode"]["name"]
             self.args_inference["Threshold"] = config["Threshold"]
+            self.uncertainty = config["uncertainty"]
             if config["large_image_resize"] != [1, 1, 1]:
                 self.aggregate_img = {}
                 self.count_map = {}
@@ -239,15 +240,6 @@ class Model(pytorch_lightning.LightningModule):
                 )
             self.iter_dataloader = iter(self.DATALOADER)
 
-    def get_upsample_grid(self, desired_shape, n_targets):
-        x = torch.linspace(-1, 1, desired_shape[-1], device=self.device)
-        y = torch.linspace(-1, 1, desired_shape[-2], device=self.device)
-        z = torch.linspace(-1, 1, desired_shape[-3], device=self.device)
-        meshz, meshy, meshx = torch.meshgrid((z, y, x))
-        grid = torch.stack((meshx, meshy, meshz), 3)
-        grid = torch.stack([grid] * n_targets)  # one grid for each target in batch
-        return grid
-
     def log_and_return(self, name, value):
         # sync_dist on_epoch=True ensures that results will be averaged across gpus
         self.log(
@@ -272,7 +264,6 @@ class Model(pytorch_lightning.LightningModule):
             targets = batch[1]
             cmap = batch[2]
         outputs = self(inputs)
-
         vae_loss = 0
         if self.model_name == "segresnetvae":
             # segresnetvae forward returns an additional vae loss term
@@ -293,7 +284,7 @@ class Model(pytorch_lightning.LightningModule):
         costmap = batch[2]
         # fn = batch[3]
 
-        outputs, vae_loss = model_inference(
+        outputs, vae_loss, _ = model_inference(
             self.model,
             input_img,
             self.args_inference,
@@ -335,7 +326,7 @@ class Model(pytorch_lightning.LightningModule):
         if self.aggregate_img is not None:
             to_numpy = False  # prevent excess gpu->cpu data transfer
 
-        output_img, _ = apply_on_image(
+        output_img, _, uncertaintymap = apply_on_image(
             self.model,
             img,
             args_inference,
@@ -344,9 +335,11 @@ class Model(pytorch_lightning.LightningModule):
             softmax=True,
             model_name=self.model_name,
             extract_output_ch=True,
+            uncertainty=self.uncertainty,
         )
-
         if self.aggregate_img is not None:
+            if self.uncertainty is not None:
+                print("Uncertainty is not yet supported with large image resizing.")
             # initialize the aggregate img
             i, j, k = batch["ijk"][0], batch["ijk"][1], batch["ijk"][2]
             if fn not in self.aggregate_img:
@@ -378,8 +371,6 @@ class Model(pytorch_lightning.LightningModule):
         # only want to perform post-processing and saving once the aggregated image
         # is complete or we're not aggregating an image
         if self.batch_count[fn] % save_n_batches == 0:
-            from aicsimageio.writers.ome_tiff_writer import OmeTiffWriter
-
             if self.aggregate_img is not None:
                 # normalize for overlapping patches
                 output_img = self.aggregate_img[fn] / self.count_map[fn]
@@ -409,10 +400,15 @@ class Model(pytorch_lightning.LightningModule):
             path = self.config["OutputDir"] + os.sep + pathlib.PurePosixPath(fn).stem
             if tt != -1:
                 path = path + "_T_" + f"{tt:03}"
-            path += "_struct_segmentation.tiff"
-            with OmeTiffWriter(path, overwrite_file=True) as writer:
-                writer.save(
-                    data=out,
-                    channel_names=[self.config["segmentation_name"]],
-                    dimension_order="CZYX",
+
+            save_image(
+                path + "_struct_segmentation.tiff",
+                out,
+                [self.config["segmentation_name"]],
+            )
+            if uncertaintymap is not None:
+                save_image(
+                    path + "_" + self.uncertainty + "_uncertainty.tiff",
+                    uncertaintymap,
+                    [self.uncertainty],
                 )
