@@ -13,7 +13,7 @@ class ElementNLLLoss(torch.nn.Module):
 	def forward(self, input, target, weight):
 
 		target_np = target.cpu().data.numpy()
-		target_np = target_np.astype(np.uint8)
+		target_np = target_np.astype(int)
 
 		row_num = target_np.shape[0]
 		mask = np.zeros((row_num,self.num_class )) 
